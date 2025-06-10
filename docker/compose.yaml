@@ -1,0 +1,20 @@
+name: torrent-search-mcp
+
+services:
+  torrent-search-mcp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: torrent-search-mcp
+    container_name: torrent-search-mcp
+    ports:
+      - 8765:8000
+    env_file:
+      - ../.env
+    networks:
+      - mcp-servers
+
+networks:
+  mcp-servers:
+    name: mcp-servers
+    driver: bridge

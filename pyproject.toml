@@ -1,0 +1,35 @@
+[project]
+name = "torrent-search-mcp"
+version = "1.0.0"
+description = "TorrentSearch MCP Server"
+authors = [{ name = "philogicae" }]
+requires-python = ">=3.10,<4.0"
+readme = "README.md"
+license = "MIT"
+dependencies = [
+    "bencodepy>=0.9.5",
+    "python-dotenv>=1.1.0",
+    "rich>=14.0.0",
+    "pydantic>=2.11.5",
+    "requests>=2.32.4",
+    "fastmcp>=2.7.1",
+    "fastapi>=0.115.12",
+    "uvicorn>=0.34.3",
+    "ygg-torrent-mcp>=1.2.0",
+]
+
+[project.urls]
+Repository = "https://github.com/philogicae/torrent-search-mcp"
+
+[project.scripts]
+torrent-search-mcp = "torrent_search.__main__:cli"
+
+[dependency-groups]
+dev = ["ruff>=0.11.13", "pytest>=8.4.0", "pytest-asyncio>=1.0.0"]
+
+[tool.hatch.build]
+include = ["torrent_search"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

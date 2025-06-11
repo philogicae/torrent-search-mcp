@@ -2,7 +2,7 @@
 
 [![PyPI version](https://badge.fury.io/py/torrent-search-mcp.svg?kill_cache=1)](https://badge.fury.io/py/torrent-search-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg?kill_cache=1)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
 This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on ThePirateBay, Nyaa and YggTorrent. It allows for easy integration into other applications or services.
 
@@ -196,12 +196,23 @@ Configuration:
 {
   "mcpServers": {
     ...
-    # with stdio (only requires uv installed)
+    # with stdio + sudo (only requires uv and playwright installed)
+    # Install playwright first:
+    # uvx playwright install --with-deps chromium
     "mcp-torrent-search": {
       "command": "uvx",
       "args": ["torrent-search-mcp"],
       "env": { "YGG_PASSKEY": "your_passkey_here" } # optional
-    }
+    },
+    # with stdio + no-sudo (only requires uv)
+    "mcp-torrent-search": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "uvx playwright install --with-deps chromium && uvx torrent_search"
+      ],
+      "env": { "YGG_PASSKEY": "your_passkey_here" } # optional
+    },
     # with sse transport (requires installation)
     "mcp-torrent-search": {
       "serverUrl": "http://127.0.0.1:8000/sse"

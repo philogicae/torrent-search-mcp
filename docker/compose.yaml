@@ -11,10 +11,13 @@ services:
       - 8765:8000
     env_file:
       - ../.env
-    networks:
-      - mcp-servers
-
-networks:
-  mcp-servers:
-    name: mcp-servers
-    driver: bridge
+    dns:
+      - 9.9.9.9
+      - 149.112.112.112
+      - 2620:fe::fe
+      - 2620:fe::9
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,85 +1,104 @@
 from sys import argv
 
-from rich import print as pr
 from ygg_torrent import ygg_api
 
 from .models import Torrent
-
-# from .utils import format_torrent
+from .scraper import WEBSITES, search_torrents
 
 
 class TorrentSearchApi:
-    """A client for interacting with the TorrentSearch API."""
+    """A client for searching torrents on ThePirateBay, Nyaa and YGG Torrent."""
 
-    def __init__(self):
-        """
-        Initializes the API client.
-        """
-        pass
+    WEBSITES = ["yggtorrent"] + list(WEBSITES.keys())
 
-    def search_torrents(self, query: str = "") -> list[Torrent] | None:
+    def available_sources(self) -> list[str]:
+        """Get the list of available torrent sources."""
+        return self.WEBSITES
+
+    async def search_torrents(
+        self,
+        query: str,
+        sources: list[str] | None = None,
+        max_items: int = 50,
+    ) -> list[Torrent]:
         """
-        Get a list of torrents.
-        Corresponds to GET /torrents
+        Search for torrents on ThePirateBay, Nyaa and YGG Torrent.
 
         Args:
             query: Search query.
+            sources: List of valid sources to scrape from.
+            max_items: Maximum number of items to return.
 
         Returns:
             A list of torrent results or an error dictionary.
         """
-        return ygg_api.search_torrents(query)
+        found_torrents = []
+        if sources is None or any(source in sources for source in WEBSITES):
+            found_torrents.extend(await search_torrents(query, sources=sources))
+        if sources is None or "yggtorrent" in sources:
+            ygg_torrents = ygg_api.search_torrents(query)
+            if ygg_torrents:
+                found_torrents.extend(
+                    [
+                        Torrent(**torrent.model_dump(), source="yggtorrent")
+                        for torrent in ygg_torrents
+                    ]
+                )
+        return list(
+            sorted(
+                found_torrents,
+                key=lambda torrent: torrent.seeders + torrent.leechers,
+                reverse=True,
+            )
+        )[:max_items]
 
-    def get_torrent_details(
-        self, torrent_id: int, with_magnet_link: bool = False
+    def get_ygg_torrent_details(
+        self, ygg_torrent_id: int, with_magnet_link: bool = False
     ) -> Torrent | None:
         """
-        Get details about a specific torrent.
-        Corresponds to GET /torrent/{torrent_id}
+        Get details about a specific torrent coming from YGG Torrent source only.
 
         Args:
-            torrent_id: The ID of the torrent.
+            ygg_torrent_id: The ID of the torrent.
 
         Returns:
             Detailed torrent result.
         """
-        if torrent_id < 1:
-            pr("torrent_id must be >= 1")
+        torrent = ygg_api.get_torrent_details(
+            ygg_torrent_id, with_magnet_link=with_magnet_link
+        )
+        if not torrent:
             return None
-        resp = ygg_api.get_torrent_details(torrent_id)
-        if not resp:
-            pr("Failed to get torrent details")
-            return None
-        torrent = Torrent(**resp.model_dump())
-        if with_magnet_link:
-            torrent.magnet_link = self.get_magnet_link(torrent_id)
-        return torrent
+        return Torrent(**torrent.model_dump(), source="yggtorrent")
 
-    def get_magnet_link(self, torrent_id: int) -> str | None:
+    def get_ygg_magnet_link(self, ygg_torrent_id: int) -> str | None:
         """
-        Get the magnet link for a specific torrent.
+        Get the magnet link for a specific torrent coming from YGG Torrent source only.
 
         Args:
-            torrent_id: The ID of the torrent.
+            ygg_torrent_id: The ID of the torrent.
 
         Returns:
             The magnet link as a string or None.
         """
-        try:
-            return ygg_api.get_magnet_link(torrent_id)
-        except Exception as e:
-            pr(f"Failed to get magnet link: {e}")
-            return None
+        return ygg_api.get_magnet_link(ygg_torrent_id)
 
 
 if __name__ == "__main__":
     QUERY = argv[1] if len(argv) > 1 else None
     if not QUERY:
-        pr("Please provide a search query.")
+        print("Please provide a search query.")
         exit(1)
-    client = TorrentSearchApi()
-    found_torrents = client.search_torrents(QUERY)
-    if found_torrents:
-        pr(client.get_torrent_details(found_torrents[0].id, with_magnet_link=True))
-    else:
-        pr("No torrents found")
+    from asyncio import run
+
+    async def main():
+        client = TorrentSearchApi()
+        torrents = await client.search_torrents(QUERY)
+        print(torrents)
+        ygg = [torrent for torrent in torrents if torrent.source == "yggtorrent"]
+        if ygg:
+            print(client.get_ygg_torrent_details(ygg[0].id, with_magnet_link=True))
+        else:
+            print("No torrents found")
+
+    run(main())

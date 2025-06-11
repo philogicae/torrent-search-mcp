@@ -12,4 +12,4 @@ class Torrent(BaseModel):
     date: str
     magnet_link: str | None = None
     uploader: str | None = None
-    source: str | None = None  # TODO: remove
+    source: str | None = None

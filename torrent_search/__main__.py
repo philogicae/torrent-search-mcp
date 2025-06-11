@@ -21,7 +21,7 @@ def cli():
         "--port",
         type=int,
         default=8000,
-        help="Port to bind the server to. Default: 8001.",
+        help="Port to bind the server to. Default: 8000.",
     )
     parser.add_argument(
         "--reload",

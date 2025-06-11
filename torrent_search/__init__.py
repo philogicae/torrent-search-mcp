@@ -6,6 +6,6 @@ from .mcp_server import torrent_search_api
 __all__ = [
     "torrent_search_mcp",
     "torrent_search_api",
-    "Torrent",
     "torrent_search_fastapi",
+    "Torrent",
 ]

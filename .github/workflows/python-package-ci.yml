@@ -18,6 +18,8 @@ jobs:
         run: uv sync --locked --no-cache --no-editable
       - name: Create dummy .env file
         run: echo "YGG_PASSKEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" > .env
+      - name: Install crawl4ai/playwright
+        run: uvx playwright install --with-deps chromium
       - name: Run tests
         run: uv run pytest
 
@@ -36,9 +38,9 @@ jobs:
       - name: Install uv
         run: pip install uv
       - name: Install dependencies
-        run: uv sync --locked --no-cache --no-editable && python -m pip install build
+        run: uv sync --locked --no-cache --no-editable
       - name: Build a binary wheel and a source tarball
-        run: python -m build
+        run: uv build
       - name: Store the distribution packages
         uses: actions/upload-artifact@v4
         with:

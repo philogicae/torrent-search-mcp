@@ -75,6 +75,9 @@ This method is best for using the package as a library or running the server wit
 1.  Install the package from PyPI:
 ```bash
 pip install torrent-search-mcp
+crawl4ai-setup # For crawl4ai/playwright
+# If it fails, try:
+uvx playwright install --with-deps chromium
 ```
 2.  Create a `.env` file in the directory where you'll run the application and add your passkey (optional):
 ```env
@@ -98,6 +101,9 @@ cd torrent-search-mcp
 2.  Install dependencies using `uv`:
 ```bash
 uv sync
+crawl4ai-setup # For crawl4ai/playwright
+# If it fails, try:
+uvx playwright install --with-deps chromium
 ```
 3.  Create your configuration file by copying the example and add your passkey (optional):
 ```bash

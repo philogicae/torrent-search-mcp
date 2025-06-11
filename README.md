@@ -1,19 +1,27 @@
-# TorrentSearch MCP Server & API
+# Torrent Search MCP Server & API
 
 [![PyPI version](https://badge.fury.io/py/torrent-search-mcp.svg?kill_cache=1)](https://badge.fury.io/py/torrent-search-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
-This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically. This allows for easy integration of Thepiratebay, Nyaa and YggTorrent functionalities into other applications or services.
+This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on ThePirateBay, Nyaa and YggTorrent. It allows for easy integration into other applications or services.
+
+<a href="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp/badge" alt="Torrent Search MCP server" />
+</a>
+
+## Quickstart
 
 > [How to use it with MCP Clients](#via-mcp-clients)
+
+> [Run it with Docker to bypass common DNS issues](#for-docker)
 
 ## Table of Contents
 
 - [Features](#features)
 - [Setup](#setup)
   - [Prerequisites](#prerequisites)
-  - [Configuration](#configuration)
+  - [Configuration](#configuration-optional)
   - [Installation](#installation)
     - [Install from PyPI (Recommended)](#install-from-pypi-recommended)
     - [For Local Development](#for-local-development)
@@ -30,25 +38,25 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 
 ## Features
 
--   API wrapper for Thepiratebay, Nyaa and YggTorrent.
+-   API wrapper for ThePirateBay, Nyaa and YggTorrent.
     -   **Your Ygg passkey is injected locally into the torrent file/magnet link, ensuring it's not exposed externally**
 -   MCP server interface for standardized communication (stdio, sse, streamable-http)
 -   FastAPI server interface for alternative HTTP access (e.g., for direct API calls or testing)
 -   Tools:
-    -   Search for torrents on Thepiratebay, Nyaa and YggTorrent
-    -   Get details for a specific torrent
-    -   Retrieve magnet links
+    -   Search for torrents on ThePirateBay, Nyaa and YggTorrent
+    -   Get details for a specific YGG torrent
+    -   Retrieve YGG magnet links
 
 ## Setup
 
 ### Prerequisites
 
--   An active YggTorrent account and passkey.
+-   An active YggTorrent account and passkey (Optional).
 -   Python 3.10+ (required for PyPI install).
 -   [`uv`](https://github.com/astral-sh/uv) (for local development)
 -   Docker and Docker Compose (for Docker setup)
 
-### Configuration
+### Configuration (Optional)
 
 This application requires your YggTorrent passkey to interact with the API.
 
@@ -68,7 +76,7 @@ This method is best for using the package as a library or running the server wit
 ```bash
 pip install torrent-search-mcp
 ```
-2.  Create a `.env` file in the directory where you'll run the application and add your passkey:
+2.  Create a `.env` file in the directory where you'll run the application and add your passkey (optional):
 ```env
 YGG_PASSKEY=your_passkey_here
 ```
@@ -91,7 +99,7 @@ cd torrent-search-mcp
 ```bash
 uv sync
 ```
-3.  Create your configuration file by copying the example and add your passkey:
+3.  Create your configuration file by copying the example and add your passkey (optional):
 ```bash
 cp .env.example .env
 ```
@@ -105,12 +113,14 @@ uv run -m torrent_search
 
 This method uses Docker to run the server in a container.
 
+compose.yaml is configured to bypass DNS issues (using [quad9](https://quad9.net/) DNS).
+
 1.  Clone the repository (if you haven't already):
 ```bash
 git clone https://github.com/philogicae/torrent-search-mcp.git
 cd torrent-search-mcp
 ```
-2.  Create your configuration file by copying the example and add your passkey:
+2.  Create your configuration file by copying the example and add your passkey (optional):
 ```bash
 cp .env.example .env
 ```
@@ -184,7 +194,7 @@ Configuration:
     "mcp-torrent-search": {
       "command": "uvx",
       "args": ["torrent-search-mcp"],
-      "env": { "YGG_PASSKEY": "your_passkey_here" }
+      "env": { "YGG_PASSKEY": "your_passkey_here" } # optional
     }
     # with sse transport (requires installation)
     "mcp-torrent-search": {

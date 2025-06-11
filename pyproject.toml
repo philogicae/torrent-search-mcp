@@ -9,13 +9,14 @@ license = "MIT"
 dependencies = [
     "bencodepy>=0.9.5",
     "python-dotenv>=1.1.0",
-    "rich>=14.0.0",
     "pydantic>=2.11.5",
     "requests>=2.32.4",
-    "fastmcp>=2.7.1",
+    "fastmcp>=2.8.0",
     "fastapi>=0.115.12",
     "uvicorn>=0.34.3",
-    "ygg-torrent-mcp>=1.2.0",
+    "ygg-torrent-mcp>=1.2.3",
+    "crawl4ai>=0.6.3",
+    "asyncio>=3.4.3",
 ]
 
 [project.urls]

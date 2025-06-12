@@ -76,8 +76,7 @@ This method is best for using the package as a library or running the server wit
 ```bash
 pip install torrent-search-mcp
 crawl4ai-setup # For crawl4ai/playwright
-# If it fails, try:
-uvx playwright install --with-deps chromium
+uvx playwright install # If previous command fails
 ```
 2.  Create a `.env` file in the directory where you'll run the application and add your passkey (optional):
 ```env
@@ -102,8 +101,7 @@ cd torrent-search-mcp
 ```bash
 uv sync
 crawl4ai-setup # For crawl4ai/playwright
-# If it fails, try:
-uvx playwright install --with-deps chromium
+uvx playwright install # If previous command fails
 ```
 3.  Create your configuration file by copying the example and add your passkey (optional):
 ```bash
@@ -196,21 +194,10 @@ Configuration:
 {
   "mcpServers": {
     ...
-    # with stdio + sudo (only requires uv and playwright installed)
-    # Install playwright first:
-    # uvx playwright install --with-deps chromium
+    # with stdio (only requires uv)
     "mcp-torrent-search": {
       "command": "uvx",
-      "args": ["torrent-search-mcp"],
-      "env": { "YGG_PASSKEY": "your_passkey_here" } # optional
-    },
-    # with stdio + no-sudo (only requires uv)
-    "mcp-torrent-search": {
-      "command": "sh",
-      "args": [
-        "-c",
-        "uvx playwright install --with-deps chromium && uvx torrent_search"
-      ],
+      "args": [ "torrent_search" ],
       "env": { "YGG_PASSKEY": "your_passkey_here" } # optional
     },
     # with sse transport (requires installation)

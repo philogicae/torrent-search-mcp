@@ -1,5 +1,6 @@
 import re
 from time import time
+from typing import Any
 from urllib.parse import quote
 
 from crawl4ai import AsyncWebCrawler, CacheMode
@@ -34,7 +35,7 @@ DEFAULT_CRAWLER_RUN_CONFIG = CrawlerRunConfig(
 )
 
 # Websites Configuration
-FILTERS = {
+FILTERS: dict[str, re.Pattern[str]] = {
     "full_links": re.compile(
         r"(http|https|ftp):[/]{1,2}[a-zA-Z0-9.]+[a-zA-Z0-9./?=+~_\-@:%#&]*"
     ),
@@ -50,49 +51,49 @@ FILTERS = {
     "tags": re.compile(r"(>?<(img|a) ((alt|src)=)+)|(<a href=\")"),
     "date": re.compile(r'<label title=("[a-zA-Z0-9()+: ]+"|>)'),
 }
-REPLACERS = {
-    "weird_spaces": [re.compile(r"\u00A0"), " "],
-    "spans": [re.compile(r"</?span>"), " | "],
-    "weird spaced bars": [re.compile(r" *\|[ \|]+"), " | "],
-    "double_quotes": [re.compile(r'"[" ]+'), ""],
-    "single_angle_bracket": [re.compile(r"<|>"), ""],
-    "thepiratebay_labels": [
+REPLACERS: dict[str, tuple[re.Pattern[str], str]] = {
+    "weird_spaces": (re.compile(r"\u00A0"), " "),
+    "spans": (re.compile(r"</?span>"), " | "),
+    "weird spaced bars": (re.compile(r" *\|[ \|]+"), " | "),
+    "double_quotes": (re.compile(r'"[" ]+'), ""),
+    "single_angle_bracket": (re.compile(r"<|>"), ""),
+    "thepiratebay_labels": (
         re.compile(r"Category.*?ULed by", re.DOTALL),
         "category | filename | date | magnet_link | size | seeders | leechers | uploader",
-    ],
-    "thepiratebay_magnet_fix": [
+    ),
+    "thepiratebay_magnet_fix": (
         re.compile(r"announce\|"),
         "announce |",
-    ],
-    "nyaa_remove_click_here_line": [
+    ),
+    "nyaa_remove_click_here_line": (
         re.compile(r"^\[Click here.*?\]\n"),
         "",
-    ],
-    "nyaa_header_block": [
+    ),
+    "nyaa_header_block": (
         re.compile(r"Category \| Name \| Link \|Size \|Date \|\s*\r?\n[\|-]+\s*\r?\n"),
         "category | filename | magnet_link | size | date | seeders | leechers | downloads\n",
-    ],
-    "nyaa_remove_comments": [
+    ),
+    "nyaa_remove_comments": (
         re.compile(r"\| \[ \d+\]\( \"\d+ comments\"\) "),
         "| ",
-    ],
-    "nyaa_clean_category_and_name_column_data": [
+    ),
+    "nyaa_clean_category_and_name_column_data": (
         re.compile(r'([\|\n])[^\|\n]+\"([^"\|]+)\"[^\|]+'),
         r"\1 \2 ",
-    ],
-    "nyaa_clean_link_column_data": [
+    ),
+    "nyaa_clean_link_column_data": (
         re.compile(r"\|\((magnet:\?[^)]+)\)"),
         r"| \1",
-    ],
-    "gt": [re.compile("&gt;"), " -"],
-    "amp": [re.compile("&amp;"), "&"],
-    "bad_starting_spaced_bars": [re.compile(r"\n[\| ]+"), "\n"],
-    "bad_ending_spaces": [re.compile(r" +\n"), "\n"],
-    "duplicated_spaces": [re.compile(r" {2,4}"), " "],
-    "size": [re.compile(r"([\d.]+[\s ]?[KMG])i?B"), r"\1B"],
-    "to_csv": [re.compile(r" \| *"), ";"],
+    ),
+    "gt": (re.compile("&gt;"), " -"),
+    "amp": (re.compile("&amp;"), "&"),
+    "bad_starting_spaced_bars": (re.compile(r"\n[\| ]+"), "\n"),
+    "bad_ending_spaces": (re.compile(r" +\n"), "\n"),
+    "duplicated_spaces": (re.compile(r" {2,4}"), " "),
+    "size": (re.compile(r"([\d.]+[\s ]?[KMG])i?B"), r"\1B"),
+    "to_csv": (re.compile(r" \| *"), ";"),
 }
-WEBSITES = {
+WEBSITES: dict[str, dict[str, str | list[str]]] = {
     "thepiratebay.org": dict(
         search="https://thepiratebay.org/search.php?q={query}",
         parsing="html",
@@ -109,7 +110,7 @@ crawler = AsyncWebCrawler(config=BROWSER_CONFIG, always_bypass_cache=True)
 
 
 def parse_result(
-    text: str, exclude_patterns: list[str] | None = None, max_chars=5000
+    text: str, exclude_patterns: list[str] | None = None, max_chars: int = 5000
 ) -> str:
     """
     Parse the text result.
@@ -157,9 +158,9 @@ async def scrape_torrents(query: str, sources: list[str] | None = None) -> list[
     async with crawler:
         for source, data in WEBSITES.items():
             if sources is None or source in sources:
-                url = data["search"].format(query=quote(query))
+                url = str(data["search"]).format(query=quote(query))
                 try:
-                    crawl_result = await crawler.arun(
+                    crawl_result: Any = await crawler.arun(
                         url=url, config=DEFAULT_CRAWLER_RUN_CONFIG
                     )
                     processed_text = parse_result(
@@ -168,7 +169,7 @@ async def scrape_torrents(query: str, sources: list[str] | None = None) -> list[
                             if data["parsing"] == "html"
                             else crawl_result.markdown
                         ),
-                        data.get("exclude_patterns", []),
+                        list(data.get("exclude_patterns", [])),
                     )
                     results_list.append(f"SOURCE -> {source}\n{processed_text}")
                 except Exception as e:
@@ -192,15 +193,15 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
         if "No results" in content:
             continue
         source = source[10:]
-        content = content.splitlines()
-        headers = content[0].split(";")
-        for line in content[1:]:
-            row = line.split(";")
-            torrent = dict(zip(headers, row))
-            torrent["source"] = source
+        data = content.splitlines()
+        headers = data[0].split(";")
+        for line in data[1:]:
             try:
-                torrents.append(Torrent(**torrent))
+                torrent = dict(zip(headers, line.split(";"))) | {"source": source}
+                torrents.append(Torrent.format(**torrent))
             except ValidationError:
+                continue
+            except Exception:
                 continue
     return torrents
 

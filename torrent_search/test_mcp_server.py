@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from fastmcp import Client
 
@@ -5,13 +7,13 @@ from .mcp_server import mcp
 
 
 @pytest.fixture(scope="session")
-def mcp_client():
+def mcp_client() -> Client[Any]:
     """Create a FastMCP client for testing."""
     return Client(mcp)
 
 
 @pytest.mark.asyncio
-async def test_read_resource_torrent_sources(mcp_client):
+async def test_read_resource_torrent_sources(mcp_client: Client[Any]) -> None:
     """Test reading the 'torrent_sources' resource."""
     async with mcp_client as client:
         result = await client.read_resource("data://torrent_sources")
@@ -19,7 +21,7 @@ async def test_read_resource_torrent_sources(mcp_client):
 
 
 @pytest.mark.asyncio
-async def test_search_torrents(mcp_client):
+async def test_search_torrents(mcp_client: Client[Any]) -> None:
     """Test the 'search_torrents' tool."""
     async with mcp_client as client:
         result = await client.call_tool("search_torrents", {"query": "berserk"})
@@ -27,7 +29,7 @@ async def test_search_torrents(mcp_client):
 
 
 @pytest.mark.asyncio
-async def test_get_ygg_torrent_details_with_magnet(mcp_client):
+async def test_get_ygg_torrent_details_with_magnet(mcp_client: Client[Any]) -> None:
     """Test the 'get_ygg_torrent_details' tool with magnet link request."""
     async with mcp_client as client:
         result = await client.call_tool(
@@ -37,7 +39,7 @@ async def test_get_ygg_torrent_details_with_magnet(mcp_client):
 
 
 @pytest.mark.asyncio
-async def test_get_ygg_magnet_link(mcp_client):
+async def test_get_ygg_magnet_link(mcp_client: Client[Any]) -> None:
     """Test the 'get_ygg_magnet_link' tool."""
     async with mcp_client as client:
         result = await client.call_tool("get_ygg_magnet_link", {"torrent_id": 1268760})

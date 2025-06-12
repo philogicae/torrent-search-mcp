@@ -4,7 +4,7 @@ on: push
 
 jobs:
   test:
-    name: Run tests 🧪
+    name: Run ruff, mypy and pytest 🧪
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,12 +16,16 @@ jobs:
         run: pip install uv
       - name: Install dependencies
         run: uv sync --locked --no-cache --no-editable
-      - name: Create dummy .env file
-        run: echo "YGG_PASSKEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" > .env
       - name: Install crawl4ai/playwright
         run: uvx playwright install --with-deps chromium
+      - name: Run ruff format
+        run: uv run ruff format torrent_search
+      - name: Run ruff check
+        run: uv run ruff check torrent_search
+      - name: Run mypy
+        run: uv run mypy torrent_search
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest torrent_search
 
   build:
     name: Build distribution 📦

@@ -1,12 +1,12 @@
+from typing import Any
+
 from fastmcp import FastMCP
 
 from .wrapper import Torrent, TorrentSearchApi
 
-mcp = FastMCP(
-    "TorrentSearchServer",
-    instructions="""
-        This server provides tools for interacting with TorrentSearch API.
-    """,
+mcp: FastMCP[Any] = FastMCP(
+    name="Torrent Search Server",
+    instructions="This server provides tools for interacting with TorrentSearch API.",
 )
 torrent_search_api = TorrentSearchApi()
 SOURCES = torrent_search_api.available_sources()

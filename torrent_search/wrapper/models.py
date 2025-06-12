@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -13,3 +15,11 @@ class Torrent(BaseModel):
     magnet_link: str | None = None
     uploader: str | None = None
     source: str | None = None
+
+    @classmethod
+    def format(cls, **data: Any) -> "Torrent":
+        data["seeders"] = int(data["seeders"])
+        data["leechers"] = int(data["leechers"])
+        if "downloads" in data:
+            data["downloads"] = int(data["downloads"])
+        return cls(**data)

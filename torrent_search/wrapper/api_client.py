@@ -85,20 +85,21 @@ class TorrentSearchApi:
 
 
 if __name__ == "__main__":
-    QUERY = argv[1] if len(argv) > 1 else None
-    if not QUERY:
-        print("Please provide a search query.")
-        exit(1)
-    from asyncio import run
 
-    async def main():
+    async def main() -> None:
+        query = argv[1] if len(argv) > 1 else None
+        if not query:
+            print("Please provide a search query.")
+            exit(1)
         client = TorrentSearchApi()
-        torrents = await client.search_torrents(QUERY)
+        torrents: list[Torrent] = await client.search_torrents(query)
         print(torrents)
         ygg = [torrent for torrent in torrents if torrent.source == "yggtorrent"]
-        if ygg:
+        if ygg and ygg[0].id:
             print(client.get_ygg_torrent_details(ygg[0].id, with_magnet_link=True))
         else:
             print("No torrents found")
+
+    from asyncio import run
 
     run(main())

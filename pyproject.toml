@@ -14,19 +14,25 @@ dependencies = [
     "fastmcp>=2.8.0",
     "fastapi>=0.115.12",
     "uvicorn>=0.34.3",
-    "ygg-torrent-mcp>=1.2.3",
+    "ygg-torrent-mcp>=1.3.0",
     "crawl4ai>=0.6.3",
     "asyncio>=3.4.3",
 ]
 
 [project.urls]
 Repository = "https://github.com/philogicae/torrent-search-mcp"
+Release = "https://github.com/philogicae/torrent-search-mcp/releases"
+DeepWiki = "https://deepwiki.com/philogicae/torrent-search-mcp"
 
 [project.scripts]
 torrent-search-mcp = "torrent_search.__main__:cli"
-
 [dependency-groups]
-dev = ["ruff>=0.11.13", "pytest>=8.4.0", "pytest-asyncio>=1.0.0"]
+dev = [
+    "ruff>=0.11.13",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+    "mypy>=1.16.0",
+]
 
 [tool.hatch.build]
 include = ["torrent_search"]

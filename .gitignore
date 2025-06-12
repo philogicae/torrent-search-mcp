@@ -8,8 +8,9 @@
 dist
 build
 
-# Ruff & Pytest
+# Ruff, Mypy, Pytest
 .ruff_cache
+.mypy_cache
 .pytest_cache
 
 # Envs

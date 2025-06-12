@@ -1,11 +1,27 @@
 import argparse
+import subprocess
 
 import uvicorn
+from playwright._impl._driver import compute_driver_executable, get_driver_env
 
 from .mcp_server import mcp
 
 
-def cli():
+def install_playwright_drivers() -> None:
+    try:
+        driver_executable, driver_cli = compute_driver_executable()
+        completed_process = subprocess.run(
+            [driver_executable, driver_cli, "install"], env=get_driver_env(), check=True
+        )
+        if completed_process.returncode == 0:
+            print("Playwright drivers installed.")
+            return
+    except Exception:
+        pass
+    print("Failed to install Playwright drivers.")
+
+
+def cli() -> None:
     parser = argparse.ArgumentParser(description="Run TorrentSearch Server.")
     parser.add_argument(
         "--mode",
@@ -36,6 +52,8 @@ def cli():
     )
 
     args = parser.parse_args()
+
+    install_playwright_drivers()
 
     if args.mode == "fastapi":
         print(f"Starting FastAPI server on {args.host}:{args.port}")

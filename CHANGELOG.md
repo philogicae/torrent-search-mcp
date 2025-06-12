@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2025-06-12
+
+### 🚀 Features
+
+- Add root user detection for playwright driver installation with dependencies
+
 ## [1.1.0] - 2025-06-12
 
 ### 🚀 Features
@@ -15,6 +21,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Bump version to 1.1.0
+- Update CHANGELOG for v1.1.0 with type hints and documentation improvements
 
 ## [1.0.0] - 2025-06-11
 

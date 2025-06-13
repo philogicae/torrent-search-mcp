@@ -21,6 +21,7 @@ DeepWiki = "https://deepwiki.com/philogicae/torrent-search-mcp"
 
 [project.scripts]
 torrent-search-mcp = "torrent_search.__main__:cli"
+
 [dependency-groups]
 dev = [
     "ruff>=0.11.13",

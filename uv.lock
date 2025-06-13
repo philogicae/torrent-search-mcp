@@ -1753,7 +1753,7 @@ wheels = [
 
 [[package]]
 name = "pydantic"
-version = "2.11.5"
+version = "2.11.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-types" },
@@ -1761,9 +1761,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f0/86/8ce9040065e8f924d642c58e4a344e33163a07f6b57f836d0d734e0ad3fb/pydantic-2.11.5.tar.gz", hash = "sha256:7f853db3d0ce78ce8bbb148c401c2cdd6431b3473c0cdff2755c7690952a7b7a", size = 787102, upload-time = "2025-05-22T21:18:08.761Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/8f/9af0f46acc943b8c4592d06523f26a150acf6e6e37e8bd5f0ace925e996d/pydantic-2.11.6.tar.gz", hash = "sha256:12b45cfb4af17e555d3c6283d0b55271865fb0b43cc16dd0d52749dc7abf70e7", size = 787868, upload-time = "2025-06-13T09:00:29.595Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/69/831ed22b38ff9b4b64b66569f0e5b7b97cf3638346eb95a2147fdb49ad5f/pydantic-2.11.5-py3-none-any.whl", hash = "sha256:f9c26ba06f9747749ca1e5c94d6a85cb84254577553c8785576fd38fa64dc0f7", size = 444229, upload-time = "2025-05-22T21:18:06.329Z" },
+    { url = "https://files.pythonhosted.org/packages/05/11/7912a9a194ee4ea96520740d1534bc31a03a4a59d62e1d7cac9461d3f379/pydantic-2.11.6-py3-none-any.whl", hash = "sha256:a24478d2be1b91b6d3bc9597439f69ed5e87f68ebd285d86f7c7932a084b72e7", size = 444718, upload-time = "2025-06-13T09:00:27.134Z" },
 ]
 
 [[package]]
@@ -2310,15 +2310,15 @@ wheels = [
 
 [[package]]
 name = "tf-playwright-stealth"
-version = "1.1.5"
+version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fake-http-header" },
     { name = "playwright" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/96/c8/3a896f25f1fd5079ac56ba2fab420d7719f4fd1bc58642d28a831a78478b/tf_playwright_stealth-1.1.5.tar.gz", hash = "sha256:28a01cf65beb340876fd77487cf46df27124fab291ec97c0c9ac61f783f40059", size = 23367, upload-time = "2025-06-12T04:54:44.851Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/6b/32bb58c65991f91aeaaf7473b650175d9d4af5dd383983d177d49ccba08d/tf_playwright_stealth-1.2.0.tar.gz", hash = "sha256:7bb8d32d3e60324fbf6b9eeae540b8cd9f3b9e07baeb33b025dbc98ad47658ba", size = 23362, upload-time = "2025-06-13T04:51:04.97Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/2d/8b4790c89cee4fcc8be207ee5ddf7fab652be07a2e3191da1d806a861769/tf_playwright_stealth-1.1.5-py3-none-any.whl", hash = "sha256:eed2c8448b077a816660eacef686b036883800f778180a08c7e9dd4b024bfb44", size = 33201, upload-time = "2025-06-12T04:54:43.739Z" },
+    { url = "https://files.pythonhosted.org/packages/11/3d/2653f4cf49660bb44eeac8270617cc4c0287d61716f249f55053f0af0724/tf_playwright_stealth-1.2.0-py3-none-any.whl", hash = "sha256:26ee47ee89fa0f43c606fe37c188ea3ccd36f96ea90c01d167b768df457e7886", size = 33151, upload-time = "2025-06-13T04:51:03.769Z" },
 ]
 
 [[package]]
@@ -2423,18 +2423,13 @@ wheels = [
 
 [[package]]
 name = "torrent-search-mcp"
-version = "1.1.1"
+version = "1.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "asyncio" },
-    { name = "bencodepy" },
     { name = "crawl4ai" },
     { name = "fastapi" },
     { name = "fastmcp" },
-    { name = "pydantic" },
-    { name = "python-dotenv" },
-    { name = "requests" },
-    { name = "uvicorn" },
     { name = "ygg-torrent-mcp" },
 ]
 
@@ -2449,15 +2444,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "asyncio", specifier = ">=3.4.3" },
-    { name = "bencodepy", specifier = ">=0.9.5" },
     { name = "crawl4ai", specifier = ">=0.6.3" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "fastmcp", specifier = ">=2.8.0" },
-    { name = "pydantic", specifier = ">=2.11.5" },
-    { name = "python-dotenv", specifier = ">=1.1.0" },
-    { name = "requests", specifier = ">=2.32.4" },
-    { name = "uvicorn", specifier = ">=0.34.3" },
-    { name = "ygg-torrent-mcp", specifier = ">=1.3.0" },
+    { name = "ygg-torrent-mcp", specifier = ">=1.3.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -2713,20 +2703,17 @@ wheels = [
 
 [[package]]
 name = "ygg-torrent-mcp"
-version = "1.3.0"
+version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bencodepy" },
     { name = "fastapi" },
     { name = "fastmcp" },
-    { name = "pydantic" },
-    { name = "python-dotenv" },
     { name = "requests" },
-    { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/19/22/f35d827511db07b0d8f77cfd4676fa3b5f9491ffcab128d96802d6197374/ygg_torrent_mcp-1.3.0.tar.gz", hash = "sha256:650e8591e9231b6f22dc2ddc77c79518bbd042d2e628130873539ddd41814371", size = 10814, upload-time = "2025-06-12T15:07:28.255Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/a0/3f792ac33a1109b7d87c949b0532922b3bcb0fc5fc17ffaa37b465731a8a/ygg_torrent_mcp-1.3.1.tar.gz", hash = "sha256:9eee3100db0b798818920c80d970090b45345ab3911b76478367f68b223735c4", size = 10926, upload-time = "2025-06-13T12:42:21.302Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/da/bc/138214d4ce74e04ab949093ae92066b0922ae989e04e903fb41cfed09471/ygg_torrent_mcp-1.3.0-py3-none-any.whl", hash = "sha256:712828e1f4bcc47cd8090ee0f02f142a510c1e5c82ccded64889a6e82a8577f2", size = 14637, upload-time = "2025-06-12T15:07:26.83Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/d3/4c5ce33bd9ad6d1963b628daabde181fb7629ea3690ec827c3b823895b35/ygg_torrent_mcp-1.3.1-py3-none-any.whl", hash = "sha256:4a7d24787a4c03894730394667b326677fc8cffefc702fc24ec8e1d47d1368e9", size = 14746, upload-time = "2025-06-13T12:42:19.893Z" },
 ]
 
 [[package]]

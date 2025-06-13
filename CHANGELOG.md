@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2025-06-13
+
+### 🐛 Bug Fixes
+
+- Update badge URLs with proper cache control parameters
+
+### 📚 Documentation
+
+- Add uv, Python version and CI status badges to README
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies and remove unused requirements
+
 ## [1.1.1] - 2025-06-12
 
 ### 🚀 Features

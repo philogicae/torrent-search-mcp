@@ -6,8 +6,13 @@ from .wrapper import Torrent, TorrentSearchApi
 
 mcp: FastMCP[Any] = FastMCP(
     name="Torrent Search Server",
-    instructions="This server provides tools for interacting with TorrentSearch API.",
+    instructions="""This tool searches for torrents based on the user's provided space-separated keywords and returns a list of results.
+    Recommend the best torrent to choose from the results, following this priority rule: match 1080p resolution > is x265 encoded > has great number of seeds+leechers > has small file size.
+    If query or results are too wide or heterogeneous for a clear search or top pick, suggest user adds more specific keywords to narrow down the search.
+    Never add unnecessary keywords (like: movie, serie, etc.) to user's query, they are rarely part of torrent names.
+    Comply to user's request and be concise in your recommendation and suggestions.""",
 )
+
 torrent_search_api = TorrentSearchApi()
 SOURCES = torrent_search_api.available_sources()
 
@@ -24,7 +29,7 @@ async def search_torrents(
     sources: list[str] | None = None,
     max_items: int = 10,
 ) -> list[Torrent]:
-    """Search for torrents on sources [thepiratebay.org, nyaa.si, yggtorrent]."""
+    """Search for torrents on sources [thepiratebay.org, nyaa.si, yggtorrent]. If sources is not specified, all sources are included by default."""
     return await torrent_search_api.search_torrents(
         query, sources=sources, max_items=max_items
     )

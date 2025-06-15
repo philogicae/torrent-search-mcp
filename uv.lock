@@ -2423,7 +2423,7 @@ wheels = [
 
 [[package]]
 name = "torrent-search-mcp"
-version = "1.1.3"
+version = "1.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "asyncio" },
@@ -2447,7 +2447,7 @@ requires-dist = [
     { name = "crawl4ai", specifier = ">=0.6.3" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "fastmcp", specifier = ">=2.8.1" },
-    { name = "ygg-torrent-mcp", specifier = ">=1.3.2" },
+    { name = "ygg-torrent-mcp", specifier = ">=1.3.3" },
 ]
 
 [package.metadata.requires-dev]
@@ -2703,7 +2703,7 @@ wheels = [
 
 [[package]]
 name = "ygg-torrent-mcp"
-version = "1.3.2"
+version = "1.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bencodepy" },
@@ -2711,9 +2711,9 @@ dependencies = [
     { name = "fastmcp" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/2d/b4fa8c88c7d317ea8dca1cabb8738404938308deb21844cbc428e14c977e/ygg_torrent_mcp-1.3.2.tar.gz", hash = "sha256:a27a39b17bb6eff6b8a9da3f3c3a184685903529b5059344cc695e626508a855", size = 10924, upload-time = "2025-06-15T15:45:37.893Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/5c/eab2e809e2cdada4ed9402ef20943195ef63f8ba6405772e8b55a2e8dda3/ygg_torrent_mcp-1.3.3.tar.gz", hash = "sha256:8234edb815187b03387cb4b8704b4ee8d8b1163de9ad2288ad6ad1ce10e50371", size = 11238, upload-time = "2025-06-15T19:35:50.081Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b7/cd/f6a16f44db3ea098e4d91f86ea77994229b19fe636783f53380c77744fc7/ygg_torrent_mcp-1.3.2-py3-none-any.whl", hash = "sha256:35c1f44e4c784d6bccd0667f97d361432b62137131180383126bc7c487c68597", size = 14749, upload-time = "2025-06-15T15:45:36.435Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/37/9af33d970fed1f2d4ada68fd0d21115553c51a13446b08049f51e0527f6c/ygg_torrent_mcp-1.3.3-py3-none-any.whl", hash = "sha256:46586ebab0b2a44523b16cb28d65f799da4b0e30276e7fcd39337ea1ae080f5b", size = 15081, upload-time = "2025-06-15T19:35:48.689Z" },
 ]
 
 [[package]]

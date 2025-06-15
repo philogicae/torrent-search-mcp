@@ -1,13 +1,13 @@
 [project]
 name = "torrent-search-mcp"
-version = "1.1.3"
+version = "1.1.4"
 description = "TorrentSearch MCP Server"
 authors = [{ name = "philogicae" }]
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
 license = "MIT"
 dependencies = [
-    "ygg-torrent-mcp>=1.3.2",
+    "ygg-torrent-mcp>=1.3.3",
     "crawl4ai>=0.6.3",
     "asyncio>=3.4.3",
     "fastmcp>=2.8.1",

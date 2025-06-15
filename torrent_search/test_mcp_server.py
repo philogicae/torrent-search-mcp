@@ -24,7 +24,9 @@ async def test_read_resource_torrent_sources(mcp_client: Client[Any]) -> None:
 async def test_search_torrents(mcp_client: Client[Any]) -> None:
     """Test the 'search_torrents' tool."""
     async with mcp_client as client:
-        result = await client.call_tool("search_torrents", {"query": "berserk"})
+        result = await client.call_tool(
+            "search_torrents", {"query": "berserk", "max_items": 3}
+        )
         assert result is not None and result[0].text
 
 

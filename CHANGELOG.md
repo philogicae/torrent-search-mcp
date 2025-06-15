@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.4] - 2025-06-15
+
+### 🚜 Refactor
+
+- Simplify MCP server with default sources and improve search guidelines
+
 ## [1.1.3] - 2025-06-15
 
 ### 🚀 Features
@@ -12,6 +18,10 @@ All notable changes to this project will be documented in this file.
 
 - Typo
 - Suppress crawl4ai deprecation warnings and reorder imports
+
+### 📚 Documentation
+
+- Update changelog for v1.1.3 with new features and bug fixes
 
 ## [1.1.2] - 2025-06-13
 

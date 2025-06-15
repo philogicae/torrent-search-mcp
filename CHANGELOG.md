@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.3] - 2025-06-15
+
+### 🚀 Features
+
+- Update server instructions and improve torrent search API documentation
+
+### 🐛 Bug Fixes
+
+- Typo
+- Suppress crawl4ai deprecation warnings and reorder imports
+
 ## [1.1.2] - 2025-06-13
 
 ### 🐛 Bug Fixes
@@ -11,6 +22,7 @@ All notable changes to this project will be documented in this file.
 ### 📚 Documentation
 
 - Add uv, Python version and CI status badges to README
+- Add project badges and update dependencies in README
 
 ### ⚙️ Miscellaneous Tasks
 

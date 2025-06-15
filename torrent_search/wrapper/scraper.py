@@ -1,14 +1,23 @@
 import re
+import warnings
 from time import time
 from typing import Any
 from urllib.parse import quote
 
-from crawl4ai import AsyncWebCrawler, CacheMode
-from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
-from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from pydantic import ValidationError
 
 from .models import Torrent
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)  # For crawl4ai <= 0.6.3
+
+from crawl4ai import AsyncWebCrawler, CacheMode  # noqa: E402 wrong-import-order
+from crawl4ai.async_configs import (  # noqa: E402 wrong-import-order
+    BrowserConfig,
+    CrawlerRunConfig,
+)
+from crawl4ai.markdown_generation_strategy import (  # noqa: E402 wrong-import-order
+    DefaultMarkdownGenerator,
+)
 
 # Crawler Configuration
 BROWSER_CONFIG = BrowserConfig(

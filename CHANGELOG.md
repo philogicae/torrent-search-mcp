@@ -2,12 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2025-06-18
+
+### 🚜 Refactor
+
+- Rework on api/mcp logic to simplify params, optimize prompts, and reduce overall token consumption
+- Simplify Dockerfile by using single-stage build
+
+### ⚙️ Miscellaneous Tasks
+
+- Update ygg dependencies and version
+
 ## [1.2.0] - 2025-06-17
 
 ### 🚀 Features
 
 - Implement torrent caching and unified torrent ID system across sources [wrapper]
 - Implement torrent caching and unified torrent ID system across sources [servers]
+
+### 📚 Documentation
+
+- Update changelog for v1.2.0 with caching and unified torrent ID features
 
 ### 🧪 Testing
 

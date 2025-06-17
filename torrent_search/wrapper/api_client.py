@@ -1,5 +1,5 @@
 from sys import argv
-from typing import Any
+from typing import Any, Literal, cast
 
 from aiocache import cached
 from ygg_torrent import ygg_api
@@ -9,12 +9,19 @@ from .scraper import WEBSITES, search_torrents
 
 
 def key_builder(
-    namespace: str, fn: Any, *args: tuple[Any], **kwargs: dict[str, Any]
+    _namespace: str, _fn: Any, *args: tuple[Any], **kwargs: dict[str, Any]
 ) -> str:
-    return str(
-        {"query": args[0] if len(args) > 0 else "", "sources": None, "max_items": 10}
-        | kwargs
-    )
+    key = {
+        "query": args[0] if len(args) > 0 else "",
+        "sources": [
+            "thepiratebay.org",
+            "nyaa.si",
+            "yggtorrent",
+        ],
+        "max_items": 10,
+    } | kwargs
+    key["sources"] = sorted(key["sources"])  # type: ignore
+    return str(key)
 
 
 class TorrentSearchApi:
@@ -28,10 +35,14 @@ class TorrentSearchApi:
         return self.WEBSITES
 
     @cached(ttl=300, key_builder=key_builder)  # type: ignore[misc] # 5min
-    async def search_torrents(
+    async def search_torrents(  # pylint: disable=dangerous-default-value
         self,
         query: str,
-        sources: list[str] | None = None,
+        sources: list[Literal["thepiratebay.org", "nyaa.si", "yggtorrent"]] = [
+            "thepiratebay.org",
+            "nyaa.si",
+            "yggtorrent",
+        ],
         max_items: int = 10,
     ) -> list[Torrent]:
         """
@@ -46,8 +57,12 @@ class TorrentSearchApi:
             A list of torrent results.
         """
         found_torrents: list[Torrent] = []
-        if sources is None or any(source in sources for source in WEBSITES):
-            found_torrents.extend(await search_torrents(query, sources=sources))
+        if sources is None or any(
+            source in ["thepiratebay.org", "nyaa.si"] for source in sources
+        ):
+            found_torrents.extend(
+                await search_torrents(query, cast(list[str], sources))
+            )
         if sources is None or "yggtorrent" in sources:
             found_torrents.extend(
                 [
@@ -82,7 +97,6 @@ class TorrentSearchApi:
         if torrent_id in self.CACHE:
             found_torrent = self.CACHE[torrent_id]
 
-        print(torrent_id)
         source, real_id = torrent_id.split("-", 1)
         if source == "yggtorrent":
             if not found_torrent:

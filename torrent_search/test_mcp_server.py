@@ -38,7 +38,7 @@ async def test_get_torrent_details(mcp_client: Client[Any]) -> None:
             "get_torrent_details",
             {
                 "torrent_id": "nyaa.si-4ff655d4ae",
-                "original_search_params": {"query": "berserk", "max_items": 10},
+                "original_search_params": '{"query": "berserk", "max_items": 10}',
             },
         )
         assert result is not None and result[0].text

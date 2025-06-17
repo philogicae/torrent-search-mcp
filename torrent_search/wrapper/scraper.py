@@ -196,7 +196,7 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
     Returns:
         A list of torrent results.
     """
-    torrents = []
+    torrents: list[Torrent] = []
     for text in texts:
         source, content = text.split("\n", 1)
         if "No results" in content:
@@ -233,7 +233,8 @@ async def search_torrents(
         A list of torrent results.
     """
     start_time = time()
-    scraped_results = await scrape_torrents(query, sources=sources)
+    scraped_results: list[str] = await scrape_torrents(query, sources=sources)
+    torrents: list[Torrent] = []
     retries = 0
     while retries < max_retries:
         try:
@@ -247,4 +248,4 @@ async def search_torrents(
         f"Exhausted all {max_retries} retries. "
         f"Returning empty list. Total time: {time() - start_time:.2f} sec."
     )
-    return []
+    return torrents

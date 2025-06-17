@@ -1,10 +1,11 @@
+from hashlib import sha256
 from typing import Any
 
 from pydantic import BaseModel
 
 
 class Torrent(BaseModel):
-    id: int | None = None
+    id: str
     filename: str
     category: str | None = None
     size: str
@@ -18,8 +19,20 @@ class Torrent(BaseModel):
 
     @classmethod
     def format(cls, **data: Any) -> "Torrent":
-        data["seeders"] = int(data["seeders"])
-        data["leechers"] = int(data["leechers"])
-        if "downloads" in data:
-            data["downloads"] = int(data["downloads"])
+        data["id"] = (
+            data["source"]
+            + "-"
+            + (
+                str(data["id"])
+                if data.get("id")
+                else (
+                    sha256(data["magnet_link"].encode()).hexdigest()[:10]
+                    if data.get("magnet_link")
+                    else "none"
+                )
+            )
+        )
+        data["seeders"] = int(data["seeders"]) if data.get("seeders") else 0
+        data["leechers"] = int(data["leechers"]) if data.get("leechers") else 0
+        data["downloads"] = int(data["downloads"]) if data.get("downloads") else 0
         return cls(**data)

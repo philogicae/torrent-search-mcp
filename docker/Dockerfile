@@ -12,4 +12,6 @@ COPY pyproject.toml uv.lock README.md ./
 COPY torrent_search/ ./torrent_search/
 
 EXPOSE 8000
+
 CMD ["uv", "run", "-m", "torrent_search", "--mode", "sse"]
+#CMD ["uv", "run", "-m", "torrent_search", "--mode", "streamable-http"]

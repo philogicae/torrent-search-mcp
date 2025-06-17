@@ -200,17 +200,17 @@ Configuration:
     # with stdio (only requires uv)
     "mcp-torrent-search": {
       "command": "uvx",
-      "args": [ "torrent_search" ],
+      "args": [ "torrent-search-mcp" ],
       "env": { "YGG_PASSKEY": "your_passkey_here" } # optional
     },
     # with sse transport (requires installation)
     "mcp-torrent-search": {
       "serverUrl": "http://127.0.0.1:8000/sse"
-    }
+    },
     # with streamable-http transport (requires installation)
     "mcp-torrent-search": {
       "serverUrl": "http://127.0.0.1:8000/mcp" # not yet supported by every client
-    }
+    },
     ...
   }
 }

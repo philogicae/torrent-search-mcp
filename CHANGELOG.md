@@ -2,11 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2025-06-17
+
+### 🚀 Features
+
+- Implement torrent caching and unified torrent ID system across sources [wrapper]
+- Implement torrent caching and unified torrent ID system across sources [servers]
+
+### 🧪 Testing
+
+- Add max_items parameter to search_torrents tool
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version from 1.1.4 to 1.2.0
+
 ## [1.1.4] - 2025-06-15
 
 ### 🚜 Refactor
 
 - Simplify MCP server with default sources and improve search guidelines
+
+### 📚 Documentation
+
+- Update changelog for v1.1.4 with refactoring changes
 
 ## [1.1.3] - 2025-06-15
 

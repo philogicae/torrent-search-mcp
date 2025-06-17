@@ -1,3 +1,6 @@
+from json import loads
+from typing import Literal
+
 from fastapi import FastAPI, HTTPException, Path, Query
 
 from .wrapper import Torrent, TorrentSearchApi
@@ -26,38 +29,41 @@ async def health_check() -> dict[str, str]:
 )
 async def search_torrents(
     query: str,
-    sources: list[str] | None = None,
+    sources: list[Literal["thepiratebay.org", "nyaa.si", "yggtorrent"]] | None = None,
     max_items: int = 10,
 ) -> list[Torrent]:
     """
     Search for torrents on sources [thepiratebay.org, nyaa.si, yggtorrent].
     Corresponds to `TorrentSearchApi.search_torrents()`.
     """
-    return await api_client.search_torrents(
+    torrents: list[Torrent] = await api_client.search_torrents(
         query=query,
         sources=sources,
         max_items=max_items,
     )
+    return torrents
 
 
 @app.get(
     "/torrents/{torrent_id}",
-    summary="Get YGG Torrent Details",
+    summary="Get Torrent Details",
     tags=["Torrents"],
     response_model=Torrent,
 )
-async def get_ygg_torrent_details(
-    torrent_id: int = Path(..., ge=1, description="The ID of the torrent."),
-    with_magnet_link: bool = Query(
-        False, description="Include magnet link in the response."
+async def get_torrent_details(
+    torrent_id: str = Path(..., description="The ID of the torrent."),
+    original_search_params: str = Query(
+        "{}",
+        description='Original search parameters (can be omitted if from YGG Torrent). Format: {"query": "your_query", "max_items": 10}',
     ),
 ) -> Torrent:
     """
-    Get details about a specific torrent coming from YGG Torrent source only.
-    Corresponds to `TorrentSearchApi.get_ygg_torrent_details()`.
+    Get details about a specific torrent by id and original search parameters (can be omitted if from YGG Torrent).
+    Corresponds to `TorrentSearchApi.get_torrent_details()`.
     """
-    torrent = api_client.get_ygg_torrent_details(
-        torrent_id, with_magnet_link=with_magnet_link
+    torrent: Torrent | None = await api_client.get_torrent_details(
+        torrent_id,
+        original_search_params=loads(original_search_params),
     )
     if not torrent:
         raise HTTPException(
@@ -68,18 +74,25 @@ async def get_ygg_torrent_details(
 
 @app.get(
     "/torrents/{torrent_id}/magnet",
-    summary="Get YGG Magnet Link",
+    summary="Get Magnet Link",
     tags=["Torrents"],
     response_model=str,
 )
 async def get_magnet_link(
-    torrent_id: int = Path(..., ge=1, description="The ID of the torrent."),
+    torrent_id: str = Path(..., description="The ID of the torrent."),
+    original_search_params: str = Query(
+        "{}",
+        description='Original search parameters (can be omitted if from YGG Torrent). Format: {"query": "your_query", "max_items": 10}',
+    ),
 ) -> str:
     """
-    Get the magnet link for a specific torrent coming from YGG Torrent source only.
-    Corresponds to `TorrentSearchApi.get_ygg_magnet_link()`.
+    Get the magnet link for a specific torrent by id and original search parameters (can be omitted if from YGG Torrent).
+    Corresponds to `TorrentSearchApi.get_magnet_link()`.
     """
-    magnet_link = api_client.get_ygg_magnet_link(torrent_id)
+    magnet_link: str | None = await api_client.get_magnet_link(
+        torrent_id,
+        original_search_params=loads(original_search_params),
+    )
     if not magnet_link:
         raise HTTPException(
             status_code=404, detail="Magnet link not found or could not be generated."

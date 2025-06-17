@@ -25,24 +25,30 @@ async def test_search_torrents(mcp_client: Client[Any]) -> None:
     """Test the 'search_torrents' tool."""
     async with mcp_client as client:
         result = await client.call_tool(
-            "search_torrents", {"query": "berserk", "max_items": 3}
+            "search_torrents", {"query": "berserk", "max_items": 10}
         )
         assert result is not None and result[0].text
 
 
 @pytest.mark.asyncio
-async def test_get_ygg_torrent_details_with_magnet(mcp_client: Client[Any]) -> None:
-    """Test the 'get_ygg_torrent_details' tool with magnet link request."""
+async def test_get_torrent_details(mcp_client: Client[Any]) -> None:
+    """Test the 'get_torrent_details' tool."""
     async with mcp_client as client:
         result = await client.call_tool(
-            "get_ygg_torrent_details", {"torrent_id": 1268760, "with_magnet_link": True}
+            "get_torrent_details",
+            {
+                "torrent_id": "nyaa.si-4ff655d4ae",
+                "original_search_params": {"query": "berserk", "max_items": 10},
+            },
         )
         assert result is not None and result[0].text
 
 
 @pytest.mark.asyncio
-async def test_get_ygg_magnet_link(mcp_client: Client[Any]) -> None:
-    """Test the 'get_ygg_magnet_link' tool."""
+async def test_get_magnet_link(mcp_client: Client[Any]) -> None:
+    """Test the 'get_magnet_link' tool."""
     async with mcp_client as client:
-        result = await client.call_tool("get_ygg_magnet_link", {"torrent_id": 1268760})
+        result = await client.call_tool(
+            "get_magnet_link", {"torrent_id": "yggtorrent-1268760"}
+        )
         assert result is not None and result[0].text

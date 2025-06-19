@@ -2,11 +2,12 @@ name: torrent-search-mcp
 
 services:
   torrent-search-mcp:
+    container_name: torrent-search-mcp
     build:
       context: ..
       dockerfile: docker/Dockerfile
     image: torrent-search-mcp
-    container_name: torrent-search-mcp
+    restart: unless-stopped
     ports:
       - 8765:8000
     env_file:

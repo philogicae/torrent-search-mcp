@@ -13,6 +13,7 @@ dependencies = [
     "aiocache>=0.12.3",
     "fastmcp>=2.8.1",
     "fastapi>=0.115.12",
+    "pybase62>=1.0.0",
 ]
 
 [project.urls]
@@ -26,7 +27,7 @@ torrent-search-mcp = "torrent_search.__main__:cli"
 [dependency-groups]
 dev = [
     "ruff>=0.11.13",
-    "pytest>=8.4.0",
+    "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
     "mypy>=1.16.1",
 ]

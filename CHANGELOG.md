@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2025-06-19
+
+### ⚙️ Miscellaneous Tasks
+
+- Update litellm to 1.72.6.post2 and ygg-torrent-mcp to 1.5.0
+
 ## [1.4.0] - 2025-06-19
 
 ### 🚀 Features
 
 - Implement caching and base62 compression for torrent IDs
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 1.4.0 for caching and base62 compression features
 
 ## [1.3.0] - 2025-06-17
 

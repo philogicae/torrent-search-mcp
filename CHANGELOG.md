@@ -2,12 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.3.0] - 2025-06-18
+## [1.4.0] - 2025-06-19
+
+### 🚀 Features
+
+- Implement caching and base62 compression for torrent IDs
+
+## [1.3.0] - 2025-06-17
 
 ### 🚜 Refactor
 
 - Rework on api/mcp logic to simplify params, optimize prompts, and reduce overall token consumption
 - Simplify Dockerfile by using single-stage build
+
+### 📚 Documentation
+
+- Update changelog for v1.3.0 with API refactoring and dependency updates
 
 ### ⚙️ Miscellaneous Tasks
 

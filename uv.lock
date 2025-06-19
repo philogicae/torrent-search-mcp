@@ -1024,7 +1024,7 @@ wheels = [
 
 [[package]]
 name = "litellm"
-version = "1.72.6.post1"
+version = "1.72.6.post2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1039,10 +1039,7 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9d/49/673d6e95c086c578f48803d46583c64a89b60b6c22a2757e600d1eadd63a/litellm-1.72.6.post1.tar.gz", hash = "sha256:cc03455bfae17c4226e70bc0e8ac7c889fc577b4832fbb6bc5bd8bc5a2ab02f9", size = 8398642, upload-time = "2025-06-18T03:53:14.777Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/d9/d6cbfe107e240a2206e34197f76ab73e0bc8312970b61b56452351da11aa/litellm-1.72.6.post1-py3-none-any.whl", hash = "sha256:94abba480b3e1c9f05ed75f908e8fb0d5fe1bd5304868bd435f99fbdfcdb4c88", size = 8305823, upload-time = "2025-06-18T03:53:12.747Z" },
-]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/50/e594d8978362796e44c9643befac6dd27dcc113aa700723697bae849ed72/litellm-1.72.6.post2.tar.gz", hash = "sha256:24dbe0efaeca0712d2e18795a6734d1678af086ed9ea1893721c426fe984398d", size = 8363431, upload-time = "2025-06-19T19:28:44.555Z" }
 
 [[package]]
 name = "lxml"
@@ -2445,7 +2442,7 @@ wheels = [
 
 [[package]]
 name = "torrent-search-mcp"
-version = "1.4.0"
+version = "1.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiocache" },
@@ -2473,7 +2470,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "fastmcp", specifier = ">=2.8.1" },
     { name = "pybase62", specifier = ">=1.0.0" },
-    { name = "ygg-torrent-mcp", specifier = ">=1.4.0" },
+    { name = "ygg-torrent-mcp", specifier = ">=1.5.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -2729,7 +2726,7 @@ wheels = [
 
 [[package]]
 name = "ygg-torrent-mcp"
-version = "1.4.0"
+version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bencodepy" },
@@ -2737,9 +2734,9 @@ dependencies = [
     { name = "fastmcp" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/56/50/ad5a8165ff6fcc505b3be43f0a52fd63f2e41e6688aa298bfe2a5f024b5b/ygg_torrent_mcp-1.4.0.tar.gz", hash = "sha256:5575a64d24983dcb807b3a09c69d6959597226d8465bc17ff5cec8901a6b3a71", size = 11389, upload-time = "2025-06-17T21:27:01.034Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/43/10deadece56722044a0a05d90a5d8daff6e24ca45c87f398a2afc3a18873/ygg_torrent_mcp-1.5.0.tar.gz", hash = "sha256:73eb132f727577af18cf8732167c5550965ee85cecf1acc9dd9e24f0af069159", size = 11531, upload-time = "2025-06-19T21:38:52.801Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/dd/731c64579e73be0eb58803e567f5533aa41723bad6940837db8b01222600/ygg_torrent_mcp-1.4.0-py3-none-any.whl", hash = "sha256:eb6b9c1441e204e37a3e4e4721c1a95ce592fe6b2ba2edd87fa1a7aa813ecbe9", size = 15239, upload-time = "2025-06-17T21:26:59.714Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/88/e32d0b37ddcb005a725857c1b6f519b133870bf5753db8094dfc6378946d/ygg_torrent_mcp-1.5.0-py3-none-any.whl", hash = "sha256:1ab31532d51dcaa55d5ef21017fb6354b74ffcd651f974ea4ccbf509d18c92be", size = 15420, upload-time = "2025-06-19T21:38:51.672Z" },
 ]
 
 [[package]]

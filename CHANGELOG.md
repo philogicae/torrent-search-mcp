@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2025-06-22
+
+### 🚀 Features
+
+- Add prepare_search_query tool
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies and changelog for version 1.4.1
+- Update dependencies (numpy 2.3.1, litellm 1.73.0, hf-xet 1.1.5)
+
 ## [1.4.1] - 2025-06-19
 
 ### ⚙️ Miscellaneous Tasks

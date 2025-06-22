@@ -27,6 +27,17 @@ def available_sources() -> list[str]:
 
 
 @mcp.tool()
+def prepare_search_query(user_intent: str, search_query: str) -> str:
+    """Always use this tool to prepare a query for torrent search.
+    Properly split the user's intention and the actual search query (space-separated keywords) to avoid unfruitful results.
+    # Instructions:
+    - `user_intent`: Must reflect user's overall intention (e.g., "last episode of Breaking Bad", "season 5 of Breaking Bad", "complete series of Breaking Bad").
+    - `search_query`: The actual search terms, consisting of lowercase, space-separated keywords. Do not add generic terms (e.g., "movie", "series"), common prefixes (e.g., "the", "a", "and"), or extra information (e.g., episode name, resolution, codec). For TV series, use `sXXeYY` for specific episodes (e.g., "breaking bad s05e16"), `sXX` for complete seasons (e.g., "breaking bad s05") and only the show name for complete series (e.g., "breaking bad").
+    """
+    return "Ready to search for torrents."
+
+
+@mcp.tool()
 async def search_torrents(query: str) -> str:
     """Searches for torrents using a query (space-separated keywords) and returns a list of torrent results.
     # Instructions:

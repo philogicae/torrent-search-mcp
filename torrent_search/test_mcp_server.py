@@ -21,6 +21,20 @@ async def test_read_resource_torrent_sources(mcp_client: Client[Any]) -> None:
 
 
 @pytest.mark.asyncio
+async def test_prepare_search_query(mcp_client: Client[Any]) -> None:
+    """Test the 'prepare_search_query' tool."""
+    async with mcp_client as client:
+        result = await client.call_tool(
+            "prepare_search_query",
+            {
+                "user_intent": "last episode of Breaking Bad",
+                "search_query": "breaking bad s05e16",
+            },
+        )
+        assert result is not None and len(result[0].text) > 8  # Success
+
+
+@pytest.mark.asyncio
 async def test_search_torrents(mcp_client: Client[Any]) -> None:
     """Test the 'search_torrents' tool."""
     async with mcp_client as client:

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2025-06-24
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade dependencies including fastmcp to 2.9.0 and litellm to 1.73.1
+
 ## [1.5.0] - 2025-06-22
 
 ### 🚀 Features
@@ -12,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 - Update dependencies and changelog for version 1.4.1
 - Update dependencies (numpy 2.3.1, litellm 1.73.0, hf-xet 1.1.5)
+- Update changelog for v1.5.0 with new search query tool and dependency updates
 
 ## [1.4.1] - 2025-06-19
 

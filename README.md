@@ -47,8 +47,8 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 -   FastAPI server interface for alternative HTTP access (e.g., for direct API calls or testing)
 -   Tools:
     -   Search for torrents on ThePirateBay, Nyaa and YggTorrent
-    -   Get details for a specific YGG torrent
-    -   Retrieve YGG magnet links
+    -   Get info for a specific torrent by id
+    -   Get magnet link for a specific torrent by id
 
 ## Setup
 
@@ -188,8 +188,8 @@ Environment variables (like `YGG_PASSKEY`) are configured the same way as for th
 Usable with any MCP-compatible client. Available tools:
 
 -   `search_torrents`: Search for torrents.
--   `get_torrent_details`: Get details of a specific torrent.
--   `get_magnet_link`: Get the magnet link for a torrent.
+-   `get_torrent_info`: Get info for a specific torrent by id.
+-   `get_magnet_link`: Get the magnet link for a specific torrent by id.
 
 #### Example with Windsurf
 Configuration:

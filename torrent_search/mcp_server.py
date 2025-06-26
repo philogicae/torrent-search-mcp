@@ -60,9 +60,9 @@ async def search_torrents(query: str) -> str:
 
 
 @mcp.tool()
-async def get_torrent_details(torrent_id: str) -> str:
-    """Get details for a specific torrent by id."""
-    logger.info(f"Getting details for torrent: {torrent_id}")
+async def get_torrent_info(torrent_id: str) -> str:
+    """Get info for a specific torrent by id."""
+    logger.info(f"Getting info for torrent: {torrent_id}")
     torrent: Torrent | None = await torrent_search_api.get_torrent_details(torrent_id)
     return str(torrent) if torrent else "Torrent not found"
 

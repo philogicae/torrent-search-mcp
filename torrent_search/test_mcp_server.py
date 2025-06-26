@@ -45,11 +45,11 @@ async def test_search_torrents(mcp_client: Client[Any]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_torrent_details(mcp_client: Client[Any]) -> None:
-    """Test the 'get_torrent_details' tool."""
+async def test_get_torrent_info(mcp_client: Client[Any]) -> None:
+    """Test the 'get_torrent_info' tool."""
     async with mcp_client as client:
         result = await client.call_tool(
-            "get_torrent_details",
+            "get_torrent_info",
             {"torrent_id": "t7O3z6diFKc3BneNfORT-5-nyaa.si-4ff655d4ae"},
         )
         assert result is not None and len(result[0].text) > 32  # Torrent found

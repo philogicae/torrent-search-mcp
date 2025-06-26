@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2025-06-26
+
+### 🚜 Refactor
+
+- Rename get_torrent_details to get_torrent_info for consistency
+
 ## [1.6.0] - 2025-06-24
 
 ### ⚙️ Miscellaneous Tasks
 
 - Upgrade dependencies including fastmcp to 2.9.0 and litellm to 1.73.1
+- Update changelog for v1.6.0 with dependency upgrades
 
 ## [1.5.0] - 2025-06-22
 

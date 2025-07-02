@@ -56,13 +56,13 @@ async def test_get_torrent_info(mcp_client: Client[Any]) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_magnet_link(mcp_client: Client[Any]) -> None:
-    """Test the 'get_magnet_link' tool."""
+async def test_get_magnet_link_or_torrent_file(mcp_client: Client[Any]) -> None:
+    """Test the 'get_magnet_link_or_torrent_file' tool."""
     async with mcp_client as client:
         result = await client.call_tool(
-            "get_magnet_link",
-            {"torrent_id": "t7O3z6diFKc3BneNfORT-5-yggtorrent-1268760"},
+            "get_magnet_link_or_torrent_file",
+            {"torrent_id": "t7O3z6diFKc3BneNfORT-5-nyaa.si-4ff655d4ae"},
         )
         assert (
             result is not None and len(result.content[0].text) > 32
-        )  # Magnet link found
+        )  # Magnet link or torrent file found

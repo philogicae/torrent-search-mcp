@@ -16,7 +16,7 @@ mcp: FastMCP[Any] = FastMCP("TorrentSearch Tool")
 
 torrent_search_api = TorrentSearchApi()
 
-INCLUDE_MAGNET_LINKS = str(getenv("INCLUDE_MAGNET_LINKS")).lower() == "true"
+INCLUDE_LINKS = str(getenv("INCLUDE_LINKS")).lower() == "true"
 SOURCES = torrent_search_api.available_sources()
 
 
@@ -51,10 +51,11 @@ async def search_torrents(query: str) -> str:
     """
     logger.info(f"Searching for torrents: {query}")
     found_torrents: list[Torrent] = await torrent_search_api.search_torrents(query)
-    if found_torrents and not INCLUDE_MAGNET_LINKS:
+    if found_torrents and not INCLUDE_LINKS:  # Greatly reduce token usage
         shorted_torrents = deepcopy(found_torrents)  # Leave cache intact
         for torrent in shorted_torrents:
-            torrent.magnet_link = None  # Greatly reduce token usage
+            torrent.magnet_link = None
+            torrent.torrent_file = None
         return "\n".join([str(torrent) for torrent in shorted_torrents])
     return "\n".join([str(torrent) for torrent in found_torrents])
 
@@ -68,8 +69,12 @@ async def get_torrent_info(torrent_id: str) -> str:
 
 
 @mcp.tool()
-async def get_magnet_link(torrent_id: str) -> str:
-    """Get the magnet link for a specific torrent by id."""
-    logger.info(f"Getting magnet link for torrent: {torrent_id}")
-    magnet_link: str | None = await torrent_search_api.get_magnet_link(torrent_id)
-    return magnet_link or "Torrent or magnet link not found"
+async def get_magnet_link_or_torrent_file(torrent_id: str) -> str:
+    """Get the magnet link or torrent file for a specific torrent by id."""
+    logger.info(f"Getting magnet link or torrent file for torrent: {torrent_id}")
+    magnet_link_or_torrent_file: (
+        str | None
+    ) = await torrent_search_api.get_magnet_link_or_torrent_file(torrent_id)
+    return (
+        magnet_link_or_torrent_file or "Torrent, magnet link or torrent file not found"
+    )

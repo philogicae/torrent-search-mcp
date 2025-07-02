@@ -17,6 +17,7 @@ class Torrent(BaseModel):
     downloads: int | None = None
     date: str
     magnet_link: str | None = None
+    torrent_file: str | None = None
     uploader: str | None = None
     source: str | None = None
 

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Path
+from fastapi.responses import FileResponse
 
-from .wrapper import Torrent, TorrentSearchApi
+from .wrapper import FOLDER_TORRENT_FILES, Torrent, TorrentSearchApi
 
 app = FastAPI(
     title="TorrentSearch FastAPI",
@@ -58,21 +59,30 @@ async def get_torrent_details(
 
 
 @app.get(
-    "/torrents/{torrent_id}/magnet",
-    summary="Get Magnet Link",
+    "/torrents/{torrent_id}/download",
+    summary="Get Magnet Link or Torrent File",
     tags=["Torrents"],
     response_model=str,
 )
-async def get_magnet_link(
+async def get_magnet_link_or_torrent_file(
     torrent_id: str = Path(..., description="The ID of the torrent."),
-) -> str:
+) -> str | FileResponse:
     """
-    Get the magnet link for a specific torrent by id.
-    Corresponds to `TorrentSearchApi.get_magnet_link()`.
+    Get the magnet link or torrent file for a specific torrent by id.
+    Corresponds to `TorrentSearchApi.get_magnet_link_or_torrent_file()`.
     """
-    magnet_link: str | None = await api_client.get_magnet_link(torrent_id)
-    if not magnet_link:
+    magnet_link_or_torrent_file: (
+        str | None
+    ) = await api_client.get_magnet_link_or_torrent_file(torrent_id)
+    if not magnet_link_or_torrent_file:
         raise HTTPException(
-            status_code=404, detail="Magnet link not found or could not be generated."
+            status_code=404,
+            detail="Magnet link or torrent file not found or could not be generated.",
         )
-    return magnet_link
+    elif magnet_link_or_torrent_file.endswith(".torrent"):
+        return FileResponse(
+            path=str(FOLDER_TORRENT_FILES / magnet_link_or_torrent_file),
+            media_type="application/x-bittorrent",
+            filename=magnet_link_or_torrent_file,
+        )
+    return magnet_link_or_torrent_file

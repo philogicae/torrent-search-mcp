@@ -1,4 +1,5 @@
-from os import getenv
+from os import getenv, makedirs
+from pathlib import Path
 from sys import argv
 from typing import Any
 
@@ -7,6 +8,10 @@ from ygg_torrent import ygg_api
 
 from .models import Cache, Torrent
 from .scraper import WEBSITES, search_torrents
+
+PREFER_TORRENT_FILES: bool = str(getenv("PREFER_TORRENT_FILES")).lower() == "true"
+FOLDER_TORRENT_FILES: Path = Path(getenv("FOLDER_TORRENT_FILES") or "./torrents")
+makedirs(FOLDER_TORRENT_FILES, exist_ok=True)
 
 EXCLUDE_SOURCES: set[str] = set()
 SOURCES: list[str] = ["yggtorrent"] + list(WEBSITES.keys())
@@ -104,15 +109,21 @@ class TorrentSearchApi:
         if source == "yggtorrent":
             if not found_torrent:  # Missing or uncached
                 ygg_torrent = ygg_api.get_torrent_details(
-                    int(ref_id), with_magnet_link=True
+                    int(ref_id), with_magnet_link=not PREFER_TORRENT_FILES
                 )
                 if ygg_torrent:
                     found_torrent = Torrent.format(
                         **ygg_torrent.model_dump(), source="yggtorrent"
                     )
                     found_torrent.prepend_info(query, max_items)
-            elif not found_torrent.magnet_link:  # Cached but missing magnet link
-                found_torrent.magnet_link = ygg_api.get_magnet_link(int(ref_id))
+            if found_torrent:
+                if PREFER_TORRENT_FILES:
+                    if not found_torrent.torrent_file:
+                        found_torrent.torrent_file = ygg_api.download_torrent_file(
+                            int(ref_id), output_dir=FOLDER_TORRENT_FILES
+                        )
+                elif not found_torrent.magnet_link:  # Cached but missing magnet link
+                    found_torrent.magnet_link = ygg_api.get_magnet_link(int(ref_id))
         elif not found_torrent:  # Missing or uncached
             torrents: list[Torrent] = await self.search_torrents(query, max_items)
             found_torrent = next(
@@ -122,19 +133,22 @@ class TorrentSearchApi:
         self.CACHE.clean()  # Clean cache routine
         return found_torrent
 
-    async def get_magnet_link(self, torrent_id: str) -> str | None:
+    async def get_magnet_link_or_torrent_file(self, torrent_id: str) -> str | None:
         """
-        Get the magnet link for a previously found torrent.
+        Get the magnet link or torrent file for a previously found torrent.
 
         Args:
             torrent_id: The ID of the torrent.
 
         Returns:
-            The magnet link as a string or None.
+            The magnet link or torrent file path as a string, else None.
         """
         found_torrent: Torrent | None = await self.get_torrent_details(torrent_id)
-        if found_torrent and found_torrent.magnet_link:
-            return found_torrent.magnet_link
+        if found_torrent:
+            if PREFER_TORRENT_FILES and found_torrent.torrent_file:
+                return found_torrent.torrent_file
+            elif found_torrent.magnet_link:
+                return found_torrent.magnet_link
         return None
 
 
@@ -149,7 +163,7 @@ if __name__ == "__main__":
         torrents: list[Torrent] = await client.search_torrents(query, max_items=5)
         if torrents:
             for torrent in torrents:
-                print(await client.get_torrent_details(torrent.id))
+                print(await client.get_magnet_link_or_torrent_file(torrent.id))
         else:
             print("No torrents found")
 

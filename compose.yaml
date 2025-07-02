@@ -10,6 +10,8 @@ services:
       - 8000:8000
     env_file:
       - .env
+    volumes:
+      - torrents:/app/${FOLDER_TORRENT_FILES:-torrents} # (Optional) If PREFER_TORRENT_FILES=true
     dns:
       - 9.9.9.9
       - 149.112.112.112
@@ -21,3 +23,6 @@ services:
         max-size: "10m"
         max-file: "3"
     network_mode: bridge
+
+volumes:
+  torrents:

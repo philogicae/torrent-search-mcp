@@ -47,7 +47,7 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 -   Tools:
     -   Search for torrents on ThePirateBay, Nyaa and YggTorrent
     -   Get info for a specific torrent by id
-    -   Get magnet link for a specific torrent by id
+    -   Get magnet link or torrent file for a specific torrent by id
 
 ## Setup
 
@@ -64,7 +64,7 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 This application requires a passkey if you want to interact with YggTorrent.
 
 1.  **Find your Passkey**: On the YggTorrent website, navigate to `Mon compte` -> `PASSKEY` field.
-2.  **Set Environment Variable**: The application reads the passkey from the `YGG_PASSKEY` environment variable. The recommended way to set this is by creating a `.env` file in your project's root directory. The application will load it automatically.
+2.  **Set Environment Variables**: The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
 ### Installation
 
@@ -189,7 +189,7 @@ Usable with any MCP-compatible client. Available tools:
 
 -   `search_torrents`: Search for torrents.
 -   `get_torrent_info`: Get info for a specific torrent by id.
--   `get_magnet_link`: Get the magnet link for a specific torrent by id.
+-   `get_magnet_link_or_torrent_file`: Get the magnet link or torrent file for a specific torrent by id.
 
 #### Example with Windsurf
 Configuration:

@@ -2,11 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0] - 2025-07-03
+
+### 🚀 Features
+
+- Add support for downloading torrent files as alternative to magnet links
+
+### 🐛 Bug Fixes
+
+- Handle case-insensitive INCLUDE_MAGNET_LINKS env var and make YggTorrent optional
+- Update dependencies, fix tests, update readme instructions
+
+### 🚜 Refactor
+
+- Optimize Dockerfile with multi-stage builds and improved caching
+
+### 📚 Documentation
+
+- Update tool names and descriptions to be more generic and consistent
+- Update installation instructions and default server configurations
+
 ## [1.7.0] - 2025-06-26
 
 ### 🚜 Refactor
 
 - Rename get_torrent_details to get_torrent_info for consistency
+
+### 📚 Documentation
+
+- Update changelog for v1.7.0 with renamed torrent function
 
 ## [1.6.0] - 2025-06-24
 

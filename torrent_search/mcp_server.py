@@ -16,7 +16,7 @@ mcp: FastMCP[Any] = FastMCP("TorrentSearch Tool")
 
 torrent_search_api = TorrentSearchApi()
 
-INCLUDE_MAGNET_LINKS = getenv("INCLUDE_MAGNET_LINKS") == "true"
+INCLUDE_MAGNET_LINKS = str(getenv("INCLUDE_MAGNET_LINKS")).lower() == "true"
 SOURCES = torrent_search_api.available_sources()
 
 

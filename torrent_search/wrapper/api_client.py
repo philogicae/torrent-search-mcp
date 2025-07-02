@@ -8,13 +8,18 @@ from ygg_torrent import ygg_api
 from .models import Cache, Torrent
 from .scraper import WEBSITES, search_torrents
 
+EXCLUDE_SOURCES: set[str] = set()
 SOURCES: list[str] = ["yggtorrent"] + list(WEBSITES.keys())
-EXCLUDE_SOURCES: str | None = getenv("EXCLUDE_SOURCES")
-if EXCLUDE_SOURCES:
-    excluded_sources: list[str] = [
-        source.lower().strip() for source in EXCLUDE_SOURCES.split(",")
-    ]
-    SOURCES = [source for source in SOURCES if source not in excluded_sources]
+
+YGG_ENABLED: bool = len(str(getenv("YGG_PASSKEY"))) == 32
+if not YGG_ENABLED:
+    EXCLUDE_SOURCES.add("yggtorrent")
+
+if excluded_sources := getenv("EXCLUDE_SOURCES"):
+    EXCLUDE_SOURCES = EXCLUDE_SOURCES.union(
+        {source.lower().strip() for source in excluded_sources.split(",")}
+    )
+    SOURCES = [source for source in SOURCES if source not in EXCLUDE_SOURCES]
 
 
 def key_builder(

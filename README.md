@@ -57,13 +57,14 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 -   An active YggTorrent account and passkey (Optional).
 -   Python 3.10+ (required for PyPI install).
 -   [`uv`](https://github.com/astral-sh/uv) (for local development)
+-   Chromium and its required dependencies
 -   Docker and Docker Compose (for Docker setup)
 
 ### Configuration (Optional)
 
-This application requires your YggTorrent passkey to interact with the API.
+This application requires a passkey if you want to interact with YggTorrent.
 
-1.  **Find your Passkey**: On the YggTorrent website, navigate to `Mon compte` -> `Mes paramètres`. Your passkey is part of the tracker URL, which looks like `http://tracker.p2p-world.net:8080/{YOUR_PASSKEY}/announce`.
+1.  **Find your Passkey**: On the YggTorrent website, navigate to `Mon compte` -> `PASSKEY` field.
 
 2.  **Set Environment Variable**: The application reads the passkey from the `YGG_PASSKEY` environment variable. The recommended way to set this is by creating a `.env` file in your project's root directory. The application will load it automatically.
 
@@ -79,7 +80,7 @@ This method is best for using the package as a library or running the server wit
 ```bash
 pip install torrent-search-mcp
 crawl4ai-setup # For crawl4ai/playwright
-uvx playwright install # If previous command fails
+playwright install --with-deps chromium # If previous command fails
 ```
 2.  Create a `.env` file in the directory where you'll run the application and add your passkey (optional):
 ```env
@@ -103,8 +104,7 @@ cd torrent-search-mcp
 2.  Install dependencies using `uv`:
 ```bash
 uv sync
-crawl4ai-setup # For crawl4ai/playwright
-uvx playwright install # If previous command fails
+uvx playwright install --with-deps chromium # If previous command fails
 ```
 3.  Create your configuration file by copying the example and add your passkey (optional):
 ```bash
@@ -159,7 +159,7 @@ torrent_search_mcp.run(transport="sse")
 
 ### As FastAPI Server
 
-This project also includes a FastAPI server as an alternative way to interact with the YggTorrent functionalities via a standard HTTP API. This can be useful for direct API calls, integration with other web services, or for testing purposes.
+This project also includes a FastAPI server as an alternative way to interact with the library via a standard HTTP API. This can be useful for direct API calls, integration with other web services, or for testing purposes.
 
 **Running the FastAPI Server:**
 ```bash

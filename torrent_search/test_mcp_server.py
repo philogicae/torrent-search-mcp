@@ -31,7 +31,7 @@ async def test_prepare_search_query(mcp_client: Client[Any]) -> None:
                 "search_query": "breaking bad s05e16",
             },
         )
-        assert result is not None and len(result[0].text) > 8  # Success
+        assert result is not None and len(result.content[0].text) > 8  # Success
 
 
 @pytest.mark.asyncio
@@ -40,7 +40,7 @@ async def test_search_torrents(mcp_client: Client[Any]) -> None:
     async with mcp_client as client:
         result = await client.call_tool("search_torrents", {"query": "berserk"})
         assert (
-            result is not None and len(result[0].text) > 32
+            result is not None and len(result.content[0].text) > 32
         )  # At least 1 torrent found
 
 
@@ -52,7 +52,7 @@ async def test_get_torrent_info(mcp_client: Client[Any]) -> None:
             "get_torrent_info",
             {"torrent_id": "t7O3z6diFKc3BneNfORT-5-nyaa.si-4ff655d4ae"},
         )
-        assert result is not None and len(result[0].text) > 32  # Torrent found
+        assert result is not None and len(result.content[0].text) > 32  # Torrent found
 
 
 @pytest.mark.asyncio
@@ -63,4 +63,6 @@ async def test_get_magnet_link(mcp_client: Client[Any]) -> None:
             "get_magnet_link",
             {"torrent_id": "t7O3z6diFKc3BneNfORT-5-yggtorrent-1268760"},
         )
-        assert result is not None and len(result[0].text) > 32  # Magnet link found
+        assert (
+            result is not None and len(result.content[0].text) > 32
+        )  # Magnet link found

@@ -119,9 +119,13 @@ class TorrentSearchApi:
             if found_torrent:
                 if PREFER_TORRENT_FILES:
                     if not found_torrent.torrent_file:
-                        found_torrent.torrent_file = ygg_api.download_torrent_file(
+                        filename = ygg_api.download_torrent_file(
                             int(ref_id), output_dir=FOLDER_TORRENT_FILES
                         )
+                        if filename:
+                            found_torrent.torrent_file = str(
+                                FOLDER_TORRENT_FILES / filename
+                            )
                 elif not found_torrent.magnet_link:  # Cached but missing magnet link
                     found_torrent.magnet_link = ygg_api.get_magnet_link(int(ref_id))
         elif not found_torrent:  # Missing or uncached
@@ -135,13 +139,13 @@ class TorrentSearchApi:
 
     async def get_magnet_link_or_torrent_file(self, torrent_id: str) -> str | None:
         """
-        Get the magnet link or torrent file for a previously found torrent.
+        Get the magnet link or torrent filepath for a previously found torrent.
 
         Args:
             torrent_id: The ID of the torrent.
 
         Returns:
-            The magnet link or torrent file path as a string, else None.
+            The magnet link or torrent filepath as a string, else None.
         """
         found_torrent: Torrent | None = await self.get_torrent_details(torrent_id)
         if found_torrent:

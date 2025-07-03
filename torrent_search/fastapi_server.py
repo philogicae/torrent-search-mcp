@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Path
 from fastapi.responses import FileResponse
 
-from .wrapper import FOLDER_TORRENT_FILES, Torrent, TorrentSearchApi
+from .wrapper import Torrent, TorrentSearchApi
 
 app = FastAPI(
     title="TorrentSearch FastAPI",
@@ -81,8 +81,8 @@ async def get_magnet_link_or_torrent_file(
         )
     elif magnet_link_or_torrent_file.endswith(".torrent"):
         return FileResponse(
-            path=str(FOLDER_TORRENT_FILES / magnet_link_or_torrent_file),
+            path=magnet_link_or_torrent_file,
             media_type="application/x-bittorrent",
-            filename=magnet_link_or_torrent_file,
+            filename=magnet_link_or_torrent_file.split("/")[-1],
         )
     return magnet_link_or_torrent_file

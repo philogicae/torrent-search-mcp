@@ -70,8 +70,8 @@ async def get_torrent_info(torrent_id: str) -> str:
 
 @mcp.tool()
 async def get_magnet_link_or_torrent_file(torrent_id: str) -> str:
-    """Get the magnet link or torrent file for a specific torrent by id."""
-    logger.info(f"Getting magnet link or torrent file for torrent: {torrent_id}")
+    """Get the magnet link or torrent filepath for a specific torrent by id."""
+    logger.info(f"Getting magnet link or torrent filepath for torrent: {torrent_id}")
     magnet_link_or_torrent_file: (
         str | None
     ) = await torrent_search_api.get_magnet_link_or_torrent_file(torrent_id)

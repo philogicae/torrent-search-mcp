@@ -2,7 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.8.0] - 2025-07-03
+## [1.8.1] - 2025-07-03
+
+### 🐛 Bug Fixes
+
+- Handle torrent file download failures and improve filepath handling
+
+### 📚 Documentation
+
+- Add changelog entries for v1.8.0 release
+
+## [1.8.0] - 2025-07-02
 
 ### 🚀 Features
 

@@ -1,6 +1,8 @@
 name: CI-CD
 
 on: push
+env:
+  UV_SYSTEM_PYTHON: 1
 
 jobs:
   test:
@@ -8,14 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install uv with cache
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-      - name: Install uv
-        run: pip install uv
+          python-version-file: pyproject.toml
       - name: Install dependencies
-        run: uv sync --locked --no-cache --no-editable
+        run: uv sync --locked --dev
       - name: Install crawl4ai/playwright
         run: uvx playwright install --with-deps chromium
       - name: Run ruff format
@@ -29,20 +34,24 @@ jobs:
 
   build:
     name: Build distribution 📦
+    if: startsWith(github.ref, 'refs/tags/')
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Install uv with cache
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-      - name: Install uv
-        run: pip install uv
+          python-version-file: pyproject.toml
       - name: Install dependencies
-        run: uv sync --locked --no-cache --no-editable
+        run: uv sync --locked
       - name: Build a binary wheel and a source tarball
         run: uv build
       - name: Store the distribution packages

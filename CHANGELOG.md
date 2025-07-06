@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.2] - 2025-07-06
+
+### 🚀 Features
+
+- Add empty results handling in torrent search response
+
+### ⚙️ Miscellaneous Tasks
+
+- Optimize GitHub Actions workflow with uv caching and tag-based releases
+
 ## [1.8.1] - 2025-07-03
 
 ### 🐛 Bug Fixes
@@ -11,6 +21,7 @@ All notable changes to this project will be documented in this file.
 ### 📚 Documentation
 
 - Add changelog entries for v1.8.0 release
+- Add changelog entries for v1.8.1 release with bug fixes and documentation updates
 
 ## [1.8.0] - 2025-07-02
 

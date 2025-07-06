@@ -51,7 +51,9 @@ async def search_torrents(query: str) -> str:
     """
     logger.info(f"Searching for torrents: {query}")
     found_torrents: list[Torrent] = await torrent_search_api.search_torrents(query)
-    if found_torrents and not INCLUDE_LINKS:  # Greatly reduce token usage
+    if not found_torrents:
+        return "No torrents found"
+    elif found_torrents and not INCLUDE_LINKS:  # Greatly reduce token usage
         shorted_torrents = deepcopy(found_torrents)  # Leave cache intact
         for torrent in shorted_torrents:
             torrent.magnet_link = None

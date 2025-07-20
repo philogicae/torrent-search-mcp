@@ -2,11 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.0] - 2025-07-20
+
+### 🚀 Features
+
+- Update search query preparation and result prioritization logic
+
+### ⚙️ Miscellaneous Tasks
+
+- Update aiohttp from 3.12.13 to 3.12.14 and adjust Python version requirements
+
 ## [1.8.2] - 2025-07-06
 
 ### 🚀 Features
 
 - Add empty results handling in torrent search response
+
+### 📚 Documentation
+
+- Update changelog for v1.8.2 with empty results handling and workflow optimizations
 
 ### ⚙️ Miscellaneous Tasks
 

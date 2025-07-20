@@ -2,11 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.9.1] - 2025-07-21
+
+### ⚙️ Miscellaneous Tasks
+
+- Downgrade crawl4ai to 0.6.3 and remove unused dependencies
+
 ## [1.9.0] - 2025-07-20
 
 ### 🚀 Features
 
 - Update search query preparation and result prioritization logic
+
+### 📚 Documentation
+
+- Update changelog for v1.9.0 with search improvements and dependency updates
 
 ### ⚙️ Miscellaneous Tasks
 

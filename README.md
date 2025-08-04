@@ -102,7 +102,7 @@ cd torrent-search-mcp
 2.  Install dependencies using `uv`:
 ```bash
 uv sync --locked
-uvx playwright install --with-deps chromium # If previous command fails
+uvx playwright install --with-deps chromium
 ```
 3.  Create your configuration file by copying the example and add your passkey (optional):
 ```bash

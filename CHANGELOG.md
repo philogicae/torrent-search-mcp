@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.9.1] - 2025-07-21
+## [1.9.2] - 2025-08-04
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependencies
+
+## [1.9.1] - 2025-07-20
 
 ### ⚙️ Miscellaneous Tasks
 
 - Downgrade crawl4ai to 0.6.3 and remove unused dependencies
+- Downgrade crawl4ai to 0.6.3 and cleanup dependencies
 
 ## [1.9.0] - 2025-07-20
 

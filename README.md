@@ -203,6 +203,11 @@ Configuration:
       "args": [ "torrent-search-mcp" ],
       "env": { "YGG_PASSKEY": "your_passkey_here" } # optional
     },
+    # with docker (only requires docker)
+    "torrent-search-mcp": {
+      "command": "docker",
+      "args": [ "run", "-i", "-p", "8000:8000", "-e", "YGG_PASSKEY=your_passkey_here", "philogicae/torrent-search-mcp:latest", "torrent-search-mcp" ]
+    },
     # with sse transport (requires installation)
     "torrent-search-mcp": {
       "serverUrl": "http://127.0.0.1:8000/sse"

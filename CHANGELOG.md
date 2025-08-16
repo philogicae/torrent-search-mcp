@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.10.2] - 2025-08-16
+
+### ⚙️ Miscellaneous Tasks
+
+- Update deps
+
 ## [1.10.0] - 2025-08-06
 
 ### ⚙️ Miscellaneous Tasks
 
 - Add Docker Hub publishing workflow and container configuration
+- Update changelog for v1.10.0 release with Docker Hub workflow
 
 ## [1.9.2] - 2025-08-04
 

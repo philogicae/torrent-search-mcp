@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.1] - 2025-09-30
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version from 1.11.0 to 1.11.1
+
 ## [1.11.0] - 2025-08-25
 
 ### ⚙️ Miscellaneous Tasks
 
 - Update dependencies
+- Update changelog for v1.11.0 release with dependency updates
 
 ## [1.10.2] - 2025-08-16
 

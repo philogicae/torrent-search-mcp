@@ -1,6 +1,6 @@
 [project]
 name = "torrent-search-mcp"
-version = "1.11.0"
+version = "1.11.1"
 description = "TorrentSearch MCP Server"
 authors = [{ name = "philogicae" }]
 requires-python = ">=3.10,<4.0"

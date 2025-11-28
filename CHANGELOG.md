@@ -2,11 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.11.2] - 2025-11-28
+
+### ⚙️ Miscellaneous Tasks
+
+- Add system dependencies for lxml and bump version to 1.11.2
+
 ## [1.11.1] - 2025-09-30
 
 ### ⚙️ Miscellaneous Tasks
 
 - Bump version from 1.11.0 to 1.11.1
+- Bump version to 1.11.1 and update changelog
 
 ## [1.11.0] - 2025-08-25
 

@@ -46,7 +46,7 @@ class TorrentSearchApi:
         """Get the list of available torrent sources."""
         return SOURCES
 
-    @cached(ttl=300, key_builder=key_builder)  # type: ignore[misc] # 5min
+    @cached(ttl=300, key_builder=key_builder)  # type: ignore[untyped-decorator] # 5min
     async def search_torrents(
         self,
         query: str,

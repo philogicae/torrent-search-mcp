@@ -14,7 +14,7 @@ class Torrent(BaseModel):
     size: str
     seeders: int
     leechers: int
-    downloads: int | None = None
+    downloads: int | str | None = None
     date: str
     magnet_link: str | None = None
     torrent_file: str | None = None
@@ -38,7 +38,7 @@ class Torrent(BaseModel):
         data["filename"] = data["filename"].strip()
         data["seeders"] = int(data["seeders"]) if data.get("seeders") else 0
         data["leechers"] = int(data["leechers"]) if data.get("leechers") else 0
-        data["downloads"] = int(data["downloads"]) if data.get("downloads") else None
+        data["downloads"] = data["downloads"] if data.get("downloads") else "N/A"
         data["date"] = data["date"][:10]
         return cls(**data)
 

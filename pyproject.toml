@@ -1,13 +1,13 @@
 [project]
 name = "torrent-search-mcp"
-version = "1.11.2"
-description = "TorrentSearch MCP Server"
+version = "2.0.0"
+description = "Torrent Search MCP Server"
 authors = [{ name = "philogicae" }]
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
 license = "MIT"
 dependencies = [
-    "ygg-torrent-mcp",
+    "fr-torrent-search-mcp",
     "crawl4ai",
     "aiocache",
     "fastmcp",
@@ -24,7 +24,7 @@ DeepWiki = "https://deepwiki.com/philogicae/torrent-search-mcp"
 torrent-search-mcp = "torrent_search.__main__:cli"
 
 [dependency-groups]
-dev = ["ruff", "pytest", "pytest-asyncio", "mypy"]
+dev = ["ruff", "pytest", "pytest-asyncio", "ty"]
 
 [tool.hatch.build]
 include = ["torrent_search"]

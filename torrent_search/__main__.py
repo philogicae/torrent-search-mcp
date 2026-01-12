@@ -28,7 +28,7 @@ def install_playwright_drivers() -> None:
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="Run TorrentSearch Server.")
+    parser = argparse.ArgumentParser(description="Run Torrent Search Server.")
     parser.add_argument(
         "--mode",
         type=str,

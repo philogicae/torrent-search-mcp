@@ -10,9 +10,9 @@ from .wrapper import Torrent, TorrentSearchApi
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("TorrentSearch")
+logger = logging.getLogger("Torrent Search")
 
-mcp: FastMCP[Any] = FastMCP("TorrentSearch Tool")
+mcp: FastMCP[Any] = FastMCP("Torrent Search Tool")
 
 torrent_search_api = TorrentSearchApi()
 
@@ -27,27 +27,38 @@ def available_sources() -> list[str]:
 
 
 @mcp.tool()
-def prepare_search_query(user_intent: str, search_query: str) -> str:
-    """Always use this tool to prepare a query for `search_torrents`.
-    Properly split the user's intention and the actual search query (space-separated keywords) to avoid unfruitful results.
-    # Instructions:
-    - `user_intent`: Must reflect user's overall intention (e.g., "last episode of Breaking Bad", "season 5 of Breaking Bad", "complete series of Breaking Bad").
-    - `search_query`: The actual search terms, consisting of lowercase, space-separated keywords. Do not add generic terms (e.g., "movie", "series"), common prefixes (e.g., "the", "a", "and"), or extra information (e.g., episode name, resolution, codec). For TV series, use `sXXeYY` for specific episodes (e.g., "breaking bad s05e16"), `sXX` for complete seasons (e.g., "breaking bad s05") and only the show name for complete series (e.g., "breaking bad").
-    - For non-English languages, if requested, add the language code (e.g., "fr", "spa") to the query.
-    """
-    return "Ready to search for torrents."
+async def search_torrents(
+    user_intent: str,
+    query: str,
+) -> str:
+    """Perfom an advanced torrent search across multiple providers.
 
+    # Arguments:
+    - `user_intent`: Must reflect user's overall intention (e.g., "last episode of Breaking Bad", "season 5 of Breaking Bad", "complete Breaking Bad series").
+    - `query`: Optimized keywords for search. MUST be lowercase and space-separated.
 
-@mcp.tool()
-async def search_torrents(query: str) -> str:
-    """Searches for torrents using a query (space-separated keywords) and returns a list of torrent results.
-    # Instructions:
-    - To be called after `prepare_search_query`.
-    - Prioritize results using the following hierarchy: is 1080p > smaller file size > is x265 > max seeders+leechers.
-    - Recommend up to 3 of the best results, **always** providing filename, file size, seeders/leechers, date, source, and an ultra concise reason.
-    - If the search results are too broad, suggest the user provide more specific keywords.
-    - Keep recommendations and suggestions concise.
+    # Query Construction Rules:
+    - **NO** generic terms: remove "movie", "series", "torrent", "download".
+    - **NO** filler words: remove "the", "a", "an", "and", "of", "with".
+    - **NO** technical tags: do NOT add "1080p", "x264", "bluray", or episode titles.
+    - **TV Shows**:
+        - Specific episode: `[show name] sXXeYY` (e.g., "shogun s01e05")
+        - Full season: `[show name] sXX` (e.g., "shogun s01")
+        - Full series: `[show name]` (e.g., "shogun")
+    - **Language**: Add `multi` ONLY if the user specifically requests a non-French or multi-language version.
+
+    # Result Analysis & Ranking:
+    1. **Quality**: Prefer 1080p over 720p or 4k (unless requested).
+    2. **Efficiency**: Prefer x265/HEVC for better quality/size ratio.
+    3. **Health**: Maximize seeders + leechers.
+    4. **Size**: Prefer smaller files within the same quality bracket.
+
+    # Response Requirements:
+    - Recommend the **top 3** results maximum.
+    - For each recommendation, include: Filename, Size, Seeds/Leechs, Date, Source, and a 1-sentence "Why this?" reason.
+    - If results are poor or irrelevant, suggest specific keywords to improve the search.
     """
+    _ = user_intent
     logger.info(f"Searching for torrents: {query}")
     found_torrents: list[Torrent] = await torrent_search_api.search_torrents(query)
     if not found_torrents:
@@ -62,20 +73,8 @@ async def search_torrents(query: str) -> str:
 
 
 @mcp.tool()
-async def get_torrent_info(torrent_id: str) -> str:
-    """Get info for a specific torrent by id."""
-    logger.info(f"Getting info for torrent: {torrent_id}")
-    torrent: Torrent | None = await torrent_search_api.get_torrent_details(torrent_id)
-    return str(torrent) if torrent else "Torrent not found"
-
-
-@mcp.tool()
-async def get_magnet_link_or_torrent_file(torrent_id: str) -> str:
+async def get_torrent(torrent_id: str) -> str:
     """Get the magnet link or torrent filepath for a specific torrent by id."""
     logger.info(f"Getting magnet link or torrent filepath for torrent: {torrent_id}")
-    magnet_link_or_torrent_file: (
-        str | None
-    ) = await torrent_search_api.get_magnet_link_or_torrent_file(torrent_id)
-    return (
-        magnet_link_or_torrent_file or "Torrent, magnet link or torrent file not found"
-    )
+    result: str | None = await torrent_search_api.get_torrent(torrent_id)
+    return result or "Torrent not found"

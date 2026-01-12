@@ -1,1 +1,1 @@
-uv lock && uv sync -U --link-mode=copy && uv run ruff format torrent_search && uv run ruff check torrent_search --fix && uv run mypy torrent_search && uv run pytest torrent_search
+uv lock && uv sync -U --link-mode=copy && uv run ruff format torrent_search && uv run ruff check torrent_search --fix && uv run ty check torrent_search && uv run pytest torrent_search

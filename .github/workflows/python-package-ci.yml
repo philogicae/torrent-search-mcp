@@ -6,7 +6,7 @@ env:
 
 jobs:
   test:
-    name: Run ruff, mypy and pytest 🧪
+    name: Run ruff, ty and pytest 🧪
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,8 +29,8 @@ jobs:
         run: uv run ruff format torrent_search
       - name: Run ruff check
         run: uv run ruff check torrent_search
-      - name: Run mypy
-        run: uv run mypy torrent_search
+      - name: Run ty check
+        run: uv run ty check torrent_search
       - name: Run tests
         run: uv run pytest torrent_search
 

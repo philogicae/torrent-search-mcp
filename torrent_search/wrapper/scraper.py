@@ -169,14 +169,14 @@ async def scrape_torrents(query: str, sources: list[str] | None = None) -> list[
             if sources is None or source in sources:
                 url = str(data["search"]).format(query=quote(query))
                 try:
-                    crawl_result: Any = await crawler.arun(
+                    crawl_result: Any = await crawler.arun(  # type: ignore
                         url=url, config=DEFAULT_CRAWLER_RUN_CONFIG
                     )
                     processed_text = parse_result(
                         (
-                            crawl_result.cleaned_html
+                            crawl_result.cleaned_html  # type: ignore
                             if data["parsing"] == "html"
-                            else crawl_result.markdown
+                            else crawl_result.markdown  # type: ignore
                         ),
                         list(data.get("exclude_patterns", [])),
                     )

@@ -4,27 +4,29 @@ from sys import argv
 from typing import Any
 
 from aiocache import cached
-from ygg_torrent import ygg_api
+from fr_torrent_search import fr_torrent_api
 
 from .models import Cache, Torrent
 from .scraper import WEBSITES, search_torrents
 
-PREFER_TORRENT_FILES: bool = str(getenv("PREFER_TORRENT_FILES")).lower() == "true"
 FOLDER_TORRENT_FILES: Path = Path(getenv("FOLDER_TORRENT_FILES") or "./torrents")
 makedirs(FOLDER_TORRENT_FILES, exist_ok=True)
 
+SOURCES: list[str] = list(WEBSITES.keys())
+INCLUDE_FR_SOURCES = getenv("EXCLUDE_FR_SOURCES", "false").lower() == "false"
+FR_SOURCES: set[str] = set()
 EXCLUDE_SOURCES: set[str] = set()
-SOURCES: list[str] = ["yggtorrent"] + list(WEBSITES.keys())
 
-YGG_ENABLED: bool = len(str(getenv("YGG_PASSKEY"))) == 32
-if not YGG_ENABLED:
-    EXCLUDE_SOURCES.add("yggtorrent")
+if INCLUDE_FR_SOURCES:
+    fr_torrent_api.ensure_initialized()
+    FR_SOURCES = {source.lower() for source in fr_torrent_api.api_names}
+    SOURCES = list(set(SOURCES).union(FR_SOURCES))
 
 if excluded_sources := getenv("EXCLUDE_SOURCES"):
     EXCLUDE_SOURCES = EXCLUDE_SOURCES.union(
         {source.lower().strip() for source in excluded_sources.split(",")}
     )
-    SOURCES = [source for source in SOURCES if source not in EXCLUDE_SOURCES]
+    SOURCES = list(set(SOURCES) - EXCLUDE_SOURCES)
 
 
 def key_builder(
@@ -38,7 +40,7 @@ def key_builder(
 
 
 class TorrentSearchApi:
-    """A client for searching torrents on ThePirateBay, Nyaa and YGG Torrent."""
+    """A client for searching torrents."""
 
     CACHE: Cache = Cache()
 
@@ -46,14 +48,14 @@ class TorrentSearchApi:
         """Get the list of available torrent sources."""
         return SOURCES
 
-    @cached(ttl=300, key_builder=key_builder)  # type: ignore[untyped-decorator] # 5min
+    @cached(ttl=300, key_builder=key_builder)  # 5min
     async def search_torrents(
         self,
         query: str,
         max_items: int = 10,
     ) -> list[Torrent]:
         """
-        Search for torrents on ThePirateBay, Nyaa and YGG Torrent.
+        Search for torrents on available sources.
 
         Args:
             query: Search query.
@@ -63,13 +65,13 @@ class TorrentSearchApi:
             A list of torrent results.
         """
         found_torrents: list[Torrent] = []
-        if any(source != "yggtorrent" for source in SOURCES):
+        if any(source not in FR_SOURCES for source in SOURCES):
             found_torrents.extend(await search_torrents(query, SOURCES))
-        if "yggtorrent" in SOURCES:
+        if INCLUDE_FR_SOURCES and any(source in FR_SOURCES for source in SOURCES):
             found_torrents.extend(
                 [
-                    Torrent.format(**torrent.model_dump(), source="yggtorrent")
-                    for torrent in ygg_api.search_torrents(query)
+                    Torrent.format(**torrent.model_dump())
+                    for torrent in fr_torrent_api.search_torrents(query)
                 ]
             )
 
@@ -88,56 +90,7 @@ class TorrentSearchApi:
         self.CACHE.update(found_torrents)
         return found_torrents
 
-    async def get_torrent_details(self, torrent_id: str) -> Torrent | None:
-        """
-        Get details about a previously found torrent.
-
-        Args:
-            torrent_id: The ID of the torrent.
-
-        Returns:
-            Detailed torrent result or None.
-        """
-        found_torrent: Torrent | None = self.CACHE.get(torrent_id)
-
-        try:
-            query, max_items, source, ref_id = Torrent.extract_info(torrent_id)
-        except Exception:
-            print(f"Invalid torrent ID: {torrent_id}")
-            return None
-
-        if source == "yggtorrent":
-            if not found_torrent:  # Missing or uncached
-                ygg_torrent = ygg_api.get_torrent_details(
-                    int(ref_id), with_magnet_link=not PREFER_TORRENT_FILES
-                )
-                if ygg_torrent:
-                    found_torrent = Torrent.format(
-                        **ygg_torrent.model_dump(), source="yggtorrent"
-                    )
-                    found_torrent.prepend_info(query, max_items)
-            if found_torrent:
-                if PREFER_TORRENT_FILES:
-                    if not found_torrent.torrent_file:
-                        filename = ygg_api.download_torrent_file(
-                            int(ref_id), output_dir=FOLDER_TORRENT_FILES
-                        )
-                        if filename:
-                            found_torrent.torrent_file = str(
-                                FOLDER_TORRENT_FILES / filename
-                            )
-                elif not found_torrent.magnet_link:  # Cached but missing magnet link
-                    found_torrent.magnet_link = ygg_api.get_magnet_link(int(ref_id))
-        elif not found_torrent:  # Missing or uncached
-            torrents: list[Torrent] = await self.search_torrents(query, max_items)
-            found_torrent = next(
-                (torrent for torrent in torrents if torrent.id == torrent_id), None
-            )
-
-        self.CACHE.clean()  # Clean cache routine
-        return found_torrent
-
-    async def get_magnet_link_or_torrent_file(self, torrent_id: str) -> str | None:
+    async def get_torrent(self, torrent_id: str) -> str | None:
         """
         Get the magnet link or torrent filepath for a previously found torrent.
 
@@ -147,9 +100,34 @@ class TorrentSearchApi:
         Returns:
             The magnet link or torrent filepath as a string, else None.
         """
-        found_torrent: Torrent | None = await self.get_torrent_details(torrent_id)
+        found_torrent: Torrent | None = self.CACHE.get(torrent_id)
+
+        try:
+            query, max_items, source, ref_id = Torrent.extract_info(torrent_id)
+        except Exception:
+            print(f"Invalid torrent ID: {torrent_id}")
+            return None
+
+        if not found_torrent:  # Missing or uncached
+            torrents: list[Torrent] = await self.search_torrents(query, max_items)
+            found_torrent = next(
+                (torrent for torrent in torrents if torrent.id == torrent_id), None
+            )
+            if found_torrent:
+                source = found_torrent.source
+
+        if found_torrent and INCLUDE_FR_SOURCES and source.lower() in FR_SOURCES:
+            result = fr_torrent_api.get_torrent(ref_id, output_dir=FOLDER_TORRENT_FILES)
+            if result and isinstance(result, str):
+                if result.endswith(".torrent"):
+                    found_torrent.torrent_file = str(FOLDER_TORRENT_FILES / result)
+                else:
+                    found_torrent.magnet_link = result
+
+        self.CACHE.clean()  # Clean cache routine
+
         if found_torrent:
-            if PREFER_TORRENT_FILES and found_torrent.torrent_file:
+            if found_torrent.torrent_file:
                 return found_torrent.torrent_file
             elif found_torrent.magnet_link:
                 return found_torrent.magnet_link
@@ -166,8 +144,14 @@ if __name__ == "__main__":
         client = TorrentSearchApi()
         torrents: list[Torrent] = await client.search_torrents(query, max_items=5)
         if torrents:
-            for torrent in torrents:
-                print(await client.get_magnet_link_or_torrent_file(torrent.id))
+            print(f"Found {len(torrents)} torrents:")
+            for t in torrents:
+                print(f"- {t.filename} ({t.id})")
+
+            first_id = torrents[0].id
+            print(f"\nFetching first torrent: {first_id}")
+            result = await client.get_torrent(first_id)
+            print(f"Result: {result}")
         else:
             print("No torrents found")
 

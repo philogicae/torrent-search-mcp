@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [2.0.0] - 2026-01-12
+
+### 📚 Documentation
+
+- Update README and changelog for La Cale tracker support and API changes
 
 ### ⚙️ Miscellaneous Tasks
 

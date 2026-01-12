@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+### ⚙️ Miscellaneous Tasks
+
+- Update changelog for v1.11.2 release with lxml system dependencies
+- Major refactor to v2.0.0 with multi-tracker support and API improvements
+
 ## [1.11.2] - 2025-11-28
 
 ### ⚙️ Miscellaneous Tasks

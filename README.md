@@ -234,7 +234,7 @@ Configuration:
       "command": "uvx",
       "args": [ "torrent-search-mcp" ],
       "env": {
-        "YGG_BASE_URL": "http://localhost:3456", # YggTorrent instance URL
+        "YGG_LOCAL_API": "http://localhost:3456", # YggTorrent instance URL
         "LA_CALE_PASSKEY": "your_passkey_here" # La Cale passkey
       } # optional
     },

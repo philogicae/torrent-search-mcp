@@ -1,23 +1,14 @@
-import re
-import warnings
+from re import DOTALL, Pattern, compile, search, sub
 from time import time
 from typing import Any
 from urllib.parse import quote
 
+from crawl4ai import AsyncWebCrawler, CacheMode
+from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from pydantic import ValidationError
 
 from .models import Torrent
-
-warnings.filterwarnings("ignore", category=DeprecationWarning)  # For crawl4ai <= 0.6.3
-
-from crawl4ai import AsyncWebCrawler, CacheMode  # noqa: E402 wrong-import-order
-from crawl4ai.async_configs import (  # noqa: E402 wrong-import-order
-    BrowserConfig,
-    CrawlerRunConfig,
-)
-from crawl4ai.markdown_generation_strategy import (  # noqa: E402 wrong-import-order
-    DefaultMarkdownGenerator,
-)
 
 # Crawler Configuration
 BROWSER_CONFIG = BrowserConfig(
@@ -44,63 +35,70 @@ DEFAULT_CRAWLER_RUN_CONFIG = CrawlerRunConfig(
 )
 
 # Websites Configuration
-FILTERS: dict[str, re.Pattern[str]] = {
-    "full_links": re.compile(
+FILTERS: dict[str, Pattern[str]] = {
+    "full_links": compile(
         r"(http|https|ftp):[/]{1,2}[a-zA-Z0-9.]+[a-zA-Z0-9./?=+~_\-@:%#&]*"
     ),
-    "backslashes": re.compile(r"\\"),
-    "local_links": re.compile(
-        r"(a href=)*(<|\")\/[a-zA-Z0-9./?=+~()_\-@:%#&]*(>|\")* *"
+    "backslashes": compile(r"\\"),
+    "local_links": compile(r"(a href=)*(<|\")\/[a-zA-Z0-9./?=+~()_\-@:%#&]*(>|\")* *"),
+    "some_texts": compile(r' *"[a-zA-Z ]+" *'),
+    "empty_angle_brackets": compile(r" *< *> *"),
+    "empty_curly_brackets": compile(r" *\{ *\} *"),
+    "empty_parenthesis": compile(r" *\( *\) *"),
+    "empty_brackets": compile(r" *\[ *\] *"),
+    "tags": compile(
+        r"<img[^>]*>|<a[^>]*>(?:alt|src)=|(?<=<a )(?:alt|src)=|(?<=<img )(?:alt|src)"
     ),
-    "some_texts": re.compile(r' *"[a-zA-Z ]+" *'),
-    "empty_angle_brackets": re.compile(r" *< *> *"),
-    "empty_curly_brackets": re.compile(r" *\{ *\} *"),
-    "empty_parenthesis": re.compile(r" *\( *\) *"),
-    "empty_brackets": re.compile(r" *\[ *\] *"),
-    "tags": re.compile(r"(>?<(img|a) ((alt|src)=)+)|(<a href=\")"),
-    "date": re.compile(r'<label title=("[a-zA-Z0-9()+: ]+"|>)'),
+    "input_elements": compile(r"<input[^>]*>"),
+    "date": compile(r'<label title=("[a-zA-Z0-9()+: ]+"|>)'),
 }
-REPLACERS: dict[str, tuple[re.Pattern[str], str]] = {
-    "weird_spaces": (re.compile(r"\u00A0"), " "),
-    "spans": (re.compile(r"</?span>"), " | "),
-    "weird spaced bars": (re.compile(r" *\|[ \|]+"), " | "),
-    "double_quotes": (re.compile(r'"[" ]+'), ""),
-    "single_angle_bracket": (re.compile(r"<|>"), ""),
+REPLACERS: dict[str, tuple[Pattern[str], str]] = {
+    # Basic text cleaning
+    "weird_spaces": (compile(r"\u00A0"), " "),
+    "spans": (compile(r"</?span>"), " | "),
+    "weird spaced bars": (compile(r" *\|[ \|]+"), " | "),
+    "double_quotes": (compile(r'"[" ]+'), ""),
+    "single_angle_bracket": (compile(r"<|>"), ""),
+    "gt": (compile("&gt;"), " -"),
+    "amp": (compile("&amp;"), "&"),
+    # Line formatting
+    "bad_starting_spaced_bars": (compile(r"\n[\| ]+"), "\n"),
+    "bad_ending_spaces": (compile(r" +\n"), "\n"),
+    "duplicated_spaces": (compile(r" {2,4}"), " "),
+    # Size formatting
+    "size": (compile(r"([\d.]+[\s ]?[KMGT])i?B"), r"\1B"),
+    # ThePirateBay specific fixes
     "thepiratebay_labels": (
-        re.compile(r"Category.*?ULed by", re.DOTALL),
+        compile(r"Category.*?ULed by", DOTALL),
         "category | filename | date | magnet_link | size | seeders | leechers | uploader",
     ),
-    "thepiratebay_magnet_fix": (
-        re.compile(r"announce\|"),
-        "announce |",
-    ),
+    # Nyaa specific fixes
     "nyaa_remove_click_here_line": (
-        re.compile(r"^\[Click here.*?\]\n"),
+        compile(r"^\[Click he*?\]\n"),
         "",
     ),
     "nyaa_header_block": (
-        re.compile(r"Category \| Name \| Link \|Size \|Date \|\s*\r?\n[\|-]+\s*\r?\n"),
+        compile(r"Category \| Name \| Link \|Size \|Date \|\s*\r?\n[\|-]+\s*\r?\n"),
         "category | filename | magnet_link | size | date | seeders | leechers | downloads\n",
     ),
     "nyaa_remove_comments": (
-        re.compile(r"\| \[ \d+\]\( \"\d+ comments\"\) "),
-        "| ",
+        compile(r"\|\( \"\d+ comments?\"\)"),
+        "|",
     ),
     "nyaa_clean_category_and_name_column_data": (
-        re.compile(r'([\|\n])[^\|\n]+\"([^"\|]+)\"[^\|]+'),
+        compile(r'([\|\n])[^\|\n]+\"([^"\|]+)\"[^\|]+'),
         r"\1 \2 ",
     ),
     "nyaa_clean_link_column_data": (
-        re.compile(r"\|\((magnet:\?[^)]+)\)"),
+        compile(r"\|\((magnet:\?[^)]+)\)"),
         r"| \1",
     ),
-    "gt": (re.compile("&gt;"), " -"),
-    "amp": (re.compile("&amp;"), "&"),
-    "bad_starting_spaced_bars": (re.compile(r"\n[\| ]+"), "\n"),
-    "bad_ending_spaces": (re.compile(r" +\n"), "\n"),
-    "duplicated_spaces": (re.compile(r" {2,4}"), " "),
-    "size": (re.compile(r"([\d.]+[\s ]?[KMG])i?B"), r"\1B"),
-    "to_csv": (re.compile(r" \| *"), ";"),
+    "nyaa_fix_leading_spaces": (
+        compile(r"\n\s+"),
+        "\n",
+    ),
+    # Final formatting
+    "to_csv": (compile(r" \| *"), ";"),
 }
 WEBSITES: dict[str, dict[str, str | list[str]]] = {
     "thepiratebay.org": dict(
@@ -148,7 +146,7 @@ def parse_result(
             text = text[:max_chars]
         else:
             text = text[:safe_truncate_pos]
-    text = re.sub(r"\n{2,}", "\n", text)
+    text = sub(r"\n{2,}", "\n", text)
     return text.strip()
 
 
@@ -206,7 +204,19 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
         headers = data[0].split(";")
         for line in data[1:]:
             try:
-                torrent = dict(zip(headers, line.split(";"))) | {"source": source}
+                values = line.split(";")
+                if len(values) > len(headers):
+                    extra_count = len(values) - len(headers)
+                    if len(values) > 1:
+                        combined_filename = " - ".join(values[1 : 1 + extra_count + 1])
+                        markdown_match = search(r"\[(.*?)\]\(", combined_filename)
+                        if markdown_match:
+                            values[1] = markdown_match.group(1)
+                        else:
+                            values[1] = combined_filename
+                        del values[2 : 2 + extra_count]
+
+                torrent = dict(zip(headers, values)) | {"source": source}
                 torrents.append(Torrent.format(**torrent))
             except ValidationError:
                 continue

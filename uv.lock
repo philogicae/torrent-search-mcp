@@ -725,7 +725,7 @@ wheels = [
 
 [[package]]
 name = "cyclopts"
-version = "4.4.4"
+version = "4.4.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -735,9 +735,9 @@ dependencies = [
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/43/c4/60b6068e703c78656d07b249919754f8f60e9e7da3325560574ee27b4e39/cyclopts-4.4.4.tar.gz", hash = "sha256:f30c591c971d974ab4f223e099f881668daed72de713713c984ca41479d393dd", size = 160046, upload-time = "2026-01-05T03:40:18.438Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/31/0c2526868b1454f2e7aaac5b05f262df4513917942beef9c0040415c7664/cyclopts-4.4.5.tar.gz", hash = "sha256:02c2c9375c57bb7622a4aab3511cdeb9d762dd0579b13ab467535e34f6be3c54", size = 160428, upload-time = "2026-01-13T14:03:38.355Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/5b/0eceb9a5990de9025733a0d212ca43649ba9facd58b8552b6bf93c11439d/cyclopts-4.4.4-py3-none-any.whl", hash = "sha256:316f798fe2f2a30cb70e7140cfde2a46617bfbb575d31bbfdc0b2410a447bd83", size = 197398, upload-time = "2026-01-05T03:40:17.141Z" },
+    { url = "https://files.pythonhosted.org/packages/54/2a/662ac280907bb2ea378681b83528e54e3d4b24ed48f07d2d6b52d5cbd057/cyclopts-4.4.5-py3-none-any.whl", hash = "sha256:d0f7584282c33796614bbb5fe7f5c86520802f028453a2180ead68c8630635f8", size = 197794, upload-time = "2026-01-13T14:03:39.724Z" },
 ]
 
 [[package]]
@@ -962,7 +962,7 @@ wheels = [
 
 [[package]]
 name = "fr-torrent-search-mcp"
-version = "1.0.4"
+version = "1.0.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bencodepy" },
@@ -973,9 +973,9 @@ dependencies = [
     { name = "requests" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/63/23/affeaf79c8d7e8ce6fd20d32b663656de8cba91d9e9bb95edb9da33fb97b/fr_torrent_search_mcp-1.0.4.tar.gz", hash = "sha256:0160e49d1a4fa3a871f5c4ebd2232df538f3b907d1b56205c4f75bd614f83384", size = 14541, upload-time = "2026-01-12T23:15:13.656Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/be/6d3a68873fb2ed81742e1c80421cad82956b9308dd1be113a1323253355f/fr_torrent_search_mcp-1.0.5.tar.gz", hash = "sha256:f695ae04724726562d7827d50efe914afd20afd2133970754ade3e163e32c39c", size = 14977, upload-time = "2026-01-13T20:26:28.695Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/61/a0/7c69168d8a35ae4a6fb595a7c260b4b2278ebeda6bb9c175b5162ecc4b2d/fr_torrent_search_mcp-1.0.4-py3-none-any.whl", hash = "sha256:046c678d304979f665b51cb7e554cef5f22c9eef9a893ba5406b5a2bbe1632f1", size = 21468, upload-time = "2026-01-12T23:15:12.228Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/dd/ca3bb5bbbf8e584870f3c3f915e0413d12238fcfaed1d134c5c5c7b97d39/fr_torrent_search_mcp-1.0.5-py3-none-any.whl", hash = "sha256:592d41256108f5d2baee6ff9de3f5ef1a04b1173bbee074b9e3feae001ba455a", size = 21698, upload-time = "2026-01-13T20:26:27.205Z" },
 ]
 
 [[package]]
@@ -1409,14 +1409,14 @@ wheels = [
 
 [[package]]
 name = "jaraco-context"
-version = "6.0.2"
+version = "6.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "backports-tarfile", marker = "python_full_version < '3.12'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8d/7d/41acf8e22d791bde812cb6c2c36128bb932ed8ae066bcb5e39cb198e8253/jaraco_context-6.0.2.tar.gz", hash = "sha256:953ae8dddb57b1d791bf72ea1009b32088840a7dd19b9ba16443f62be919ee57", size = 14994, upload-time = "2025-12-24T19:21:35.784Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/9c/a788f5bb29c61e456b8ee52ce76dbdd32fd72cd73dd67bc95f42c7a8d13c/jaraco_context-6.1.0.tar.gz", hash = "sha256:129a341b0a85a7db7879e22acd66902fda67882db771754574338898b2d5d86f", size = 15850, upload-time = "2026-01-13T02:53:53.847Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c7/0c/1e0096ced9c55f9c6c6655446798df74165780375d3f5ab5f33751e087ae/jaraco_context-6.0.2-py3-none-any.whl", hash = "sha256:55fc21af4b4f9ca94aa643b6ee7fe13b1e4c01abf3aeb98ca4ad9c80b741c786", size = 6988, upload-time = "2025-12-24T19:21:34.557Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/48/aa685dbf1024c7bd82bede569e3a85f82c32fd3d79ba5fea578f0159571a/jaraco_context-6.1.0-py3-none-any.whl", hash = "sha256:a43b5ed85815223d0d3cfdb6d7ca0d2bc8946f28f30b6f3216bda070f68badda", size = 7065, upload-time = "2026-01-13T02:53:53.031Z" },
 ]
 
 [[package]]
@@ -1629,7 +1629,7 @@ wheels = [
 
 [[package]]
 name = "litellm"
-version = "1.80.15"
+version = "1.80.16"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1646,9 +1646,9 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/12/41/9b28df3e4739df83ddb32dfb2bccb12ad271d986494c9fd60e4927a0a6c3/litellm-1.80.15.tar.gz", hash = "sha256:759d09f33c9c6028c58dcdf71781b17b833ee926525714e09a408602be27f54e", size = 13376508, upload-time = "2026-01-11T18:31:44.95Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/cc/03bf7849c62587db0fb7c46f427d6a49290750752d3189a0bd95d4b78587/litellm-1.80.16.tar.gz", hash = "sha256:f96233649f99ab097f7d8a3ff9898680207b9eea7d2e23f438074a3dbcf50cca", size = 13384256, upload-time = "2026-01-13T08:52:23.067Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/3b/b1bd693721ccb3c9a37c8233d019a643ac57bef5a93f279e5a63839ee4db/litellm-1.80.15-py3-none-any.whl", hash = "sha256:f354e49456985a235b9ed99df1c19d686d30501f96e68882dcc5b29b1e7c59d9", size = 11670707, upload-time = "2026-01-11T18:31:41.67Z" },
+    { url = "https://files.pythonhosted.org/packages/53/4d/73fdb12223bdb01889134eb75525fcc768b1724255f2b87072dd6743c6e1/litellm-1.80.16-py3-none-any.whl", hash = "sha256:21be641b350561b293b831addb25249676b72ebff973a5a1d73b5d7cf35bcd1d", size = 11682530, upload-time = "2026-01-13T08:52:19.951Z" },
 ]
 
 [[package]]
@@ -3947,7 +3947,7 @@ wheels = [
 
 [[package]]
 name = "torrent-search-mcp"
-version = "2.0.0"
+version = "2.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiocache" },

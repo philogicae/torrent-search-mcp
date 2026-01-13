@@ -47,6 +47,8 @@ services:
     restart: unless-stopped
     ports:
       - 8000:8000
+    environment:
+      - YGG_LOCAL_API=http://ygg-api:8715
     env_file:
       - .env
     volumes:

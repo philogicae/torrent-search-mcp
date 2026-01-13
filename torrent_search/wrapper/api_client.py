@@ -1,3 +1,4 @@
+from asyncio import gather, run, to_thread
 from os import getenv, makedirs
 from pathlib import Path
 from sys import argv
@@ -13,20 +14,22 @@ FOLDER_TORRENT_FILES: Path = Path(getenv("FOLDER_TORRENT_FILES") or "./torrents"
 makedirs(FOLDER_TORRENT_FILES, exist_ok=True)
 
 SOURCES: list[str] = list(WEBSITES.keys())
-INCLUDE_FR_SOURCES = getenv("EXCLUDE_FR_SOURCES", "false").lower() == "false"
+EXCLUDE_SOURCES: list[str] = list()
+INCLUDE_FR_SOURCES = getenv("EXCLUDE_FR_SOURCES", "false").lower() in ["0", "false"]
 FR_SOURCES: set[str] = set()
-EXCLUDE_SOURCES: set[str] = set()
 
 if INCLUDE_FR_SOURCES:
     fr_torrent_api.ensure_initialized()
-    FR_SOURCES = {source.lower() for source in fr_torrent_api.api_names}
+    FR_SOURCES = {source for source in fr_torrent_api.api_names}
     SOURCES = list(set(SOURCES).union(FR_SOURCES))
 
 if excluded_sources := getenv("EXCLUDE_SOURCES"):
-    EXCLUDE_SOURCES = EXCLUDE_SOURCES.union(
-        {source.lower().strip() for source in excluded_sources.split(",")}
+    EXCLUDE_SOURCES = list(
+        set(EXCLUDE_SOURCES).union(
+            {source.strip() for source in excluded_sources.split(",")}
+        )
     )
-    SOURCES = list(set(SOURCES) - EXCLUDE_SOURCES)
+    SOURCES = list(set(SOURCES) - set(EXCLUDE_SOURCES))
 
 
 def key_builder(
@@ -65,15 +68,35 @@ class TorrentSearchApi:
             A list of torrent results.
         """
         found_torrents: list[Torrent] = []
+
+        # Prepare search tasks
+        search_tasks = []
         if any(source not in FR_SOURCES for source in SOURCES):
-            found_torrents.extend(await search_torrents(query, SOURCES))
+            search_tasks.append(search_torrents(query, SOURCES))
         if INCLUDE_FR_SOURCES and any(source in FR_SOURCES for source in SOURCES):
-            found_torrents.extend(
-                [
-                    Torrent.format(**torrent.model_dump())
-                    for torrent in fr_torrent_api.search_torrents(query)
-                ]
+            search_tasks.append(
+                to_thread(
+                    fr_torrent_api.search_torrents,
+                    query,
+                    max_items=max_items,
+                    exclude=EXCLUDE_SOURCES,
+                )
             )
+
+        # Execute searches in parallel
+        if search_tasks:
+            results = await gather(*search_tasks)
+            result_index = 0
+            if any(source not in FR_SOURCES for source in SOURCES):
+                found_torrents.extend(results[result_index])
+                result_index += 1
+            if INCLUDE_FR_SOURCES and any(source in FR_SOURCES for source in SOURCES):
+                found_torrents.extend(
+                    [
+                        Torrent.format(**torrent.model_dump())
+                        for torrent in results[result_index]
+                    ]
+                )
 
         found_torrents = list(
             sorted(
@@ -116,7 +139,7 @@ class TorrentSearchApi:
             if found_torrent:
                 source = found_torrent.source
 
-        if found_torrent and INCLUDE_FR_SOURCES and source.lower() in FR_SOURCES:
+        if found_torrent and INCLUDE_FR_SOURCES and source in FR_SOURCES:
             result = fr_torrent_api.get_torrent(ref_id, output_dir=FOLDER_TORRENT_FILES)
             if result and isinstance(result, str):
                 if result.endswith(".torrent"):
@@ -133,28 +156,32 @@ class TorrentSearchApi:
                 return found_torrent.magnet_link
         return None
 
+    async def cli(self) -> None:
+        """
+        Command line interface for the API.
+        """
+        query = argv[1] if len(argv) > 1 else None
+        if query:
+            print(f"Sources: {SOURCES}, Excluded: {EXCLUDE_SOURCES}")
+            found_torrents: list[Torrent] = await self.search_torrents(
+                query, max_items=100
+            )
+            if found_torrents:
+                found_sources = set()
+                print(f"Found {len(found_torrents)} torrents:")
+                for t in found_torrents:
+                    found_sources.add(t.source)
+                    print(
+                        f"{t.id} ({t.seeders}|{t.leechers}|{t.downloads}) - {t.filename}"
+                    )
+                print(f"Fetching: {found_torrents[0].id}")
+                print(f"Result: {await self.get_torrent(found_torrents[0].id)}")
+                print(f"Found Sources: {found_sources}")
+            else:
+                print("No torrents found")
+        else:
+            print("Please provide a search query.")
+
 
 if __name__ == "__main__":
-
-    async def main() -> None:
-        query = argv[1] if len(argv) > 1 else None
-        if not query:
-            print("Please provide a search query.")
-            exit(1)
-        client = TorrentSearchApi()
-        torrents: list[Torrent] = await client.search_torrents(query, max_items=5)
-        if torrents:
-            print(f"Found {len(torrents)} torrents:")
-            for t in torrents:
-                print(f"- {t.filename} ({t.id})")
-
-            first_id = torrents[0].id
-            print(f"\nFetching first torrent: {first_id}")
-            result = await client.get_torrent(first_id)
-            print(f"Result: {result}")
-        else:
-            print("No torrents found")
-
-    from asyncio import run
-
-    run(main())
+    run(TorrentSearchApi().cli())

@@ -162,13 +162,11 @@ class TorrentSearchApi:
         """
         query = argv[1] if len(argv) > 1 else None
         if query:
-            print(f"Sources: {SOURCES}, Excluded: {EXCLUDE_SOURCES}")
             found_torrents: list[Torrent] = await self.search_torrents(
                 query, max_items=100
             )
             if found_torrents:
                 found_sources = set()
-                print(f"Found {len(found_torrents)} torrents:")
                 for t in found_torrents:
                     found_sources.add(t.source)
                     print(
@@ -176,7 +174,9 @@ class TorrentSearchApi:
                     )
                 print(f"Fetching: {found_torrents[0].id}")
                 print(f"Result: {await self.get_torrent(found_torrents[0].id)}")
-                print(f"Found Sources: {found_sources}")
+                print(
+                    f"Found Sources (Excluded: {EXCLUDE_SOURCES}): {found_sources} | Found Torrents: {len(found_torrents)}"
+                )
             else:
                 print("No torrents found")
         else:

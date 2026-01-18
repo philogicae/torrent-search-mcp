@@ -1,4 +1,6 @@
-from re import DOTALL, Pattern, compile, search, sub
+from re import DOTALL, Pattern
+from re import compile as re_compile
+from re import search, sub
 from time import time
 from typing import Any
 from urllib.parse import quote
@@ -36,73 +38,75 @@ DEFAULT_CRAWLER_RUN_CONFIG = CrawlerRunConfig(
 
 # Websites Configuration
 FILTERS: dict[str, Pattern[str]] = {
-    "full_links": compile(
+    "full_links": re_compile(
         r"(http|https|ftp):[/]{1,2}[a-zA-Z0-9.]+[a-zA-Z0-9./?=+~_\-@:%#&]*"
     ),
-    "backslashes": compile(r"\\"),
-    "local_links": compile(r"(a href=)*(<|\")\/[a-zA-Z0-9./?=+~()_\-@:%#&]*(>|\")* *"),
-    "some_texts": compile(r' *"[a-zA-Z ]+" *'),
-    "empty_angle_brackets": compile(r" *< *> *"),
-    "empty_curly_brackets": compile(r" *\{ *\} *"),
-    "empty_parenthesis": compile(r" *\( *\) *"),
-    "empty_brackets": compile(r" *\[ *\] *"),
-    "tags": compile(
+    "backslashes": re_compile(r"\\"),
+    "local_links": re_compile(
+        r"(a href=)*(<|\")\/[a-zA-Z0-9./?=+~()_\-@:%#&]*(>|\")* *"
+    ),
+    "some_texts": re_compile(r' *"[a-zA-Z ]+" *'),
+    "empty_angle_brackets": re_compile(r" *< *> *"),
+    "empty_curly_brackets": re_compile(r" *\{ *\} *"),
+    "empty_parenthesis": re_compile(r" *\( *\) *"),
+    "empty_brackets": re_compile(r" *\[ *\] *"),
+    "tags": re_compile(
         r"<img[^>]*>|<a[^>]*>(?:alt|src)=|(?<=<a )(?:alt|src)=|(?<=<img )(?:alt|src)"
     ),
-    "input_elements": compile(r"<input[^>]*>"),
-    "date": compile(r'<label title=("[a-zA-Z0-9()+: ]+"|>)'),
+    "input_elements": re_compile(r"<input[^>]*>"),
+    "date": re_compile(r'<label title=("[a-zA-Z0-9()+: ]+"|>)'),
 }
 REPLACERS: dict[str, tuple[Pattern[str], str]] = {
     # Basic text cleaning
-    "weird_spaces": (compile(r"\u00A0"), " "),
-    "spans": (compile(r"</?span>"), " | "),
-    "weird spaced bars": (compile(r" *\|[ \|]+"), " | "),
-    "double_quotes": (compile(r'"[" ]+'), ""),
-    "single_angle_bracket": (compile(r"<|>"), ""),
-    "gt": (compile("&gt;"), " -"),
-    "amp": (compile("&amp;"), "&"),
+    "weird_spaces": (re_compile(r"\u00A0"), " "),
+    "spans": (re_compile(r"</?span>"), " | "),
+    "weird spaced bars": (re_compile(r" *\|[ \|]+"), " | "),
+    "double_quotes": (re_compile(r'"[" ]+'), ""),
+    "single_angle_bracket": (re_compile(r"<|>"), ""),
+    "gt": (re_compile("&gt;"), " -"),
+    "amp": (re_compile("&amp;"), "&"),
     # Line formatting
-    "bad_starting_spaced_bars": (compile(r"\n[\| ]+"), "\n"),
-    "bad_ending_spaces": (compile(r" +\n"), "\n"),
-    "duplicated_spaces": (compile(r" {2,4}"), " "),
+    "bad_starting_spaced_bars": (re_compile(r"\n[\| ]+"), "\n"),
+    "bad_ending_spaces": (re_compile(r" +\n"), "\n"),
+    "duplicated_spaces": (re_compile(r" {2,4}"), " "),
     # Size formatting
-    "size": (compile(r"([\d.]+[\s ]?[KMGT])i?B"), r"\1B"),
+    "size": (re_compile(r"([\d.]+[\s ]?[KMGT])i?B"), r"\1B"),
     # ThePirateBay specific fixes
     "thepiratebay_labels": (
-        compile(r"Category.*?ULed by", DOTALL),
+        re_compile(r"Category.*?ULed by", DOTALL),
         "category | filename | date | magnet_link | size | seeders | leechers | uploader",
     ),
     # Nyaa specific fixes
     "nyaa_remove_click_here_line": (
-        compile(r"^\[Click he*?\]\n"),
+        re_compile(r"^\[Click he*?\]\n"),
         "",
     ),
     "nyaa_header_block": (
-        compile(r"Category \| Name \| Link \|Size \|Date \|\s*\r?\n[\|-]+\s*\r?\n"),
+        re_compile(r"Category \| Name \| Link \|Size \|Date \|\s*\r?\n[\|-]+\s*\r?\n"),
         "category | filename | magnet_link | size | date | seeders | leechers | downloads\n",
     ),
     "nyaa_remove_comments": (
-        compile(r"\|\( \"\d+ comments?\"\)"),
+        re_compile(r"\|\( \"\d+ comments?\"\)"),
         "|",
     ),
     "nyaa_clean_category_and_name_column_data": (
-        compile(r'([\|\n])[^\|\n]+\"([^"\|]+)\"[^\|]+'),
+        re_compile(r'([\|\n])[^\|\n]+\"([^"\|]+)\"[^\|]+'),
         r"\1 \2 ",
     ),
     "nyaa_clean_link_column_data": (
-        compile(r"\|\((magnet:\?[^)]+)\)"),
+        re_compile(r"\|\((magnet:\?[^)]+)\)"),
         r"| \1",
     ),
     "nyaa_fix_leading_spaces": (
-        compile(r"\n\s+"),
+        re_compile(r"\n\s+"),
         "\n",
     ),
     # Final formatting
-    "to_csv": (compile(r" \| *"), ";"),
+    "to_csv": (re_compile(r" \| *"), ";"),
 }
 WEBSITES: dict[str, dict[str, str | list[str]]] = {
     "thepiratebay.org": dict(
-        search="https://thepiratebay.org/search.php?q={query}",
+        search="https://thepiratebay.org/search.php?q={query}&cat=0",
         parsing="html",
         exclude_patterns=[],
     ),
@@ -259,3 +263,13 @@ async def search_torrents(
         f"Returning empty list. Total time: {time() - start_time:.2f} sec."
     )
     return torrents
+
+
+if __name__ == "__main__":
+    # To check if the scraper is working
+    from asyncio import run
+
+    from rich import print as pr
+
+    for torrent in run(search_torrents("attack")):
+        pr(torrent)

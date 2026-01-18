@@ -67,6 +67,7 @@ class TorrentSearchApi:
         Returns:
             A list of torrent results.
         """
+        query = query.lower()
         found_torrents: list[Torrent] = []
 
         # Prepare search tasks

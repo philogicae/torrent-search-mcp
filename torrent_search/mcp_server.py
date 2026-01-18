@@ -31,16 +31,16 @@ async def search_torrents(
     user_intent: str,
     query: str,
 ) -> str:
-    """Perfom an advanced torrent search across multiple providers.
+    """Perform an advanced torrent search across multiple providers.
 
     # Arguments:
-    - `user_intent`: Must reflect user's overall intention (e.g., "last episode of Breaking Bad", "season 5 of Breaking Bad", "complete Breaking Bad series").
+    - `user_intent`: Must reflect user's overall intention (e.g. "latest episode of Breaking Bad").
     - `query`: Optimized keywords for search. MUST be lowercase and space-separated.
 
     # Query Construction Rules:
     - **NO** generic terms: remove "movie", "series", "torrent", "download".
     - **NO** filler words: remove "the", "a", "an", "and", "of", "with".
-    - **NO** technical tags: do NOT add "1080p", "x264", "bluray", or episode titles.
+    - **NO** technical tags: do NOT add "1080p", "h265", "bluray", or episode titles, except if explicitly requested by the user.
     - **TV Shows**:
         - Specific episode: `[show name] sXXeYY` (e.g., "shogun s01e05")
         - Full season: `[show name] sXX` (e.g., "shogun s01")
@@ -48,8 +48,8 @@ async def search_torrents(
     - **Language**: Add `multi` ONLY if the user specifically requests a non-French or multi-language version.
 
     # Result Analysis & Ranking:
-    1. **Quality**: Prefer 1080p over 720p or 4k (unless requested).
-    2. **Efficiency**: Prefer x265/HEVC for better quality/size ratio.
+    1. **Quality**: Prefer 1080p or 4k, over 720p.
+    2. **Efficiency**: Prefer h265/HEVC for better quality/size ratio.
     3. **Health**: Maximize seeders + leechers.
     4. **Size**: Prefer smaller files within the same quality bracket.
 

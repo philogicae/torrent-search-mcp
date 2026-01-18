@@ -1,3 +1,23 @@
+## [2.0.3] - 2026-01-18
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog with v2.0.2 release notes and improve formatting
+
+- Add v2.0.2 section documenting changelog format changes and CLI output improvements
+- Add blank lines between version sections for better readability throughout changelog
+- Document switch from conventional commits to full message parsing
+- Document consolidation of CLI output and removal of redundant debug prints
+- Chore: bump version to 2.0.3 with search improvements and scraper fixes
+
+- Update version from 2.0.2 to 2.0.3 in pyproject.toml
+- Fix typo in search_torrents docstring: "Perfom" → "Perform"
+- Improve query construction guidelines and result ranking criteria in docstring
+- Force lowercase conversion of search queries in API client
+- Rename `compile` import to `re_compile` to avoid shadowing builtin
+- Add category filter to ThePirateBay search URL
+- Add standalone scraper test script for debugging
+
 ## [2.0.2] - 2026-01-15
 
 ### ⚙️ Miscellaneous Tasks

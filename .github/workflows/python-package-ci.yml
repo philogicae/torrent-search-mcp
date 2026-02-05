@@ -9,16 +9,13 @@ jobs:
     name: Run ruff, ty and pytest 🧪
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install uv with cache
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
+          python-version: 3.13
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: pyproject.toml
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libxml2-dev libxslt-dev
       - name: Install dependencies
@@ -40,24 +37,21 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Install uv with cache
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
+          python-version: 3.13
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: pyproject.toml
       - name: Install dependencies
         run: uv sync --locked
       - name: Build a binary wheel and a source tarball
         run: uv build
       - name: Store the distribution packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: python-package-distributions
           path: dist/
@@ -72,7 +66,7 @@ jobs:
       id-token: write
     steps:
       - name: Download all the dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: python-package-distributions
           path: dist/
@@ -87,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Extract Docker image metadata
         id: meta
         uses: docker/metadata-action@v5

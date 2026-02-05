@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
-This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on ThePirateBay, Nyaa, YggTorrent and La Cale. It allows for easy integration into other applications or services.
+This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on ThePirateBay, Nyaa, YggTorrent ~~and La Cale~~. It allows for easy integration into other applications or services.
 
 <a href="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp/badge?cache-control=no-cache" alt="Torrent Search MCP server" />
@@ -41,7 +41,7 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 
 ## Features
 
-- API wrapper for ThePirateBay, Nyaa, YggTorrent and La Cale.
+- API wrapper for ThePirateBay, Nyaa, YggTorrent and ~~La Cale~~ **(DEPRECATED)**.
 - MCP server interface for standardized communication (stdio, sse, streamable-http)
 - FastAPI server interface for alternative HTTP access (e.g., for direct API calls or testing)
 - Tools:
@@ -53,7 +53,7 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 ### Prerequisites
 
 - An active YggTorrent account with username and password (Optional).
-- An active La Cale account with passkey (Optional).
+- ~~An active La Cale account with passkey~~ **DEPRECATED** (service no longer available).
 - Python 3.10+ (required for PyPI install).
 - [`uv`](https://github.com/astral-sh/uv) (for local development)
 - Chromium and its required dependencies
@@ -61,10 +61,10 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 
 ### Configuration (Optional)
 
-This application requires credentials if you want to interact with YggTorrent or La Cale.
+This application requires credentials if you want to interact with YggTorrent ~~or La Cale~~.
 
 1.  **YggTorrent**: Username and password from your account.
-2.  **La Cale**: Find your passkey on the La Cale website at `https://la-cale.space/profile`.
+2.  **~~La Cale~~**: ~~Find your passkey on the La Cale website at `https://la-cale.space/profile`.~~ **DEPRECATED** (service no longer available).
 3.  **Set Environment Variables**: The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
 ### Installation
@@ -88,7 +88,6 @@ playwright install --with-deps chromium # If previous command fails
 ```env
 YGG_USERNAME=your_username_here
 YGG_PASSWORD=your_password_here
-LA_CALE_PASSKEY=your_passkey_here
 ```
 
 3.  Run the MCP server (default: stdio):
@@ -141,7 +140,7 @@ git clone https://github.com/philogicae/torrent-search-mcp.git
 cd torrent-search-mcp
 ```
 
-2.  Create your configuration file by copying the example and add your passkey (optional):
+2.  Create your configuration file by copying the example and modify it (optional):
 
 ```bash
 cp .env.example .env
@@ -208,13 +207,13 @@ The FastAPI server exposes similar functionalities to the MCP server. Key endpoi
 - `/docs`: Interactive API documentation (Swagger UI).
 - `/redoc`: Alternative API documentation (ReDoc).
 
-Environment variables (like `YGG_USERNAME`, `YGG_PASSWORD`, `LA_CALE_PASSKEY`) are configured the same way as for the MCP server (via an `.env` file in the project root).
+Environment variables (like `YGG_USERNAME`, `YGG_PASSWORD`) are configured the same way as for the MCP server (via an `.env` file in the project root).
 
 ### Via MCP Clients
 
 Usable with any MCP-compatible client. Available tools:
 
-- `search_torrents`: Search for torrents across all available sources (ThePirateBay, Nyaa, YggTorrent, La Cale).
+- `search_torrents`: Search for torrents across all available sources (ThePirateBay, Nyaa, YggTorrent, ~~La Cale~~).
 - `get_torrent`: Get the magnet link or torrent file for a specific torrent by id.
 
 Available resources:
@@ -234,8 +233,7 @@ Configuration:
       "command": "uvx",
       "args": [ "torrent-search-mcp" ],
       "env": {
-        "YGG_LOCAL_API": "http://localhost:3456", # YggTorrent instance URL
-        "LA_CALE_PASSKEY": "your_passkey_here" # La Cale passkey
+        "YGG_LOCAL_API": "http://localhost:3456" # YggTorrent instance URL
       } # optional
     },
     # with sse transport (requires installation)

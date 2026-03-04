@@ -1,3 +1,12 @@
+## [2.2.0] - 2026-03-04
+
+### 🐛 Bug Fixes
+
+- Fix: bump version to 2.2.0 with La Cale API key support and YggTorrent deprecation
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog with v2.1.0 release notes
 ## [2.1.0] - 2026-02-05
 
 ### 🐛 Bug Fixes

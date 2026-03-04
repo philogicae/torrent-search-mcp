@@ -219,9 +219,9 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
                         else:
                             values[1] = combined_filename
                         del values[2 : 2 + extra_count]
-
-                torrent = dict(zip(headers, values)) | {"source": source}
-                torrents.append(Torrent.format(**torrent))
+                torrents.append(
+                    Torrent.format(**dict(zip(headers, values)), source=source)
+                )
             except ValidationError:
                 continue
             except Exception:
@@ -271,5 +271,10 @@ if __name__ == "__main__":
 
     from rich import print as pr
 
-    for torrent in run(search_torrents("attack")):
+    found_torrents = run(search_torrents("attack"))
+    found_sources: dict[str, int] = {}
+    for torrent in found_torrents:
         pr(torrent)
+        if torrent.source:
+            found_sources[torrent.source] = found_sources.get(torrent.source, 0) + 1
+    pr(found_sources)

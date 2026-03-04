@@ -30,7 +30,7 @@ async def search_torrents(
     max_items: int = 10,
 ) -> list[Torrent]:
     """
-    Search for torrents on sources [thepiratebay.org, nyaa.si, yggtorrent].
+    Search for torrents on sources [thepiratebay.org, nyaa.si, lacale].
     Corresponds to `TorrentSearchApi.search_torrents()`.
     """
     torrents: list[Torrent] = await api_client.search_torrents(query, max_items)

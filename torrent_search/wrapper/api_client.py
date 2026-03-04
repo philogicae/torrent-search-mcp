@@ -18,9 +18,11 @@ EXCLUDE_SOURCES: list[str] = list()
 INCLUDE_FR_SOURCES = getenv("EXCLUDE_FR_SOURCES", "false").lower() in ["0", "false"]
 FR_SOURCES: set[str] = set()
 
+fr_torrent = fr_torrent_api()
+
 if INCLUDE_FR_SOURCES:
-    fr_torrent_api.ensure_initialized()
-    FR_SOURCES = {source for source in fr_torrent_api.api_names}
+    fr_torrent.ensure_initialized()
+    FR_SOURCES = {source for source in fr_torrent.api_names}
     SOURCES = list(set(SOURCES).union(FR_SOURCES))
 
 if excluded_sources := getenv("EXCLUDE_SOURCES"):
@@ -77,7 +79,7 @@ class TorrentSearchApi:
         if INCLUDE_FR_SOURCES and any(source in FR_SOURCES for source in SOURCES):
             search_tasks.append(
                 to_thread(
-                    fr_torrent_api.search_torrents,
+                    fr_torrent.search_torrents,
                     query,
                     max_items=max_items,
                     exclude=EXCLUDE_SOURCES,
@@ -141,7 +143,7 @@ class TorrentSearchApi:
                 source = found_torrent.source
 
         if found_torrent and INCLUDE_FR_SOURCES and source in FR_SOURCES:
-            result = fr_torrent_api.get_torrent(ref_id, output_dir=FOLDER_TORRENT_FILES)
+            result = fr_torrent.get_torrent(ref_id, output_dir=FOLDER_TORRENT_FILES)
             if result and isinstance(result, str):
                 if result.endswith(".torrent"):
                     found_torrent.torrent_file = str(FOLDER_TORRENT_FILES / result)

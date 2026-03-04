@@ -1,1 +1,17 @@
-uv lock && uv sync -U --link-mode=copy && uv run ruff format torrent_search && uv run ruff check torrent_search --fix && uv run ty check torrent_search && uv run pytest torrent_search
+#!/bin/bash
+set -e
+
+# Lock and sync dependencies
+uv lock && uv sync -U --link-mode=copy
+
+# Format code
+uv run ruff format
+
+# Check for linting errors
+uv run ruff check --fix
+
+# Run type checking
+uv run ty check
+
+# Run tests
+uv run pytest

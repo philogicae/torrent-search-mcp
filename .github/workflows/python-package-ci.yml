@@ -23,13 +23,13 @@ jobs:
       - name: Install crawl4ai/playwright
         run: uvx playwright install --with-deps chromium
       - name: Run ruff format
-        run: uv run ruff format torrent_search
+        run: uv run ruff format
       - name: Run ruff check
-        run: uv run ruff check torrent_search
+        run: uv run ruff check
       - name: Run ty check
-        run: uv run ty check torrent_search
+        run: uv run ty check
       - name: Run tests
-        run: uv run pytest torrent_search
+        run: uv run pytest
 
   build:
     name: Build distribution 📦

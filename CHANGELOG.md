@@ -1,3 +1,12 @@
+## [2.3.0] - 2026-03-06
+
+### 🚀 Features
+
+- Feat: bump version to 2.3.0 with YggTorrent re-enablement via ygg-api
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog with v2.2.0 release notes
 ## [2.2.0] - 2026-03-04
 
 ### 🐛 Bug Fixes

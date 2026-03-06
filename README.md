@@ -41,7 +41,7 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 
 ## Features
 
-- API wrapper for ThePirateBay, Nyaa, and La Cale.
+- API wrapper for **ThePirateBay**, **Nyaa**, **YggTorrent (now [ygg.gratis](https://ygg.gratis))** and **La Cale**.
 - MCP server interface for standardized communication (stdio, sse, streamable-http)
 - FastAPI server interface for alternative HTTP access (e.g., for direct API calls or testing)
 - Tools:
@@ -52,19 +52,16 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 
 ### Prerequisites
 
-- An active La Cale account with API key (Optional).
-- ~~An active YggTorrent account with username and password~~ **(DEPRECATED)**.
 - Python 3.10+ (required for PyPI install).
 - [`uv`](https://github.com/astral-sh/uv) (for local development)
-- Chromium and its required dependencies
 - Docker and Docker Compose (for Docker setup)
+- Passkey for LaCale (Optional). Create your apikey on https://la-cale.space/settings/api-keys
 
 ### Configuration (Optional)
 
-This application requires credentials if you want to interact with La Cale ~~or YggTorrent~~..
+This application requires credentials if you want to interact with La Cale.
 
 1.  **La Cale**: Find your API key on the La Cale website.
-2.  **~~YggTorrent~~**: ~~Username and password from your account~~ **(DEPRECATED)**.
 3.  **Set Environment Variables**: The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
 ### Installation

@@ -16,7 +16,7 @@ x-logging: &default-logging
 
 services:
   ygg-api:
-    image: ghcr.io/djerayane/ygege:docker-publish
+    image: uwucode/ygege:latest
     container_name: ygg-api
     restart: unless-stopped
     ports:

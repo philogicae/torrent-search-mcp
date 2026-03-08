@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
-This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on ThePirateBay, Nyaa, and La Cale. It allows for easy integration into other applications or services.
+This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **Nyaa**, **YggTorrent (now [ygg.gratis](https://ygg.gratis))** and **La Cale**. It allows for easy integration into other applications or services.
 
 <a href="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp/badge?cache-control=no-cache" alt="Torrent Search MCP server" />
@@ -62,7 +62,7 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 This application requires credentials if you want to interact with La Cale.
 
 1.  **La Cale**: Find your API key on the La Cale website.
-3.  **Set Environment Variables**: The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
+2.  **Set Environment Variables**: The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
 ### Installation
 

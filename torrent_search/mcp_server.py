@@ -45,7 +45,7 @@ async def search_torrents(
         - Specific episode: `[show name] sXXeYY` (e.g., "shogun s01e05")
         - Full season: `[show name] sXX` (e.g., "shogun s01")
         - Full series: `[show name]` (e.g., "shogun")
-    - **Language**: Add `multi` ONLY if the user specifically requests a non-French or multi-language version.
+    - **Language**: Add `multi` ONLY if the user specifically requests a multi-language version.
 
     # Result Analysis & Ranking:
     1. **Quality**: Prefer 1080p or 4k, over 720p.

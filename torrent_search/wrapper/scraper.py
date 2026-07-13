@@ -295,25 +295,14 @@ crawler = AsyncWebCrawler(config=BROWSER_CONFIG, always_bypass_cache=True)
 def parse_result(
     text: str,
     exclude_patterns: list[str] | None = None,
-    max_chars: int = 5000,
 ) -> str:
     """
-    Parse the text result.
-
-    Args:
-        text: The text to parse.
-        exclude_patterns: List of patterns to exclude.
-        max_chars: Maximum number of characters to return.
-
-    Returns:
-        The parsed text.
+    Parse the text result using filters and replacers.
     """
-    # For ThePirateBay, extract only the torrent list section
     if '<ol id="torrents"' in text:
         text = text.split('<ol id="torrents"', 1)[-1]
         text = text.split("</ol>", 1)[0] if "</ol>" in text else text
     else:
-        # Fallback for other sources
         text = text.split("<li>", 1)[-1].replace("<li>", "")
 
     for name, pattern in FILTERS.items():
@@ -327,12 +316,6 @@ def parse_result(
         pattern, replacement_str = replacer_config
         text = pattern.sub(replacement_str, text)
 
-    if len(text) > max_chars:
-        safe_truncate_pos = text.rfind("\n", 0, max_chars)
-        if safe_truncate_pos == -1:
-            text = text[:max_chars]
-        else:
-            text = text[:safe_truncate_pos]
     text = sub(r"\n{2,}", "\n", text)
     return text.strip()
 

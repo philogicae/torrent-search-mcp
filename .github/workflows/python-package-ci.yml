@@ -1,6 +1,11 @@
 name: CI-CD
 
 on: push
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   UV_SYSTEM_PYTHON: 1
 
@@ -9,22 +14,22 @@ jobs:
     name: Run ruff, ty and pytest 🧪
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install uv with cache
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: 3.13
+          python-version: 3.14
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libxml2-dev libxslt-dev
       - name: Install dependencies
-        run: uv sync --locked --dev
+        run: uv sync --dev --frozen
       - name: Install crawl4ai/playwright
         run: uvx playwright install --with-deps chromium
-      - name: Run ruff format
-        run: uv run ruff format
-      - name: Run ruff check
+      - name: Run ruff format check
+        run: uv run ruff format --check
+      - name: Run ruff lint
         run: uv run ruff check
       - name: Run ty check
         run: uv run ty check
@@ -37,17 +42,17 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Install uv with cache
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: 3.13
+          python-version: 3.14
           enable-cache: true
           cache-dependency-glob: uv.lock
       - name: Install dependencies
-        run: uv sync --locked
+        run: uv sync --frozen
       - name: Build a binary wheel and a source tarball
         run: uv build
       - name: Store the distribution packages
@@ -81,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Extract Docker image metadata
         id: meta
         uses: docker/metadata-action@v5

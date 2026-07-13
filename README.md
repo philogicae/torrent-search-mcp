@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
-This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **Nyaa**, **YggTorrent (now [ygg.gratis](https://ygg.gratis))** and **La Cale**. It allows for easy integration into other applications or services.
+This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay** and **Nyaa**. It allows for easy integration into other applications or services.
 
 <a href="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp/badge?cache-control=no-cache" alt="Torrent Search MCP server" />
@@ -41,7 +41,7 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 
 ## Features
 
-- API wrapper for **ThePirateBay**, **Nyaa**, **YggTorrent (now [ygg.gratis](https://ygg.gratis))** and **La Cale**.
+- API wrapper for **ThePirateBay** and **Nyaa**.
 - MCP server interface for standardized communication (stdio, sse, streamable-http)
 - FastAPI server interface for alternative HTTP access (e.g., for direct API calls or testing)
 - Tools:
@@ -55,14 +55,10 @@ This repository provides a Python API and an MCP (Model Context Protocol) server
 - Python 3.10+ (required for PyPI install).
 - [`uv`](https://github.com/astral-sh/uv) (for local development)
 - Docker and Docker Compose (for Docker setup)
-- Passkey for LaCale (Optional). Create your apikey on https://la-cale.space/settings/api-keys
 
 ### Configuration (Optional)
 
-This application requires credentials if you want to interact with La Cale.
-
-1.  **La Cale**: Find your API key on the La Cale website.
-2.  **Set Environment Variables**: The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
+The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
 ### Installation
 
@@ -80,11 +76,7 @@ crawl4ai-setup # For crawl4ai/playwright
 playwright install --with-deps chromium # If previous command fails
 ```
 
-2.  Create a `.env` file in the directory where you'll run the application and add your credentials (optional):
-
-```env
-LA_CALE_API_KEY=your_api_key_here
-```
+2.  Create a `.env` file in the directory where you'll run the application (optional):
 
 3.  Run the MCP server (default: stdio):
 
@@ -107,11 +99,11 @@ cd torrent-search-mcp
 2.  Install dependencies using `uv`:
 
 ```bash
-uv sync --locked
+uv sync --frozen
 uvx playwright install --with-deps chromium
 ```
 
-3.  Create your configuration file by copying the example and add your credentials (optional):
+3.  Create your configuration file by copying the example:
 
 ```bash
 cp .env.example .env
@@ -136,7 +128,7 @@ git clone https://github.com/philogicae/torrent-search-mcp.git
 cd torrent-search-mcp
 ```
 
-2.  Create your configuration file by copying the example and modify it (optional):
+2.  Create your configuration file by copying the example:
 
 ```bash
 cp .env.example .env
@@ -209,7 +201,7 @@ Environment variables are configured the same way as for the MCP server (via an 
 
 Usable with any MCP-compatible client. Available tools:
 
-- `search_torrents`: Search for torrents across all available sources (ThePirateBay, Nyaa, La Cale).
+- `search_torrents`: Search for torrents across all available sources (ThePirateBay, Nyaa).
 - `get_torrent`: Get the magnet link or torrent file for a specific torrent by id.
 
 Available resources:

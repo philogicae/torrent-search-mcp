@@ -1,11 +1,10 @@
-from asyncio import gather, run, to_thread
+from asyncio import run
 from os import getenv, makedirs
 from pathlib import Path
 from sys import argv
 from typing import Any
 
 from aiocache import cached
-from fr_torrent_search import fr_torrent_api
 
 from .models import Cache, Torrent
 from .scraper import WEBSITES, search_torrents
@@ -15,15 +14,6 @@ makedirs(FOLDER_TORRENT_FILES, exist_ok=True)
 
 SOURCES: list[str] = list(WEBSITES.keys())
 EXCLUDE_SOURCES: list[str] = list()
-INCLUDE_FR_SOURCES = getenv("EXCLUDE_FR_SOURCES", "false").lower() in ["0", "false"]
-FR_SOURCES: set[str] = set()
-
-fr_torrent = fr_torrent_api()
-
-if INCLUDE_FR_SOURCES:
-    fr_torrent.ensure_initialized()
-    FR_SOURCES = {source for source in fr_torrent.api_names}
-    SOURCES = list(set(SOURCES).union(FR_SOURCES))
 
 if excluded_sources := getenv("EXCLUDE_SOURCES"):
     EXCLUDE_SOURCES = list(
@@ -72,34 +62,8 @@ class TorrentSearchApi:
         query = query.lower()
         found_torrents: list[Torrent] = []
 
-        # Prepare search tasks
-        search_tasks = []
-        if any(source not in FR_SOURCES for source in SOURCES):
-            search_tasks.append(search_torrents(query, SOURCES))
-        if INCLUDE_FR_SOURCES and any(source in FR_SOURCES for source in SOURCES):
-            search_tasks.append(
-                to_thread(
-                    fr_torrent.search_torrents,
-                    query,
-                    max_items=max_items,
-                    exclude=EXCLUDE_SOURCES,
-                )
-            )
-
-        # Execute searches in parallel
-        if search_tasks:
-            results = await gather(*search_tasks)
-            result_index = 0
-            if any(source not in FR_SOURCES for source in SOURCES):
-                found_torrents.extend(results[result_index])
-                result_index += 1
-            if INCLUDE_FR_SOURCES and any(source in FR_SOURCES for source in SOURCES):
-                found_torrents.extend(
-                    [
-                        Torrent.format(**torrent.model_dump())
-                        for torrent in results[result_index]
-                    ]
-                )
+        # Search across all enabled sources
+        found_torrents = await search_torrents(query, SOURCES)
 
         found_torrents = list(
             sorted(
@@ -129,7 +93,7 @@ class TorrentSearchApi:
         found_torrent: Torrent | None = self.CACHE.get(torrent_id)
 
         try:
-            query, max_items, source, ref_id = Torrent.extract_info(torrent_id)
+            query, max_items = Torrent.extract_info(torrent_id)[:2]
         except Exception:
             print(f"Invalid torrent ID: {torrent_id}")
             return None
@@ -139,16 +103,6 @@ class TorrentSearchApi:
             found_torrent = next(
                 (torrent for torrent in torrents if torrent.id == torrent_id), None
             )
-            if found_torrent:
-                source = found_torrent.source
-
-        if found_torrent and INCLUDE_FR_SOURCES and source in FR_SOURCES:
-            result = fr_torrent.get_torrent(ref_id, output_dir=FOLDER_TORRENT_FILES)
-            if result and isinstance(result, str):
-                if result.endswith(".torrent"):
-                    found_torrent.torrent_file = str(FOLDER_TORRENT_FILES / result)
-                else:
-                    found_torrent.magnet_link = result
 
         self.CACHE.clean()  # Clean cache routine
 

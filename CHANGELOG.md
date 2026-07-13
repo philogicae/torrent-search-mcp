@@ -1,3 +1,20 @@
+## [2.4.0] - 2026-07-13
+
+### 🚀 Features
+
+- Feat: drop fr torrent sources, upgrade to Python 3.14
+
+- Remove fr-torrent-search-mcp dependency and all French source (YggTorrent/La Cale) integration from api_client, scraper, compose.yaml, env.example, and docs
+- Upgrade base images and CI to Python 3.14
+- Replace uv sync --locked with --frozen everywhere
+- Add CI concurrency group w/ cancel-in-progress, bump actions/checkout to v7, split ruff format/lint steps
+- Remove max_chars truncation from parse_result
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+- Chore: upgrade base images from Debian Bookworm to Trixie
+
 ## [2.3.3] - 2026-04-30
 
 ### ⚙️ Miscellaneous Tasks

@@ -1,3 +1,13 @@
+## [3.0.1] - 2026-08-10
+
+### 🐛 Bug Fixes
+
+- Fix: CLI entry point script name
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [3.0.0] - 2026-08-10
 
 ### 🚀 Features

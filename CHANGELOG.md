@@ -1,3 +1,55 @@
+## [3.0.0] - 2026-08-10
+
+### 🚀 Features
+
+- Feat: v3.0.0 - multi-source refactor, CLI mode, and full test suite
+
+Sources:
+
+- Add 7 new sources via parser.py: yts.mx, apibay.org, eztvx.to,
+  fitgirl-repacks.site, subsplease.org, bittorrented.com, 1337x.to
+- New SourceParser protocol; parsers normalize to a shared CSV contract
+- Replace browser crawling with lightweight HTTP/JSON/RSS where possible
+- Parallel scraping via asyncio.gather; mirror rotation for yts/1337x
+- Dynamic tracker enrichment from ngosang/trackerslist with static fallback
+- EZTV: client-side token filtering against browse list (no search API)
+
+Scraper/parser:
+
+- Split parsing logic out of scraper.py into parser.py
+- Log source failures (logger.warning) instead of silent suppress
+- Drop no-op retry loop in search_torrents (retried identical data)
+- extract_torrents: refresh overflow comment to reference crawled HTML
+
+CLI/entry points:
+
+- Add --mode cli for direct command-line search via TorrentSearchApi.cli
+- Rename cli() -> main(); accept positional query arg
+- Default Docker CMD changed from sse to http
+
+Tests:
+
+- Add 95 tests across 9 files (parser, scraper, api_client, models,
+  mcp_server, fastapi_server, main, utils, conftest)
+- Move tests from torrent_search/ to top-level tests/; delete old test file
+
+Tooling/CI:
+
+- Split CI into lint (ruff, ty) and tests (pytest-xdist + coverage) jobs
+- Add pytest-cov, pytest-xdist to dev deps; configure pytest in pyproject
+- Delete mypy.ini and pytest.ini (consolidated into pyproject.toml)
+- dev.sh: set -euo pipefail, parallel pytest with coverage
+
+Misc:
+
+- Pin fastmcp>=3,<4; bump version 2.4.0 -> 3.0.0
+- Update README, .env.example, FastAPI docstring for new sources
+- Bump LICENSE year to 2026; sort **all** in **init**.py
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [2.4.0] - 2026-07-13
 
 ### 🚀 Features

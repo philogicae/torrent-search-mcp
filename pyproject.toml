@@ -1,6 +1,6 @@
 [project]
 name = "torrent-search-mcp"
-version = "2.4.0"
+version = "3.0.0"
 description = "Torrent Search MCP Server"
 authors = [{ name = "philogicae" }]
 requires-python = ">=3.10,<4.0"
@@ -9,7 +9,7 @@ license = "MIT"
 dependencies = [
     "crawl4ai",
     "aiocache",
-    "fastmcp",
+    "fastmcp>=3,<4",
     "fastapi",
     "pybase62",
 ]
@@ -23,7 +23,7 @@ DeepWiki = "https://deepwiki.com/philogicae/torrent-search-mcp"
 torrent-search-mcp = "torrent_search.__main__:cli"
 
 [dependency-groups]
-dev = ["ruff", "pytest", "pytest-asyncio", "ty"]
+dev = ["ruff", "pytest", "pytest-asyncio", "pytest-cov", "pytest-xdist", "ty"]
 
 [tool.hatch.build]
 include = ["torrent_search"]
@@ -31,3 +31,16 @@ include = ["torrent_search"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::authlib.deprecate.AuthlibDeprecationWarning",
+    # third-party SyntaxWarning: 'return' in a 'finally' block
+    "ignore::SyntaxWarning:crawl4ai\\.content_scraping_strategy",
+    # third-party deprecation from starlette.testclient
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]

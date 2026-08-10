@@ -1,17 +1,25 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# Lock and sync dependencies
+# ---------------------------------------------------------------------------
+# Python tooling
+# ---------------------------------------------------------------------------
+
+echo "==> Locking and syncing dependencies"
 uv lock && uv sync -U --link-mode=copy
 
-# Format code
+echo "==> Formatting Python code"
 uv run ruff format
 
-# Check for linting errors
+echo "==> Linting Python code (with autofix)"
 uv run ruff check --fix
 
-# Run type checking
+echo "==> Type checking"
 uv run ty check
 
-# Run tests
-uv run pytest
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+echo "==> Running tests with coverage (parallel)"
+uv run pytest -n 3 --dist worksteal --cov=torrent_search --cov-report=term-missing

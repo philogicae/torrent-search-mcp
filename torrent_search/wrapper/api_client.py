@@ -1,4 +1,4 @@
-from asyncio import run
+from contextlib import suppress
 from os import getenv, makedirs
 from pathlib import Path
 from sys import argv
@@ -13,7 +13,7 @@ FOLDER_TORRENT_FILES: Path = Path(getenv("FOLDER_TORRENT_FILES") or "./torrents"
 makedirs(FOLDER_TORRENT_FILES, exist_ok=True)
 
 SOURCES: list[str] = list(WEBSITES.keys())
-EXCLUDE_SOURCES: list[str] = list()
+EXCLUDE_SOURCES: list[str] = []
 
 if excluded_sources := getenv("EXCLUDE_SOURCES"):
     EXCLUDE_SOURCES = list(
@@ -65,12 +65,10 @@ class TorrentSearchApi:
         # Search across all enabled sources
         found_torrents = await search_torrents(query, SOURCES)
 
-        found_torrents = list(
-            sorted(
-                found_torrents,
-                key=lambda torrent: torrent.seeders + torrent.leechers,
-                reverse=True,
-            )
+        found_torrents = sorted(
+            found_torrents,
+            key=lambda torrent: torrent.seeders + torrent.leechers,
+            reverse=True,
         )[:max_items]
 
         for torrent in found_torrents:
@@ -92,9 +90,10 @@ class TorrentSearchApi:
         """
         found_torrent: Torrent | None = self.CACHE.get(torrent_id)
 
-        try:
+        query, max_items = "", 10
+        with suppress(Exception):
             query, max_items = Torrent.extract_info(torrent_id)[:2]
-        except Exception:
+        if not query:  # Invalid or non-decodable torrent ID
             print(f"Invalid torrent ID: {torrent_id}")
             return None
 
@@ -113,11 +112,11 @@ class TorrentSearchApi:
                 return found_torrent.magnet_link
         return None
 
-    async def cli(self) -> None:
+    async def cli(self, query: str | None = None) -> None:
         """
         Command line interface for the API.
         """
-        query = argv[1] if len(argv) > 1 else None
+        query = query or (argv[1] if len(argv) > 1 else None)
         if query:
             found_torrents: list[Torrent] = await self.search_torrents(
                 query, max_items=100
@@ -138,7 +137,3 @@ class TorrentSearchApi:
                 print("No torrents found")
         else:
             print("Please provide a search query.")
-
-
-if __name__ == "__main__":
-    run(TorrentSearchApi().cli())

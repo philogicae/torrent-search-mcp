@@ -11,6 +11,7 @@ build
 # Ruff, Pytest
 .ruff_cache
 .pytest_cache
+.coverage*
 
 # Envs
 .env

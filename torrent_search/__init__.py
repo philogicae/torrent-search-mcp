@@ -4,8 +4,8 @@ from .mcp_server import torrent_search_api
 from .wrapper import Torrent
 
 __all__ = [
-    "torrent_search_mcp",
+    "Torrent",
     "torrent_search_api",
     "torrent_search_fastapi",
-    "Torrent",
+    "torrent_search_mcp",
 ]

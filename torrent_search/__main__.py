@@ -1,5 +1,6 @@
 import argparse
 import subprocess
+from contextlib import suppress
 from os import geteuid
 
 import uvicorn
@@ -9,7 +10,7 @@ from .mcp_server import mcp
 
 
 def install_playwright_drivers() -> None:
-    try:
+    with suppress(Exception):
         driver_executable, driver_cli = compute_driver_executable()
         playwright_command = [driver_executable, driver_cli, "install"]
         if geteuid() == 0:
@@ -22,19 +23,17 @@ def install_playwright_drivers() -> None:
         if completed_process.returncode == 0:
             print("Playwright drivers installed.")
             return
-    except Exception:
-        pass
     print("Failed to install Playwright drivers.")
 
 
-def cli() -> None:
+def main() -> None:
     parser = argparse.ArgumentParser(description="Run Torrent Search Server.")
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["stdio", "sse", "streamable-http", "fastapi"],
+        choices=["cli", "stdio", "http", "sse", "streamable-http", "fastapi"],
         default="stdio",
-        help="Mode to run the server in. Default: stdio.",
+        help="Mode to run in. Default: stdio.",
     )
     parser.add_argument(
         "--host", type=str, default="0.0.0.0", help="Host to bind the server to."
@@ -56,12 +55,24 @@ def cli() -> None:
         default=1,
         help="Number of worker processes to use for the FastAPI server.",
     )
+    parser.add_argument(
+        "query",
+        nargs="?",
+        default=None,
+        help="Search query (used with --mode cli).",
+    )
 
     args = parser.parse_args()
 
     install_playwright_drivers()
 
-    if args.mode == "fastapi":
+    if args.mode == "cli":
+        from asyncio import run
+
+        from .wrapper import TorrentSearchApi
+
+        run(TorrentSearchApi().cli(args.query))
+    elif args.mode == "fastapi":
         print(f"Starting FastAPI server on {args.host}:{args.port}")
         uvicorn.run(
             "torrent_search.fastapi_server:app",
@@ -78,5 +89,5 @@ def cli() -> None:
         )
 
 
-if __name__ == "__main__":
-    cli()
+if __name__ == "__main__":  # pragma: no cover - module entry guard
+    main()

@@ -26,4 +26,4 @@ COPY --from=builder --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
-CMD ["torrent-search-mcp", "--mode", "sse"]
+CMD ["torrent-search-mcp", "--mode", "http"]

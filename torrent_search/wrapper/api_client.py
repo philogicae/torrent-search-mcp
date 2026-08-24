@@ -1,6 +1,6 @@
+import logging
 from contextlib import suppress
-from os import getenv, makedirs
-from pathlib import Path
+from os import getenv
 from sys import argv
 from typing import Any
 
@@ -8,30 +8,38 @@ from aiocache import cached
 
 from .models import Cache, Torrent
 from .scraper import WEBSITES, search_torrents
+from .scraper import popular_torrents as scrape_popular_torrents
 
-FOLDER_TORRENT_FILES: Path = Path(getenv("FOLDER_TORRENT_FILES") or "./torrents")
-makedirs(FOLDER_TORRENT_FILES, exist_ok=True)
+logger = logging.getLogger("Torrent Search")
+
 
 SOURCES: list[str] = list(WEBSITES.keys())
 EXCLUDE_SOURCES: list[str] = []
 
-if excluded_sources := getenv("EXCLUDE_SOURCES"):
-    EXCLUDE_SOURCES = list(
-        set(EXCLUDE_SOURCES).union(
-            {source.strip() for source in excluded_sources.split(",")}
-        )
+_excluded_env = getenv("EXCLUDE_SOURCES")
+if _excluded_env:
+    EXCLUDE_SOURCES = [s.strip() for s in _excluded_env.split(",") if s.strip()]
+    SOURCES = [s for s in SOURCES if s not in set(EXCLUDE_SOURCES)]
+
+
+def key_builder(fn: Any, *args: Any, **kwargs: Any) -> str:
+    """Build the aiocache key.
+
+    aiocache calls ``key_builder(fn, *call_args)``; for the decorated bound
+    method ``args[0]`` is ``self``, so real arguments start at ``args[1]``.
+    The query is lowercased to match ``search_torrents``' normalization and
+    avoid duplicate cache entries that only differ by case.
+    """
+    call_args = args[1:]
+    query = (
+        str(call_args[0]).lower() if call_args else str(kwargs.get("query", "")).lower()
     )
-    SOURCES = list(set(SOURCES) - set(EXCLUDE_SOURCES))
-
-
-def key_builder(
-    _namespace: str, _fn: Any, *args: tuple[Any], **kwargs: dict[str, Any]
-) -> str:
-    key = {
-        "query": args[0] if len(args) > 0 else "",
-        "max_items": args[1] if len(args) > 1 else 10,
-    } | kwargs
-    return str(key)
+    limit = (
+        call_args[1]
+        if len(call_args) > 1
+        else kwargs.get("limit", kwargs.get("max_items", 10))
+    )
+    return str({"fn": getattr(fn, "__qualname__", ""), "query": query, "limit": limit})
 
 
 class TorrentSearchApi:
@@ -43,11 +51,11 @@ class TorrentSearchApi:
         """Get the list of available torrent sources."""
         return SOURCES
 
-    @cached(ttl=300, key_builder=key_builder)  # 5min
+    @cached(ttl=120, key_builder=key_builder)  # 2min
     async def search_torrents(
         self,
         query: str,
-        max_items: int = 10,
+        max_items: int = 20,
     ) -> list[Torrent]:
         """
         Search for torrents on available sources.
@@ -60,9 +68,6 @@ class TorrentSearchApi:
             A list of torrent results.
         """
         query = query.lower()
-        found_torrents: list[Torrent] = []
-
-        # Search across all enabled sources
         found_torrents = await search_torrents(query, SOURCES)
 
         found_torrents = sorted(
@@ -78,23 +83,46 @@ class TorrentSearchApi:
         self.CACHE.update(found_torrents)
         return found_torrents
 
+    @cached(ttl=120, key_builder=key_builder)  # 2min
+    async def popular_torrents(self, per_source: int = 10) -> list[Torrent]:
+        """
+        Get the most popular torrents per source with a top listing.
+
+        Args:
+            per_source: Maximum number of results kept per source (best first).
+
+        Returns:
+            A list of torrent results ranked by seeders + leechers.
+        """
+        found_torrents = await scrape_popular_torrents(per_source=per_source)
+
+        for torrent in found_torrents:
+            # Empty query marker: ids stay decodable but are not re-searchable
+            torrent.prepend_info("", per_source)
+
+        self.CACHE.clean()  # Clean cache routine
+        self.CACHE.update(found_torrents)
+        return found_torrents
+
     async def get_torrent(self, torrent_id: str) -> str | None:
         """
-        Get the magnet link or torrent filepath for a previously found torrent.
+        Get the magnet link for a previously found torrent.
 
         Args:
             torrent_id: The ID of the torrent.
 
         Returns:
-            The magnet link or torrent filepath as a string, else None.
+            The magnet link as a string, else None.
         """
         found_torrent: Torrent | None = self.CACHE.get(torrent_id)
 
         query, max_items = "", 10
         with suppress(Exception):
             query, max_items = Torrent.extract_info(torrent_id)[:2]
-        if not query:  # Invalid or non-decodable torrent ID
-            print(f"Invalid torrent ID: {torrent_id}")
+        if not query and not found_torrent:
+            # Garbage ids, or popular-listing ids whose cache entry expired
+            # (they carry no query marker and cannot be re-searched).
+            logger.warning("Invalid torrent ID: %s", torrent_id)
             return None
 
         if not found_torrent:  # Missing or uncached
@@ -105,11 +133,8 @@ class TorrentSearchApi:
 
         self.CACHE.clean()  # Clean cache routine
 
-        if found_torrent:
-            if found_torrent.torrent_file:
-                return found_torrent.torrent_file
-            elif found_torrent.magnet_link:
-                return found_torrent.magnet_link
+        if found_torrent and found_torrent.magnet_link:
+            return found_torrent.magnet_link
         return None
 
     async def cli(self, query: str | None = None) -> None:

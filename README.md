@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
-This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **Nyaa**, **1337x**, **YTS**, **FitGirl**, **EZTV**, **SubsPlease** and **BitTorrented**. It allows for easy integration into other applications or services.
+This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**. It allows for easy integration into other applications or services.
 
 <a href="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp/badge?cache-control=no-cache" alt="Torrent Search MCP server" />
@@ -65,29 +65,34 @@ uvx torrent-search-mcp --mode fastapi
 
 ## Features
 
-- API wrapper for **ThePirateBay**, **Nyaa**, **1337x**, **YTS**, **FitGirl**, **EZTV**, **SubsPlease** and **BitTorrented**.
+- API wrapper for **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**.
 - MCP server interface for standardized communication (`stdio`, `sse`, `streamable-http`).
 - FastAPI server interface for alternative HTTP access (e.g., for direct API calls or testing).
 - CLI mode for quick one-off searches directly from the terminal.
 - In-memory + `aiocache` result caching to reduce redundant scraping.
-- Configurable source filtering and torrent file download folder via environment variables.
+- Configurable source filtering via environment variables.
 - Tools:
   - Search for torrents across all available sources.
-  - Get magnet link or torrent file for a specific torrent by id.
+  - Get the most popular torrents per source (apibay, uindex, 1337x, YTS, nyaa, EZTV).
+  - Get the magnet link for a specific torrent by id.
+  - List available sources.
 
 ## Supported Sources
 
 | Source              | Domain                 | Fetch method    |
 | ------------------- | ---------------------- | --------------- |
 | ThePirateBay        | `thepiratebay.org`     | HTML (crawl4ai) |
-| Nyaa                | `nyaa.si`              | HTTP API        |
+| apibay (TPB mirror) | `apibay.org`           | HTTP API        |
 | 1337x               | `1337x.to`             | HTTP API        |
+| Nyaa                | `nyaa.si`              | HTTP API        |
 | YTS                 | `yts.mx`               | HTTP API        |
-| FitGirl             | `fitgirl-repacks.site` | HTTP API        |
 | EZTV                | `eztvx.to`             | HTTP API        |
+| FitGirl             | `fitgirl-repacks.site` | HTTP API        |
 | SubsPlease          | `subsplease.org`       | HTTP API        |
 | BitTorrented        | `bittorrented.com`     | HTTP API        |
-| apibay (TPB mirror) | `apibay.org`           | HTTP API        |
+| UIndex              | `uindex.org`           | HTTP top list   |
+
+> **Note on UIndex:** the site exposes no programmatic search endpoint (its search path is protected by a browser challenge), so queries are matched client-side against its live top list — which conveniently carries magnet links inline.
 
 Sources can be excluded individually via the [`EXCLUDE_SOURCES`](#configuration-optional) env var.
 
@@ -103,11 +108,13 @@ Sources can be excluded individually via the [`EXCLUDE_SOURCES`](#configuration-
 
 The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
-| Variable               | Default      | Description                                                                                                                             |
-| ---------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `INCLUDE_LINKS`        | `false`      | When `true`, include magnet links / torrent file paths in `search_torrents` results. Left off by default to greatly reduce token usage. |
-| `EXCLUDE_SOURCES`      | _(none)_     | Comma-separated list of sources to exclude from results (e.g. `nyaa.si,1337x.to`).                                                      |
-| `FOLDER_TORRENT_FILES` | `./torrents` | Target folder where downloaded `.torrent` files are stored.                                                                             |
+| Variable                 | Default  | Description                                                                                                                                                     |
+| ------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INCLUDE_LINKS`          | `false`  | When `true`, include magnet links in the MCP `search_torrents` / `popular_torrents` results. Left off by default to greatly reduce token usage.                 |
+| `EXCLUDE_SOURCES`        | _(none)_ | Comma-separated list of sources to exclude from results (e.g. `nyaa.si,1337x.to`).                                                                              |
+| `CRAWLER_IDLE_TIMEOUT`   | `120`    | Seconds of inactivity before the headless browser (used for HTML sources like ThePirateBay) is shut down; the timer resets on every search. Set `0` to disable. |
+| `TORRENT_SEARCH_API_URL` | _(none)_ | MCP only: base URL of a running Torrent Search REST API — tools proxy it instead of scraping locally. Unset = standalone.                                       |
+| `TELEGRAM_BOT_HANDLE`    | _(none)_ | Telegram bot handle used by the Web UI torrent action. The Telegram button is hidden when unset.                                                                |
 
 ### Installation
 
@@ -172,9 +179,14 @@ The repo also ships a `dev.sh` helper that locks/syncs deps, formats, lints, typ
 
 #### For Docker
 
-This method uses Docker to run the server in a container.
+This method uses Docker Compose to run **two containers**: the REST API + web UI, and an MCP server that proxies the API (no local scraping).
 
-`compose.yaml` is configured to bypass DNS issues (using [quad9](https://quad9.net/) DNS). The container runs the server in `http` (streamable-http) mode on port `8000` (endpoint `/mcp`) and persists downloaded torrent files to a named volume.
+`compose.yaml` is configured to bypass DNS issues (using [quad9](https://quad9.net/) DNS).
+
+| Container            | Mode      | Host port | Endpoints                                                                                  |
+| -------------------- | --------- | --------- | ------------------------------------------------------------------------------------------ |
+| `torrent-search-api` | `fastapi` | `8000`    | `/` (web UI), `/torrent/*`, `/sources`, `/docs`                                            |
+| `torrent-search-mcp` | `http`    | `8001`    | `/mcp` (MCP over streamable HTTP, `TORRENT_SEARCH_API_URL=http://torrent-search-api:8000`) |
 
 1.  Clone the repository (if you haven't already):
 
@@ -189,7 +201,7 @@ cd torrent-search-mcp
 cp .env.example .env
 ```
 
-3.  Build and run the container using Docker Compose (default port: 8000):
+3.  Build and run the containers using Docker Compose:
 
 ```bash
 docker compose up --build -d
@@ -198,6 +210,7 @@ docker compose up --build -d
 4.  Access container logs:
 
 ```bash
+docker logs torrent-search-api -f
 docker logs torrent-search-mcp -f
 ```
 
@@ -213,6 +226,8 @@ The package exposes a single entry point, `torrent-search-mcp` (installed by `pi
 | `streamable-http` | `/mcp`   | Same as `http`; the modern, MCP-spec-recommended HTTP transport.                                                       |
 | `sse`             | `/sse`   | MCP server using Server-Sent Events. Legacy HTTP transport (deprecated by the MCP spec in favor of `streamable-http`). |
 | `fastapi`         | `/`      | Standalone FastAPI HTTP server (see [As FastAPI Server](#as-fastapi-server)).                                          |
+
+MCP modes (`stdio`, `http`, `streamable-http`, `sse`) run **standalone** by default (tools scrape locally). Set [`TORRENT_SEARCH_API_URL`](#configuration-optional) to switch to **API mode**: the tools proxy a running Torrent Search REST API instead.
 
 Common flags (for `http`, `streamable-http`, `sse` and `fastapi` modes): `--host` (default `0.0.0.0`), `--port` (default `8000`), `--reload`, `--workers` (FastAPI only).
 
@@ -243,7 +258,7 @@ for torrent in results:
     )
 ```
 
-`search_torrents` is async and accepts an optional `max_items` (default `10`). Each `Torrent` exposes `id`, `filename`, `size`, `seeders`, `leechers`, `date`, `source`, and (when available) `magnet_link` / `torrent_file`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link or `.torrent` file path.
+`search_torrents` is async and accepts an optional `max_items` (default `10`). `popular_torrents(per_source=10)` returns the current most popular torrents from sources with a top listing — up to `per_source` results per source, merged and ranked by seeders + leechers. Each `Torrent` exposes `id`, `filename`, `size`, `seeders`, `leechers`, `date`, `source`, and (when available) `magnet_link`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link.
 
 ### As MCP Server
 
@@ -276,9 +291,10 @@ The FastAPI server will then be accessible at `http://<host>:<port>`.
 **Available Endpoints:**
 The FastAPI server exposes similar functionalities to the MCP server. Key endpoints include:
 
-- `GET /`: Health check endpoint. Returns `{"status": "ok"}`.
-- `POST /torrent/search`: Search for torrents. Query params: `query` (required) and `max_items` (optional, default `10`).
-- `GET /torrent/{torrent_id}`: Get the magnet link or `.torrent` file for a specific torrent by id. Returns the magnet URI as text, or streams the `.torrent` file.
+- `GET /`: Built-in dark-mode terminal-style web UI — search, popular listings, sortable results with magnet links.
+- `POST /torrent/search`: Search for torrents. Query params: `query` (required) and `max_items` (optional, default `20`).
+- `GET /torrent/popular`: Get the most popular torrents. Query param: `per_source` (optional, default `10`).
+- `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as text.
 - `/docs`: Interactive API documentation (Swagger UI).
 - `/redoc`: Alternative API documentation (ReDoc).
 
@@ -292,11 +308,10 @@ Usable with any MCP-compatible client. Available tools:
   - `user_intent`: A short description reflecting the user's overall intention (e.g. `"latest episode of Breaking Bad"`).
   - `query`: Optimized, lowercase, space-separated keywords (e.g. `"breaking bad s01e05"`). Generic/filler/technical terms should be stripped per the tool's docstring.
   - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
-- `get_torrent(torrent_id)`: Get the magnet link or torrent file path for a specific torrent by id (the `id` returned by `search_torrents`).
-
-Available resources:
-
-- `data://torrent_sources`: Get the list of available torrent sources.
+- `popular_torrents(per_source=10)`: Get the most popular torrents right now from sources with an official top listing (apibay, uindex, 1337x, YTS, nyaa, EZTV) — up to `per_source` results each, merged and pre-ranked by seeders + leechers.
+  - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
+- `available_sources()`: Get the list of available torrent sources.
+- `get_torrent(torrent_id)`: Get the magnet link for a specific torrent by id (the `id` returned by `search_torrents` or `popular_torrents`).
 
 #### Example with Devin
 
@@ -311,13 +326,13 @@ Configuration:
       "command": "uvx",
       "args": [ "torrent-search-mcp" ]
     },
-    # with streamable-http transport (Docker default; requires running server)
+    # with streamable-http transport (Docker compose: MCP on port 8001; standalone server: 8000)
     "torrent-search-mcp": {
-      "serverUrl": "http://127.0.0.1:8000/mcp"
+      "serverUrl": "http://127.0.0.1:8001/mcp"
     },
     # with sse transport (legacy; requires running server)
     "torrent-search-mcp": {
-      "serverUrl": "http://127.0.0.1:8000/sse"
+      "serverUrl": "http://127.0.0.1:8001/sse"
     },
     ...
   }

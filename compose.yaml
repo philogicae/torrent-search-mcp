@@ -1,11 +1,19 @@
 name: torrent-search
 
-x-dns: &default-dns
+x-networks: &default-networks
+  networks:
+    torrent-network:
   dns:
+    - 127.0.0.11 # Docker embedded DNS
     - 9.9.9.9
     - 149.112.112.112
     - 2620:fe::fe
     - 2620:fe::9
+
+networks:
+  torrent-network:
+    name: torrent-network
+    driver: bridge
 
 x-logging: &default-logging
   logging:
@@ -15,20 +23,47 @@ x-logging: &default-logging
       max-file: "3"
 
 services:
-  torrent-search-mcp:
-    container_name: torrent-search-mcp
+  torrent-search-build:
+    container_name: torrent-search-build
+    image: torrent-search-mcp
     build: .
+    command: ["echo", "build completed"]
+    <<: [*default-logging]
+
+  torrent-search-api:
+    container_name: torrent-search-api
     image: torrent-search-mcp
     restart: unless-stopped
+    init: true
+    depends_on:
+      torrent-search-build:
+        condition: service_started
+        required: true
     ports:
       - 8000:8000
+    command: ["torrent-search-mcp", "--mode", "fastapi"]
     env_file:
       - path: .env
         required: false
-    volumes:
-      - torrents:/app/${FOLDER_TORRENT_FILES:-torrents}
-    <<: [*default-dns, *default-logging]
-    network_mode: bridge
+    <<: [*default-networks, *default-logging]
 
-volumes:
-  torrents:
+  torrent-search-mcp:
+    container_name: torrent-search-mcp
+    image: torrent-search-mcp
+    restart: unless-stopped
+    init: true
+    depends_on:
+      torrent-search-build:
+        condition: service_started
+        required: true
+      torrent-search-api:
+        condition: service_started
+    ports:
+      - 8001:8000
+    command: ["torrent-search-mcp", "--mode", "http"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TORRENT_SEARCH_API_URL: http://torrent-search-api:8000
+    <<: [*default-networks, *default-logging]

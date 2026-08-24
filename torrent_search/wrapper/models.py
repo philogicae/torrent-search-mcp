@@ -17,7 +17,6 @@ class Torrent(BaseModel):
     downloads: int | str | None = None
     date: str
     magnet_link: str | None = None
-    torrent_file: str | None = None
     uploader: str | None = None
     source: str | None = None
 
@@ -47,7 +46,7 @@ class Torrent(BaseModel):
 
     @staticmethod
     def extract_info(torrent_id: str) -> tuple[str, int, str, str]:
-        compressed_query, max_items, source, ref_id = torrent_id.split("-")
+        compressed_query, max_items, source, ref_id = torrent_id.split("-", 3)
         return Compress62.decompress(compressed_query), int(max_items), source, ref_id
 
     def __str__(self) -> str:

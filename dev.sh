@@ -18,8 +18,17 @@ echo "==> Type checking"
 uv run ty check
 
 # ---------------------------------------------------------------------------
+# Markdown / HTML checks (config)
+# ---------------------------------------------------------------------------
+
+MISC_DIRS=("./torrent_search/static")
+
+echo "==> Formatting markdown and html files"
+npx --yes prettier --write --print-width 200 --log-level warn "${MISC_DIRS[*]/%//**/*.{md,html}}" ./*.md
+
+# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 
 echo "==> Running tests with coverage (parallel)"
-uv run pytest -n 3 --dist worksteal --cov=torrent_search --cov-report=term-missing
+uv run pytest -n 2 --dist worksteal --cov=torrent_search --cov-report=term-missing

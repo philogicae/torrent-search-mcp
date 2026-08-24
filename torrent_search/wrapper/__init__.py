@@ -1,4 +1,4 @@
-from .api_client import FOLDER_TORRENT_FILES, TorrentSearchApi
+from .api_client import TorrentSearchApi
 from .models import Torrent
 
-__all__ = ["FOLDER_TORRENT_FILES", "Torrent", "TorrentSearchApi"]
+__all__ = ["Torrent", "TorrentSearchApi"]

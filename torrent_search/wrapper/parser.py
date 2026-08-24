@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from re import DOTALL, MULTILINE, Pattern, sub
 from re import compile as re_compile
+from time import time
 from typing import Any
 from urllib.parse import quote
 
@@ -462,18 +463,18 @@ def x1337_rows(html_text: str) -> list[list[str]]:
             r'class="coll-4 size[^"]*">\s*([\d.]+\s*[KMGT]i?B)', tr, re.IGNORECASE
         )
         seeds_match = re.search(
-            r'class="coll-2 seeds[^"]*">\s*(\d+)', tr, re.IGNORECASE
+            r'class="coll-2 seeds[^"]*">\s*([\d,]+)', tr, re.IGNORECASE
         )
         leech_match = re.search(
-            r'class="coll-3 leeches[^"]*">\s*(\d+)', tr, re.IGNORECASE
+            r'class="coll-3 leeches[^"]*">\s*([\d,]+)', tr, re.IGNORECASE
         )
         rows.append(
             [
                 html.unescape(link_match.group(2).strip()),
                 link_match.group(1),
                 size_match.group(1) if size_match else "N/A",
-                seeds_match.group(1) if seeds_match else "0",
-                leech_match.group(1) if leech_match else "0",
+                seeds_match.group(1).replace(",", "") if seeds_match else "0",
+                leech_match.group(1).replace(",", "") if leech_match else "0",
             ]
         )
     return rows
@@ -767,6 +768,47 @@ async def nyaa_parse(query: str) -> str:
     return _format(nyaa_rss_rows(xml))
 
 
+NYAA_POPULAR_URL = "https://nyaa.si/"
+NYAA_POPULAR_PARAMS = {"q": "", "s": "seeders", "o": "desc"}
+
+
+def nyaa_html_rows(html_text: str) -> list[list[str]]:
+    """Parse the HTML browse table (the RSS feed ignores sort params)."""
+    rows: list[list[str]] = []
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", html_text, DOTALL):
+        name_match = re.search(r'<a href="/view/\d+" title="([^"]+)"', tr)
+        magnet_match = re.search(r'href="(magnet:\?xt=urn:btih:[^"]+)"', tr)
+        if not name_match or not magnet_match:
+            continue
+        cells = re.findall(r'<td class="text-center"[^>]*>(.*?)</td>', tr, DOTALL)
+        ts_match = re.search(r'data-timestamp="(\d+)"', tr)
+        # Cells: [links, size, date, seeders, leechers, downloads]
+        if len(cells) < 6:
+            continue
+        seeds = re.search(r"([\d,]+)", cells[3])
+        leechers = re.search(r"([\d,]+)", cells[4])
+        downloads = re.search(r"([\d,]+)", cells[5])
+        rows.append(
+            _row(
+                html.unescape(name_match.group(1)),
+                "Anime",
+                (cells[1].strip() or "N/A"),
+                (seeds.group(1).replace(",", "") if seeds else 0),
+                (leechers.group(1).replace(",", "") if leechers else 0),
+                (downloads.group(1).replace(",", "") if downloads else None),
+                (int(ts_match.group(1)) if ts_match else None),
+                html.unescape(magnet_match.group(1)),
+            )
+        )
+    return rows
+
+
+async def nyaa_popular() -> str:
+    """Most seeded listings; the HTML page honors sorting, the RSS feed does not."""
+    html_text = await _get_text(NYAA_POPULAR_URL, NYAA_POPULAR_PARAMS)
+    return _format(nyaa_html_rows(html_text))
+
+
 # ---------------------------------------------------------------------------
 # subsplease.org - JSON API
 # ---------------------------------------------------------------------------
@@ -821,6 +863,81 @@ async def subsplease_parse(query: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# uindex.org - browse top list (search endpoint is Cloudflare-challenged)
+# ---------------------------------------------------------------------------
+UINDEX_TOP_URL = "https://uindex.org/top.php"
+
+_UINDEX_AGE = re.compile(
+    r"(\d+(?:\.\d+)?)\s+(second|minute|hour|day|week|month|year)s?\s+ago"
+)
+_UINDEX_AGE_SECONDS = {
+    "second": 1,
+    "minute": 60,
+    "hour": 3600,
+    "day": 86400,
+    "week": 604800,
+    "month": 2592000,
+    "year": 31536000,
+}
+
+
+def _uindex_date(value: str) -> str:
+    """Convert uIndex's relative ages ("2.9 days ago") to YYYY-MM-DD."""
+    match = _UINDEX_AGE.search(value)
+    if not match:
+        return fmt_date(value)
+    seconds = float(match.group(1)) * _UINDEX_AGE_SECONDS[match.group(2)]
+    return datetime.fromtimestamp(time() - seconds, tz=timezone.utc).strftime(
+        "%Y-%m-%d"
+    )
+
+
+def uindex_rows(html_text: str) -> list[list[str]]:
+    """Parse the top-list table; the name link href is the magnet itself."""
+    rows: list[list[str]] = []
+    for tr in re.findall(r"<tr><td class=\"top-col-rank\">.*?</tr>", html_text, DOTALL):
+        magnet_match = re.search(r'href="(magnet:\?xt=urn:btih:[^"]+)"', tr)
+        name_match = re.search(r'class="sr-torrent-link"[^>]*>(.*?)</a>', tr, DOTALL)
+        if not magnet_match or not name_match:
+            continue
+        cat_match = re.search(r"sr-cat-badge[^>]*>(?:<svg.*?</svg>)?\s*([^<]+)</a>", tr)
+        size_match = re.search(r'class="sr-col-size">([^<]+)<', tr)
+        date_match = re.search(r'class="sr-col-uploaded"[^>]*>([^<]+)<', tr)
+        seeds_match = re.search(r'class="sr-seed">([\d,]+)<', tr)
+        leech_match = re.search(r'class="sr-leech">([\d,]+)<', tr)
+        rows.append(
+            _row(
+                html.unescape(
+                    sub(
+                        r"<[^>]+>",
+                        " ",
+                        sub(r"<span[^>]*>.*?</span>", "", name_match.group(1)),
+                    )
+                ).strip(),
+                (cat_match.group(1).strip() if cat_match else "N/A"),
+                (size_match.group(1) if size_match else "N/A"),
+                (seeds_match.group(1).replace(",", "") if seeds_match else "0"),
+                (leech_match.group(1).replace(",", "") if leech_match else "0"),
+                None,
+                (_uindex_date(date_match.group(1)) if date_match else "N/A"),
+                html.unescape(magnet_match.group(1)),
+            )
+        )
+    return rows
+
+
+async def uindex_parse(query: str) -> str:
+    # ponytail: /search.php is Cloudflare-challenged for non-browsers, but
+    # /top.php is open and carries magnets inline, so queries are matched
+    # client-side against the current top list (same approach as EZTV).
+    xml = await _get_text(UINDEX_TOP_URL)
+    rows = uindex_rows(xml)
+    if tokens := [t for t in query.strip().lower().split() if t]:
+        rows = [r for r in rows if all(t in r[0].lower() for t in tokens)]
+    return _format(rows)
+
+
+# ---------------------------------------------------------------------------
 # yts.mx - JSON API
 # ---------------------------------------------------------------------------
 YTS_HOSTS = ["yts.mx", "yts.am", "yts.rs"]
@@ -853,12 +970,27 @@ def yts_rows(data: dict[str, Any]) -> list[list[str]]:
     return rows
 
 
-async def yts_parse(query: str) -> str:
+async def yts_parse(query: str, *, sort_by: str = "") -> str:
     q = query.strip()
     params: dict[str, str] = {"limit": "50"}
     if q:
         params["query_term"] = q
     else:
-        params["sort_by"] = "date_added"
+        params["sort_by"] = sort_by or "date_added"
     data = json.loads(await _get_first(YTS_HOSTS, "/api/v2/list_movies.json", params))
     return _format(yts_rows(data if isinstance(data, dict) else {}))
+
+
+# ---------------------------------------------------------------------------
+# Popular listings
+# ---------------------------------------------------------------------------
+# Sources exposing a top/popular listing. Each entry takes no query and
+# returns the same CSV text contract as the search parsers.
+POPULAR_SOURCES: dict[str, Callable[[], Awaitable[str]]] = {
+    "apibay.org": lambda: apibay_parse(""),  # official TPB top100 (movies + HD)
+    "uindex.org": lambda: uindex_parse(""),  # site-wide top list, magnets inline
+    "1337x.to": lambda: x1337_parse(""),  # popular movies + TV pages
+    "yts.mx": lambda: yts_parse("", sort_by="seeds"),  # most seeded uploads
+    "nyaa.si": lambda: nyaa_popular(),  # HTML page honors seed sorting, RSS does not
+    "eztvx.to": lambda: eztv_parse(""),  # latest releases as candidate pool
+}

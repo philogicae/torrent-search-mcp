@@ -1,6 +1,5 @@
 """FastAPI server tests with a mocked search API."""
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -35,15 +34,28 @@ def client(monkeypatch: Any) -> TestClient:
     return TestClient(fastapi_server.app)
 
 
-def test_health_check(client: TestClient) -> None:
+def test_webui_served_at_root(client: TestClient) -> None:
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Torrent Search" in response.text
+    assert "__TELEGRAM_BOT_HANDLE__" not in response.text
+
+
+def test_static_telegram_icon(client: TestClient) -> None:
+    response = client.get("/static/telegram.svg")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/svg+xml")
+    assert response.text.startswith("<svg")
 
 
 def test_search_torrents_endpoint(client: TestClient) -> None:
     response = client.post("/torrent/search", params={"query": "show s01e01"})
     assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["cache-control"] == "no-cache, no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["expires"] == "0"
     body = response.json()
     assert len(body) == 1
     assert body[0]["filename"] == "Show S01E01 1080p"
@@ -56,19 +68,29 @@ def test_get_torrent_returns_magnet(client: TestClient) -> None:
     assert response.json() == "magnet:?xt=urn:btih:aaaa&dn=x"
 
 
-def test_get_torrent_returns_torrent_file(monkeypatch: Any, tmp_path: Path) -> None:
-    torrent_file = tmp_path / "example.torrent"
-    torrent_file.write_bytes(b"mock torrent data")
-
-    async def fake_get(torrent_id: str) -> str | None:
-        return str(torrent_file)
-
-    monkeypatch.setattr(fastapi_server.api_client, "get_torrent", fake_get)
+def test_list_sources_endpoint() -> None:
     client = TestClient(fastapi_server.app)
-    response = client.get("/torrent/any-id")
+    response = client.get("/sources")
     assert response.status_code == 200
-    assert response.content == b"mock torrent data"
-    assert response.headers["content-type"] == "application/x-bittorrent"
+    assert "thepiratebay.org" in response.json()
+
+
+def test_get_popular_torrents(monkeypatch: Any) -> None:
+    async def fake_popular(per_source: int = 10) -> list[Torrent]:
+        return [_torrent()][:per_source]
+
+    monkeypatch.setattr(fastapi_server.api_client, "popular_torrents", fake_popular)
+    client = TestClient(fastapi_server.app)
+
+    response = client.get("/torrent/popular", params={"per_source": 5})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["cache-control"] == "no-cache, no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["expires"] == "0"
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["filename"] == "Show S01E01 1080p"
 
 
 def test_get_torrent_not_found(monkeypatch: Any) -> None:

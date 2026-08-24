@@ -27,7 +27,7 @@ def _noop(*_args: Any, **_kwargs: Any) -> None:
 
 def test_install_playwright_drivers_success(capsys: Any) -> None:
     main_mod.install_playwright_drivers()
-    assert "Playwright drivers installed." in capsys.readouterr().out
+    assert "Playwright drivers installed." in capsys.readouterr().err
 
 
 def test_install_playwright_drivers_failure(monkeypatch: Any, capsys: Any) -> None:
@@ -36,7 +36,7 @@ def test_install_playwright_drivers_failure(monkeypatch: Any, capsys: Any) -> No
 
     monkeypatch.setattr(main_mod.subprocess, "run", boom)
     main_mod.install_playwright_drivers()
-    assert "Failed to install Playwright drivers." in capsys.readouterr().out
+    assert "Failed to install Playwright drivers." in capsys.readouterr().err
 
 
 def test_install_playwright_drivers_as_root(monkeypatch: Any, capsys: Any) -> None:

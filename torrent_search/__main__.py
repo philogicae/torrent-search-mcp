@@ -1,5 +1,6 @@
 import argparse
 import subprocess
+import sys
 from contextlib import suppress
 from os import geteuid
 
@@ -13,7 +14,7 @@ def install_playwright_drivers() -> None:
     with suppress(Exception):
         driver_executable, driver_cli = compute_driver_executable()
         playwright_command = [driver_executable, driver_cli, "install"]
-        if geteuid() == 0:
+        if sys.platform != "win32" and geteuid() == 0:
             playwright_command.extend(["--with-deps", "chromium"])
         completed_process = subprocess.run(
             playwright_command,
@@ -21,9 +22,9 @@ def install_playwright_drivers() -> None:
             check=True,
         )
         if completed_process.returncode == 0:
-            print("Playwright drivers installed.")
+            print("Playwright drivers installed.", file=sys.stderr)
             return
-    print("Failed to install Playwright drivers.")
+    print("Failed to install Playwright drivers.", file=sys.stderr)
 
 
 def main() -> None:
@@ -73,7 +74,7 @@ def main() -> None:
 
         run(TorrentSearchApi().cli(args.query))
     elif args.mode == "fastapi":
-        print(f"Starting FastAPI server on {args.host}:{args.port}")
+        print(f"Starting FastAPI server on {args.host}:{args.port}", file=sys.stderr)
         uvicorn.run(
             "torrent_search.fastapi_server:app",
             host=args.host,
@@ -82,7 +83,7 @@ def main() -> None:
             workers=args.workers,
         )
     else:
-        print(f"Starting MCP server on {args.host}:{args.port}")
+        print(f"Starting MCP server on {args.host}:{args.port}", file=sys.stderr)
         mcp.run(
             transport=args.mode,
             **({} if args.mode == "stdio" else {"host": args.host, "port": args.port}),

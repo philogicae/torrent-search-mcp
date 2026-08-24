@@ -17,3 +17,5 @@ build
 .env
 .venv
 torrents
+.playwright-mcp/
+.playwright-cli/

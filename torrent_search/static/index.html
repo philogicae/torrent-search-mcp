@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torrent Search</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
+    <script data-key="oat.min.js" data-src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
+    <link rel="stylesheet" data-key="oat.min.css" data-src="https://unpkg.com/@knadh/oat/oat.min.css" />
+    <style>
+      :root {
+        /* Cyberpunk accent + swarm health colors — defined once, flip with the theme */
+        --accent: light-dark(#00a97f, #00ffa3);
+        --accent-dim: light-dark(#00a97f40, #00ffa340);
+        --up: light-dark(#0c8a4d, #2ee56b);
+        --down: light-dark(#c2373c, #ff6169);
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        height: 100dvh;
+        overflow: hidden; /* the results table is the only scroller */
+      }
+      body {
+        font-family: "Cascadia Mono", "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        display: flex;
+        flex-direction: column;
+      }
+      body[data-theme="dark"] {
+        color-scheme: dark;
+        /* Softer palette: deep slate, not pure black */
+        --background: #151821;
+        --card: #1c2029;
+        --secondary: #262b38;
+        --muted: #262b38;
+        --faint: #20242f;
+        --border: #2e3442;
+        --input: #2e3442;
+      }
+      body[data-theme="light"] {
+        color-scheme: light;
+        /* Softer palette: soft gray, not pure white */
+        --background: #eef0f4;
+        --card: #f7f8fa;
+        --secondary: #e3e6ec;
+        --muted: #e3e6ec;
+        --faint: #f1f3f6;
+        --border: #ccd2dc;
+        --input: #ccd2dc;
+      }
+      /* Subtle CRT scanlines */
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.05) 2px 4px);
+        z-index: 400;
+      }
+      #theme-toggle {
+        width: 2rem;
+        min-width: 2rem;
+        height: 2rem;
+        padding: 0;
+        border-radius: var(--radius-medium);
+        font-size: 0.85rem;
+      }
+      body[data-theme="dark"] #theme-toggle {
+        --_hov: #68b9ef;
+        color: #ffffff;
+        background-color: #4298d4;
+        border-color: #78c7f7;
+      }
+      body[data-theme="light"] #theme-toggle {
+        --_hov: #263555;
+        color: #f7df72;
+        background-color: #18233d;
+        border-color: #34466f;
+      }
+      main.container {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: none; /* always full width — no side gutters */
+        margin-inline: 0;
+        padding: var(--space-4) var(--space-4) var(--space-3);
+        box-sizing: border-box;
+      }
+      h1 {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        font-size: var(--text-2);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin: 0 0 var(--space-2);
+      }
+      /* Toolbar: every control on one baseline, identical heights */
+      #toolbar {
+        --compact-control-width: 7.5rem;
+        display: grid;
+        grid-template-columns: minmax(14rem, 1fr) repeat(3, var(--compact-control-width));
+        gap: var(--space-3);
+        align-items: end;
+        margin-bottom: var(--space-3);
+      }
+      #toolbar label[data-field] {
+        margin: 0;
+      }
+      #toolbar label[data-field]:nth-child(2),
+      #toolbar button {
+        width: var(--compact-control-width);
+        min-width: var(--compact-control-width);
+      }
+      #toolbar label[data-field] input,
+      #toolbar label[data-field] select {
+        height: 2.6rem;
+      }
+      #query,
+      #limit {
+        width: 100%;
+      }
+      #toolbar button {
+        height: 2.6rem;
+        padding-block: 0;
+        white-space: nowrap;
+        box-sizing: border-box;
+      }
+      #btn-search:hover,
+      #btn-popular:hover {
+        box-shadow: 0 0 0.6rem var(--accent-dim);
+      }
+      #results-card {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        overflow: hidden;
+        border: none;
+        border-radius: 0;
+      }
+      #results-card > header {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3) var(--space-4);
+        border-bottom: 1px solid var(--border);
+      }
+      .term-dots {
+        display: flex;
+        gap: 0.4rem;
+      }
+      .term-dots span {
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: 50%;
+        background: var(--border);
+      }
+      .term-dots span:nth-child(1) {
+        background: light-dark(#e06c75, #ff5f56);
+      }
+      .term-dots span:nth-child(2) {
+        background: light-dark(#e5c07b, #ffbd2e);
+      }
+      .term-dots span:nth-child(3) {
+        background: light-dark(#98c379, #27c93f);
+      }
+      #status-line {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+        flex: 1;
+        min-width: 0;
+      }
+      #summary::before {
+        content: "❯ ";
+        color: var(--accent);
+      }
+      /* The one and only scroller */
+      .table {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+      #results {
+        width: 100%;
+        min-width: 50.5rem;
+        table-layout: fixed;
+      }
+      #results th,
+      #results td {
+        text-align: left;
+        padding: 0.35rem var(--space-3);
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #results thead th {
+        position: sticky;
+        top: 0;
+        background: var(--background);
+        z-index: 10;
+        border-bottom: 1px solid var(--border);
+      }
+      col.c-name {
+        width: auto;
+      }
+      col.c-size {
+        width: 6.5rem;
+      }
+      col.c-num {
+        width: 4.5rem;
+      }
+      col.c-date {
+        width: 8rem;
+      }
+      col.c-actions {
+        width: 7rem;
+      }
+      th.sortable {
+        cursor: pointer;
+        user-select: none;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      th.sortable::after {
+        content: "↕";
+        opacity: 0.35;
+        margin-left: 0.3em;
+      }
+      th.sortable[data-dir="asc"]::after {
+        content: "↑";
+        opacity: 1;
+        color: var(--accent);
+      }
+      th.sortable[data-dir="desc"]::after {
+        content: "↓";
+        opacity: 1;
+        color: var(--accent);
+      }
+      tbody tr {
+        border-bottom: 1px solid var(--border);
+      }
+      tbody tr:hover {
+        background: var(--accent-dim);
+      }
+      td.num,
+      th.c-num,
+      #results th:nth-child(2),
+      #results td:nth-child(2),
+      #results th:last-child,
+      td.actions-cell {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      td.se {
+        color: var(--up);
+      }
+      td.le {
+        color: var(--down);
+      }
+      td.actions-cell a,
+      td.actions-cell button,
+      td.actions-cell > span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        padding: 0;
+        text-decoration: none;
+        vertical-align: middle;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+      td.actions-cell img {
+        width: 1rem;
+        height: 1rem;
+      }
+      td.actions-cell a:hover,
+      td.actions-cell button:hover:not(:disabled) {
+        filter: drop-shadow(0 0 0.35rem var(--accent));
+      }
+      td.actions-cell button:disabled,
+      td.actions-cell > span {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+      #summary.error-text {
+        color: var(--down);
+      }
+      td.name-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        overflow: visible;
+      }
+      td.name-cell .filename-details {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+        overflow: hidden;
+      }
+      td.name-cell .filename,
+      td.name-cell .torrent-source {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      td.name-cell .torrent-detail {
+        display: flex;
+        min-width: 0;
+        font-size: 0.65rem;
+        line-height: 1;
+        opacity: 0.55;
+      }
+      td.name-cell .torrent-source {
+        min-width: 0;
+      }
+      td.name-cell .torrent-category {
+        flex: none;
+      }
+      .info-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0 0.25rem 0 0;
+        opacity: 0.55;
+        font-size: 0.85rem;
+      }
+      .info-btn:hover,
+      .info-btn.tooltip-open {
+        opacity: 1;
+      }
+      #filename-tooltip {
+        position: fixed;
+        z-index: 600;
+        width: fit-content;
+        max-width: min(40rem, calc(100vw - 2rem));
+        max-height: calc(100vh - 2rem);
+        max-height: calc(100dvh - 2rem);
+        padding: var(--space-2) var(--space-3);
+        color: var(--foreground);
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-large);
+        box-shadow: var(--shadow-large);
+        font-size: 0.65rem;
+        line-height: 1.35;
+        text-align: left;
+        white-space: normal;
+        overflow: auto;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        pointer-events: none;
+      }
+      /* Small screens: shrink everything, stack the toolbar */
+      @media (max-width: 640px) {
+        html {
+          font-size: 14px;
+        }
+        body::after {
+          display: none;
+        }
+        main.container {
+          padding: 0.5rem;
+        }
+        h1 {
+          min-height: 1.75rem;
+          margin-bottom: 0.4rem;
+          font-size: 1rem;
+          letter-spacing: 0.05em;
+        }
+        #theme-toggle {
+          width: 1.75rem;
+          min-width: 1.75rem;
+          height: 1.75rem;
+          font-size: 0.75rem;
+        }
+        #toolbar {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0.4rem;
+          margin-bottom: 0.5rem;
+        }
+        #toolbar label[data-field]:first-child {
+          grid-column: 1 / -1;
+        }
+        #toolbar label[data-field]:nth-child(2),
+        #toolbar button {
+          width: 100%;
+          min-width: 0;
+        }
+        #toolbar label[data-field] input,
+        #toolbar label[data-field] select,
+        #toolbar button {
+          height: 2rem;
+          padding-inline: 0.5rem;
+          font-size: 0.75rem;
+        }
+        #results-card > header {
+          gap: 0.5rem;
+          padding: 0.4rem 0.5rem;
+          font-size: 0.75rem;
+        }
+        .term-dots {
+          gap: 0.25rem;
+        }
+        .term-dots span {
+          width: 0.45rem;
+          height: 0.45rem;
+        }
+        #status-line {
+          gap: 0.5rem;
+        }
+        #results {
+          min-width: 42rem;
+        }
+        #results th,
+        #results td {
+          padding: 0.22rem 0.4rem;
+          font-size: 0.72rem;
+        }
+        td.name-cell .torrent-detail {
+          font-size: 0.58rem;
+        }
+        .info-btn {
+          font-size: 0.75rem;
+        }
+        col.c-size {
+          width: 4.5rem;
+        }
+        col.c-num {
+          width: 3rem;
+        }
+        #results th.c-num,
+        #results td.se,
+        #results td.le {
+          padding-inline: 0.2rem;
+        }
+        col.c-date {
+          width: 6rem;
+        }
+        col.c-actions {
+          width: 5.5rem;
+        }
+        #results td.actions-cell {
+          padding-inline: 0;
+        }
+        td.actions-cell a,
+        td.actions-cell button,
+        td.actions-cell > span {
+          width: 1.2rem;
+          height: 1.2rem;
+          font-size: 0.85rem;
+        }
+        #filename-tooltip {
+          max-width: calc(100vw - 1rem);
+          max-height: calc(100vh - 1rem);
+          max-height: calc(100dvh - 1rem);
+          padding: 0.4rem 0.5rem;
+          font-size: 0.6rem;
+        }
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <main class="container">
+      <h1>
+        <span>🌊</span>
+        <span>Torrent Search</span>
+        <button id="theme-toggle" class="outline" aria-label="Toggle light/dark theme" title="Toggle theme">🔆</button>
+      </h1>
+
+      <div id="toolbar">
+        <label data-field>
+          <input id="query" type="search" placeholder="Search torrents..." autocomplete="off" autofocus />
+        </label>
+        <label data-field>
+          <select id="limit">
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="200">200</option>
+          </select>
+        </label>
+        <button id="btn-search" data-variant="secondary" aria-label="Search torrents">🔍 Search</button>
+        <button id="btn-popular" data-variant="secondary" aria-label="Load popular torrents">⭐ Popular</button>
+      </div>
+
+      <article class="card" id="results-card">
+        <header>
+          <div class="term-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div id="status-line">
+            <strong id="summary">Loading...</strong>
+            <small id="sort-hint"></small>
+          </div>
+        </header>
+        <div class="table">
+          <table id="results">
+            <colgroup>
+              <col class="c-name" />
+              <col class="c-date" />
+              <col class="c-size" />
+              <col class="c-num" />
+              <col class="c-num" />
+              <col class="c-actions" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="sortable" data-key="filename">File</th>
+                <th class="sortable" data-key="date">Date</th>
+                <th class="sortable" data-key="_size">Size</th>
+                <th class="sortable c-num" data-key="seeders">SE</th>
+                <th class="sortable c-num" data-key="leechers">LE</th>
+                <th>LINKS</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </article>
+    </main>
+
+    <div id="filename-tooltip" role="tooltip" hidden></div>
+
+    <script src="https://unpkg.com/@knadh/indexed-cache@0.4.4/dist/indexed-cache.min.js"></script>
+    <script>
+      // ---- Theme (house default: dark, persisted choice wins) -----------------
+      const ic = new IndexedCache();
+      ic.init()
+        .then(() => ic.load())
+        .catch(() => {});
+      const themeBtn = document.getElementById("theme-toggle");
+      function setTheme(theme) {
+        document.body.dataset.theme = theme;
+        try {
+          localStorage.setItem("theme", theme);
+        } catch {}
+        themeBtn.textContent = theme === "dark" ? "🔆" : "🌙";
+      }
+      let savedTheme = null;
+      try {
+        savedTheme = localStorage.getItem("theme");
+      } catch {}
+      if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+      themeBtn.onclick = () => setTheme(document.body.dataset.theme === "dark" ? "light" : "dark");
+
+      // ---- State --------------------------------------------------------------
+      // The Results selector caps the overall list length for both search
+      // and popular listings.
+      let rows = [];
+      let sortKey = "seeders";
+      let sortDir = "desc";
+      const SIZE_UNITS = {
+        B: 1,
+        KB: 1e3,
+        MB: 1e6,
+        GB: 1e9,
+        TB: 1e12,
+        KIB: 1024,
+        MIB: 1024 ** 2,
+        GIB: 1024 ** 3,
+        TIB: 1024 ** 4,
+      };
+      const SKELETON_ROWS = 12;
+      const TELEGRAM_BOT_HANDLE = __TELEGRAM_BOT_HANDLE__;
+
+      const $ = (id) => document.getElementById(id);
+
+      function escapeHtml(s) {
+        return String(s ?? "").replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      }
+
+      function parseSize(s) {
+        const m = /^([\d.]+)\s*([KMGT]?I?B)$/i.exec(String(s || "").trim());
+        return m ? parseFloat(m[1]) * (SIZE_UNITS[m[2].toUpperCase()] || 1) : -1;
+      }
+
+      function sortValue(row, key) {
+        if (key === "_size") return parseSize(row.size);
+        return row[key];
+      }
+
+      function applySort() {
+        const dir = sortDir === "asc" ? 1 : -1;
+        rows.sort((a, b) => {
+          const va = sortValue(a, sortKey),
+            vb = sortValue(b, sortKey);
+          if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+          return (
+            String(va ?? "").localeCompare(String(vb ?? ""), undefined, {
+              sensitivity: "base",
+            }) * dir
+          );
+        });
+      }
+
+      function renderSkeleton() {
+        const cols = document.querySelectorAll("#results th").length;
+        const cell = `<td><span class="skeleton line" style="display:block">&nbsp;</span></td>`;
+        $("rows").innerHTML = `<tr>${cell.repeat(cols)}</tr>`.repeat(SKELETON_ROWS);
+      }
+
+      function render() {
+        applySort();
+        document.querySelectorAll("#results th.sortable").forEach((th) => {
+          if (th.dataset.key === sortKey) th.dataset.dir = sortDir;
+          else delete th.dataset.dir;
+        });
+        $("rows").innerHTML = rows
+          .map((r) => {
+            const magnet = r.magnet_link
+              ? `<a href="${escapeHtml(r.magnet_link)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>`
+              : `<span title="No magnet link available" aria-label="No magnet link available">🚫</span>`;
+            const copy = r.magnet_link
+              ? `<button class="ghost" data-copy="${escapeHtml(r.magnet_link)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
+              : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
+            const telegramUrl =
+              r.magnet_link && TELEGRAM_BOT_HANDLE ? `https://t.me/${encodeURIComponent(TELEGRAM_BOT_HANDLE)}?text=${encodeURIComponent(`Download this torrent: ${r.magnet_link}`)}` : "";
+            const telegram = TELEGRAM_BOT_HANDLE
+              ? r.magnet_link
+                ? `<a href="${escapeHtml(telegramUrl)}" target="_blank" rel="noopener noreferrer" title="Send to Telegram" aria-label="Send to Telegram"><img src="/static/telegram.svg" alt="" /></a>`
+                : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled><img src="/static/telegram.svg" alt="" /></button>`
+              : "";
+            const info = `<button class="info-btn ghost" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
+            const source = r.source ? `<span class="torrent-source">${escapeHtml(r.source)}</span>` : "";
+            const category = r.category ? `<span class="torrent-category">${source ? "&nbsp;-&nbsp;" : ""}${escapeHtml(r.category)}</span>` : "";
+            const detail = source || category ? `<small class="torrent-detail">${source}${category}</small>` : "";
+            return `<tr>
+                  <td class="name-cell">${info}<span class="filename-details"><span class="filename">${escapeHtml(r.filename)}</span>${detail}</span></td>
+                  <td>${escapeHtml(r.date)}</td>
+                  <td class="num">${escapeHtml(r.size)}</td>
+                  <td class="num se">${r.seeders}</td>
+                  <td class="num le">${r.leechers}</td>
+                  <td class="actions-cell">${telegram}${magnet}${copy}</td>
+                </tr>`;
+          })
+          .join("");
+      }
+
+      function setStatus(text) {
+        $("summary").textContent = text;
+      }
+
+      function showError(msg) {
+        // Surface failures on the status line instead of a separate banner.
+        const el = $("summary");
+        el.textContent = msg;
+        el.classList.add("error-text");
+      }
+
+      async function fetchJson(url, options) {
+        const res = await fetch(url, { cache: "no-store", ...options });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      }
+
+      async function run(url, options, summaryText, activeBtn) {
+        $("summary").classList.remove("error-text");
+        renderSkeleton();
+        $("btn-search").disabled = true;
+        $("btn-popular").disabled = true;
+        // The clicked button's label becomes an hourglass while loading.
+        const originalLabel = activeBtn.innerHTML;
+        const originalAriaLabel = activeBtn.getAttribute("aria-label");
+        activeBtn.setAttribute("aria-label", "Loading");
+        activeBtn.textContent = "⏳";
+        try {
+          const data = await fetchJson(url, options);
+          rows = data;
+          // Default view: most seeded first.
+          sortKey = "seeders";
+          sortDir = "desc";
+          render();
+          setStatus(rows.length ? summaryText.replace("{n}", String(rows.length)) : "No torrents found.");
+        } catch (err) {
+          $("rows").innerHTML = "";
+          showError(`Request failed: ${err.message}. Is the server running?`);
+        } finally {
+          activeBtn.innerHTML = originalLabel;
+          activeBtn.setAttribute("aria-label", originalAriaLabel);
+          $("btn-search").disabled = false;
+          $("btn-popular").disabled = false;
+        }
+      }
+
+      function doSearch() {
+        const q = $("query").value.trim();
+        if (!q) {
+          ot.toast("Enter a query first", "Torrent Search", {
+            variant: "warning",
+          });
+          return;
+        }
+        const limit = parseInt($("limit").value, 10) || 100;
+        run(`/torrent/search?query=${encodeURIComponent(q)}&max_items=${limit}`, { method: "POST" }, `{n} results for “${q}”`, $("btn-search"));
+      }
+
+      function doPopular() {
+        const limit = parseInt($("limit").value, 10) || 100;
+        run(`/torrent/popular?per_source=${limit}`, {}, "Popular Torrents", $("btn-popular")).then(() => {
+          if (rows.length) {
+            rows = rows.slice(0, limit);
+            render();
+          }
+        });
+      }
+
+      $("btn-search").onclick = doSearch;
+      $("btn-popular").onclick = doPopular;
+      $("query").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doSearch();
+      });
+
+      // Freeze button widths so the loading label swap never reflows the toolbar.
+      // Measured at startup and again once webfonts settle.
+      function freezeButtonWidths() {
+        const width = $("limit").offsetWidth;
+        for (const id of ["btn-search", "btn-popular"]) {
+          $(id).style.width = `${width}px`;
+        }
+      }
+      freezeButtonWidths();
+      window.addEventListener("resize", freezeButtonWidths);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(freezeButtonWidths);
+
+      document.querySelectorAll("#results th.sortable").forEach((th) => {
+        th.onclick = () => {
+          const key = th.dataset.key;
+          if (sortKey === key) sortDir = sortDir === "asc" ? "desc" : "asc";
+          else {
+            sortKey = key;
+            sortDir = "desc";
+          }
+          render();
+          const label = th.textContent.replace(/[↕↑↓]\s*$/, "");
+          $("sort-hint").textContent = `sorted by ${label} ${sortDir === "asc" ? "↑" : "↓"}`;
+        };
+      });
+
+      // Filename tooltip toggle (ⓘ)
+      const filenameTooltip = $("filename-tooltip");
+
+      function closeFilenameTooltip() {
+        filenameTooltip.hidden = true;
+        document.querySelectorAll("button[data-info].tooltip-open").forEach((openBtn) => {
+          openBtn.classList.remove("tooltip-open");
+          openBtn.setAttribute("aria-expanded", "false");
+        });
+      }
+
+      function openFilenameTooltip(btn) {
+        filenameTooltip.textContent = btn.dataset.filename;
+        filenameTooltip.hidden = false;
+        const buttonRect = btn.getBoundingClientRect();
+        const tooltipRect = filenameTooltip.getBoundingClientRect();
+        const gap = 8;
+        const margin = 8;
+        let left = buttonRect.right + gap;
+        if (left + tooltipRect.width > window.innerWidth - margin) left = buttonRect.left - tooltipRect.width - gap;
+        left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+        const top = Math.max(margin, Math.min(buttonRect.top + (buttonRect.height - tooltipRect.height) / 2, window.innerHeight - tooltipRect.height - margin));
+        filenameTooltip.style.left = `${left}px`;
+        filenameTooltip.style.top = `${top}px`;
+        btn.classList.add("tooltip-open");
+        btn.setAttribute("aria-expanded", "true");
+      }
+
+      $("rows").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-info]");
+        if (!btn) return;
+        const shouldOpen = !btn.classList.contains("tooltip-open");
+        closeFilenameTooltip();
+        if (shouldOpen) openFilenameTooltip(btn);
+      });
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("button[data-info]")) closeFilenameTooltip();
+      });
+      document.querySelector(".table").addEventListener("scroll", closeFilenameTooltip);
+      window.addEventListener("resize", closeFilenameTooltip);
+
+      // Copy-magnet (icon button, event delegation)
+      async function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+        // Fallback for plain-HTTP (non-secure) origins
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
+
+      $("rows").addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-copy]");
+        if (!btn || btn.disabled) return;
+        try {
+          await copyText(btn.dataset.copy);
+          ot.toast("Magnet link copied", "📋", {
+            variant: "success",
+            duration: 2500,
+          });
+        } catch {
+          ot.toast("Copy failed", "📋", { variant: "error", duration: 2500 });
+        }
+      });
+
+      // Load the popular listings on first visit so the page is never empty.
+      window.addEventListener("DOMContentLoaded", doPopular);
+    </script>
+  </body>
+</html>

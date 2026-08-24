@@ -1,6 +1,7 @@
 """Unit tests for parser.py: helpers, row mappers and the CSV pipeline."""
 
 import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
@@ -547,6 +548,67 @@ async def test_eztv_parse_filters_client_side(monkeypatch: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# uIndex
+# ---------------------------------------------------------------------------
+
+
+UINDEX_ROW = (
+    '<tr><td class="top-col-rank"><span class="top-rank">1</span></td>'
+    '<td class="sr-col-cat"><a href="top.php?c=2&amp;t=7d" class="sr-cat-badge"> TV</a></td>'
+    '<td class="sr-col-name">'
+    '<a href="magnet:?xt=urn:btih:{hash}&amp;dn=Name" class="sr-magnet" title="Download Magnet"></a> '
+    '<a href="/details.php?id=123" class="sr-torrent-link">{name} <span class="top-new-badge">NEW</span></a></td>'
+    '<td class="sr-col-size">517.00 MB</td>'
+    '<td class="sr-col-uploaded" title="2.9 days ago">2.9 days ago</td>'
+    '<td class="sr-col-seeders"><span class="sr-seed">12,422</span></td>'
+    '<td class="sr-col-leechers"><span class="sr-leech">21,234</span></td></tr>'
+)
+
+
+def test_uindex_rows() -> None:
+    html_text = (
+        UINDEX_ROW.format(hash="a" * 40, name="Show S01E01 1080p")
+        + '<tr><td class="top-col-rank"><span class="top-rank">9</span></td>'
+        + '<td class="sr-col-name"><a href="/details.php?id=2">No Magnet</a></td></tr>'
+        + "<tr><td>not a listing row</td></tr>"
+    )
+    rows = parser.uindex_rows(html_text)
+    assert len(rows) == 1
+    assert rows[0][0] == "Show S01E01 1080p"
+    assert rows[0][1] == "TV"
+    assert rows[0][3] == "12422"
+    assert rows[0][4] == "21234"
+    assert rows[0][7].startswith(f"magnet:?xt=urn:btih:{'a' * 40}")
+
+
+def test_uindex_date_converts_relative_ages(monkeypatch: Any) -> None:
+    fixed = 1_800_000_000  # frozen clock removes midnight-boundary flakiness
+    monkeypatch.setattr(parser, "time", lambda: fixed)
+    expected = datetime.fromtimestamp(fixed - 7200, tz=timezone.utc)
+    assert parser._uindex_date("2 hours ago") == expected.strftime("%Y-%m-%d")
+    assert len(parser._uindex_date("3 weeks ago")) == 10
+    assert parser._uindex_date("2026-01-01") == "2026-01-01"
+
+
+@pytest.mark.asyncio
+async def test_uindex_parse_filters_client_side(monkeypatch: Any) -> None:
+    body = UINDEX_ROW.format(
+        hash="a" * 40, name="Ubuntu 24.04 LTS Desktop"
+    ) + UINDEX_ROW.format(hash="b" * 40, name="Other Distro")
+    monkeypatch.setattr(parser, "_get_text", _fake(body))
+
+    out = await parser.uindex_parse("")
+    assert len(_extract("uindex.org", out)) == 2
+
+    out = await parser.uindex_parse("ubuntu lts")
+    torrents = _extract("uindex.org", out)
+    assert len(torrents) == 1
+    assert torrents[0].filename == "Ubuntu 24.04 LTS Desktop"
+
+    assert await parser.uindex_parse("breaking bad") == "No results"
+
+
+# ---------------------------------------------------------------------------
 # FitGirl
 # ---------------------------------------------------------------------------
 
@@ -744,13 +806,69 @@ def test_nyaa_rss_rows_skips_items_without_hash_or_name() -> None:
     assert rows[0][0] == "OK"
 
 
+@pytest.mark.asyncio
+async def test_nyaa_popular_parses_html_table(monkeypatch: Any) -> None:
+    tr = (
+        '<tr><td><a href="/?c=1_2">cat</a></td>'
+        '<td colspan="2"><a href="/view/123" title="Show S01E01">x</a></td>'
+        '<td class="text-center"><a href="/download/123.torrent">dl</a>'
+        '<a href="magnet:?xt=urn:btih:{hash}&amp;dn=x">m</a></td>'
+        '<td class="text-center">1.5 GiB</td>'
+        '<td class="text-center" data-timestamp="1787497286">2026-08-23 15:01</td>'
+        '<td class="text-center">3,442</td>'
+        '<td class="text-center">91</td>'
+        '<td class="text-center">12954</td></tr>'
+    )
+    seen: dict[str, Any] = {}
+
+    async def spy(url: str, params: dict[str, str] | None = None) -> str:
+        seen.update({"url": url, "params": params})
+        return f"<table>{tr}{tr}</table>"
+
+    monkeypatch.setattr(parser, "_get_text", spy)
+
+    out = await parser.nyaa_popular()
+    torrents = _extract("nyaa.si", out)
+    assert len(torrents) == 2
+    assert torrents[0].filename == "Show S01E01"
+    assert torrents[0].size == "1.5 GiB"
+    assert torrents[0].seeders == 3442
+    assert torrents[0].leechers == 91
+    assert torrents[0].downloads == "12954"
+    assert torrents[0].date == "2026-08-23"
+    assert torrents[0].magnet_link
+    assert seen["url"] == parser.NYAA_POPULAR_URL
+    assert seen["params"] == parser.NYAA_POPULAR_PARAMS
+
+
+def test_nyaa_html_rows_skips_malformed_cells() -> None:
+    no_cells = '<tr><td><a href="/view/1" title="No Cells">x</a></td></tr>'
+    short = (
+        '<tr><td colspan="2"><a href="/view/9" title="Short">x</a>'
+        f'<a href="magnet:?xt=urn:btih:{"d" * 40}&amp;dn=x">m</a></td>'
+        '<td class="text-center">1 GB</td></tr>'
+    )
+    ok = (
+        '<tr><td><a href="/view/2" title="Good">x</a></td>'
+        '<td colspan="2"><a href="/view/2" title="Good">x</a>'
+        f'<a href="magnet:?xt=urn:btih:{"d" * 40}&amp;dn=x">m</a></td>'
+        + "".join(
+            f'<td class="text-center">{c}</td>'
+            for c in ("dl", "1 GB", "2026-01-01", "5", "1", "10")
+        )
+        + "</tr>"
+    )
+    rows = parser.nyaa_html_rows(f"<table>{no_cells}{short}{ok}</table>")
+    assert [r[0] for r in rows] == ["Good"]
+
+
 # ---------------------------------------------------------------------------
 # 1337x
 # ---------------------------------------------------------------------------
 
 X1337_HTML = """<table class="table-list">
     <tr><td><a href="/torrent/111/1/">Show S01 1080p</a></td>
-        <td class="coll-2 seeds">123</td>
+        <td class="coll-2 seeds">1,234</td>
         <td class="coll-3 leeches">45</td>
         <td class="coll-4 size">1.2 GiB</td></tr>
     <tr><td><a href="/torrent/222/1/">Show S01 720p</a></td>
@@ -765,7 +883,7 @@ X1337_HTML = """<table class="table-list">
 def test_x1337_rows() -> None:
     rows = parser.x1337_rows(X1337_HTML)
     assert len(rows) == 2
-    assert rows[0] == ["Show S01 1080p", "/torrent/111/1/", "1.2 GiB", "123", "45"]
+    assert rows[0] == ["Show S01 1080p", "/torrent/111/1/", "1.2 GiB", "1234", "45"]
     assert parser.x1337_rows("<p>no table here</p>") == []
 
 
@@ -839,7 +957,7 @@ async def test_x1337_parse_query(monkeypatch: Any) -> None:
     out = await parser.x1337_parse("show s01")
     torrents = _extract("1337x.to", out)
     assert len(torrents) == 2
-    assert torrents[0].seeders == 123
+    assert torrents[0].seeders == 1234
     assert torrents[0].date == "2026-06-26"
 
 

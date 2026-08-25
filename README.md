@@ -9,9 +9,9 @@
 
 This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**. It allows for easy integration into other applications or services.
 
-<a href="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@philogicae/torrent-search-mcp/badge?cache-control=no-cache" alt="Torrent Search MCP server" />
-</a>
+<div align="center" style="margin: 20px 0;">
+  <img src=".github/assets/cover.png" alt="Torrent Search web UI — popular torrents view" width="720" />
+</div>
 
 ## Quickstart
 

@@ -9,7 +9,7 @@
     <link rel="stylesheet" data-key="oat.min.css" data-src="https://unpkg.com/@knadh/oat/oat.min.css" />
     <style>
       :root {
-        /* Cyberpunk accent + swarm health colors — defined once, flip with the theme */
+        /* Cyberpunk accent + swarm health colors - defined once, flip with the theme */
         --accent: light-dark(#00a97f, #00ffa3);
         --accent-dim: light-dark(#00a97f40, #00ffa340);
         --up: light-dark(#0c8a4d, #2ee56b);
@@ -85,7 +85,7 @@
         display: flex;
         flex-direction: column;
         width: 100%;
-        max-width: none; /* always full width — no side gutters */
+        max-width: none; /* always full width - no side gutters */
         margin-inline: 0;
         padding: var(--space-4) var(--space-4) var(--space-3);
         box-sizing: border-box;
@@ -367,7 +367,137 @@
         word-break: break-word;
         pointer-events: none;
       }
+      /* Send-to-Telegram confirm popup */
+      #tg-dialog {
+        --tg-pad: var(--space-4);
+        width: min(24rem, calc(100vw - 2rem));
+        padding: 0;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-large);
+        box-shadow: var(--shadow-large);
+        overflow: hidden;
+        font-size: 0.75rem;
+      }
+      #tg-dialog::backdrop {
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(3px);
+      }
+      #tg-dialog .tg-body {
+        padding: var(--tg-pad);
+      }
+      #tg-dialog .tg-body::before {
+        content: "";
+        display: block;
+        height: 2px;
+        margin: calc(-1 * var(--tg-pad)) calc(-1 * var(--tg-pad)) var(--space-3);
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      }
+      #tg-dialog h2 {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0 0 var(--space-2);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      #tg-dialog h2 .tg-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 1.5rem;
+        height: 1.5rem;
+        background: var(--accent-dim);
+        border-radius: var(--radius-medium);
+      }
+      #tg-dialog h2 .tg-badge img {
+        width: 0.9rem;
+        height: 0.9rem;
+      }
+      #tg-dialog .tg-bot {
+        margin: 0 0 var(--space-3);
+        opacity: 0.65;
+      }
+      #tg-dialog .tg-bot strong {
+        color: var(--accent);
+      }
+      #tg-dialog .tg-payload {
+        margin: 0;
+        padding: var(--space-2) var(--space-3);
+        max-height: 6rem;
+        overflow: auto;
+        background: var(--faint);
+        border: 1px solid var(--border);
+        border-left: 2px solid var(--accent);
+        border-radius: var(--radius-medium);
+        font-family: inherit;
+        font-size: 0.62rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        opacity: 0.85;
+        user-select: all;
+      }
+      #tg-dialog .tg-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.45rem;
+        margin-top: var(--space-3);
+      }
+      #tg-dialog .tg-actions button {
+        height: 1.9rem;
+        min-height: 1.9rem;
+        padding-inline: 0.7rem;
+        font-size: 0.68rem;
+        border-radius: var(--radius-medium);
+      }
+      #tg-dialog .tg-actions .spacer {
+        flex: 1;
+      }
+      #tg-dialog .tg-hint {
+        display: none;
+        margin: var(--space-2) 0 0;
+        font-size: 0.65rem;
+        color: var(--down);
+      }
+      #tg-dialog .tg-hint.visible {
+        display: block;
+      }
+      /* Page footer */
+      #page-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-3);
+        margin-top: auto;
+        padding-top: var(--space-2);
+        font-size: 0.62rem;
+        opacity: 0.55;
+      }
+      #page-footer .foot-left {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      #page-footer a {
+        display: inline-flex;
+        align-items: center;
+        color: inherit;
+      }
+      #page-footer a:hover {
+        color: var(--accent);
+        opacity: 1;
+      }
+      #page-footer svg {
+        width: 0.9rem;
+        height: 0.9rem;
+      }
       /* Small screens: shrink everything, stack the toolbar */
+
       @media (max-width: 640px) {
         html {
           font-size: 14px;
@@ -445,6 +575,9 @@
         col.c-num {
           width: 3rem;
         }
+        #tg-dialog {
+          --tg-pad: var(--space-3);
+        }
         #results th.c-num,
         #results td.se,
         #results td.le {
@@ -472,6 +605,9 @@
           max-height: calc(100dvh - 1rem);
           padding: 0.4rem 0.5rem;
           font-size: 0.6rem;
+        }
+        #tg-dialog {
+          padding: var(--space-3);
         }
       }
     </style>
@@ -532,10 +668,47 @@
           </table>
         </div>
       </article>
+      <footer id="page-footer">
+        <span class="foot-left" title="MIT License">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v18" />
+            <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
+            <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
+            <path d="m5 8 3 8a5 5 0 0 1-6 0zV7" />
+            <path d="M7 21h10" />
+          </svg>
+          2026 Philogicae
+        </span>
+        <a href="https://github.com/philogicae/torrent-search-mcp" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="GitHub repository">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path
+              d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656"
+            />
+          </svg>
+        </a>
+      </footer>
     </main>
 
     <div id="filename-tooltip" role="tooltip" hidden></div>
 
+    <dialog id="tg-dialog" aria-labelledby="tg-title">
+      <div class="tg-body">
+        <h2 id="tg-title">
+          <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Send to Telegram
+        </h2>
+        <p class="tg-bot">
+          Message Draft for <strong>@<span id="tg-handle"></span></strong> - Confirmation.
+        </p>
+        <pre class="tg-payload" id="tg-payload"></pre>
+        <div class="tg-actions">
+          <button id="tg-open">Open in Telegram</button>
+          <button id="tg-web-btn" data-variant="secondary" title="Open the t.me page in a new tab">t.me ↗</button>
+          <span class="spacer"></span>
+          <button id="tg-close" data-variant="secondary">Close</button>
+        </div>
+        <p class="tg-hint" id="tg-hint">Telegram didn't open? The app may not be installed - use the t.me button instead.</p>
+      </div>
+    </dialog>
     <script src="https://unpkg.com/@knadh/indexed-cache@0.4.4/dist/indexed-cache.min.js"></script>
     <script>
       // ---- Theme (house default: dark, persisted choice wins) -----------------
@@ -642,7 +815,7 @@
               r.magnet_link && TELEGRAM_BOT_HANDLE ? `https://t.me/${encodeURIComponent(TELEGRAM_BOT_HANDLE)}?text=${encodeURIComponent(`Download this torrent: ${r.magnet_link}`)}` : "";
             const telegram = TELEGRAM_BOT_HANDLE
               ? r.magnet_link
-                ? `<a href="${escapeHtml(telegramUrl)}" target="_blank" rel="noopener noreferrer" title="Send to Telegram" aria-label="Send to Telegram"><img src="/static/telegram.svg" alt="" /></a>`
+                ? `<a href="${escapeHtml(telegramUrl)}" data-tg title="Send to Telegram" aria-label="Send to Telegram"><img src="/static/telegram.svg" alt="" /></a>`
                 : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled><img src="/static/telegram.svg" alt="" /></button>`
               : "";
             const info = `<button class="info-btn ghost" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
@@ -832,6 +1005,53 @@
           ot.toast("Copy failed", "📋", { variant: "error", duration: 2500 });
         }
       });
+
+      // Send-to-Telegram popup. The https t.me auto-handoff drops the ?text=
+      // draft on some phones; an explicit tap on tg://resolve preserves it,
+      // so the button opens this confirm popup and fires the scheme directly.
+      const tgDialog = $("tg-dialog");
+      let tgTimer = null;
+      function tgLinks(text) {
+        return {
+          app: `tg://resolve?domain=${encodeURIComponent(TELEGRAM_BOT_HANDLE)}&text=${encodeURIComponent(text)}`,
+          web: `https://t.me/${encodeURIComponent(TELEGRAM_BOT_HANDLE)}?text=${encodeURIComponent(text)}`,
+        };
+      }
+      $("rows").addEventListener("click", (e) => {
+        const a = e.target.closest("a[data-tg]");
+        if (!a || !TELEGRAM_BOT_HANDLE) return;
+        e.preventDefault();
+        const q = a.href.indexOf("?text=");
+        let text = "";
+        if (q >= 0) {
+          try {
+            text = decodeURIComponent(a.href.slice(q + 6));
+          } catch {
+            text = "";
+          }
+        }
+        $("tg-handle").textContent = TELEGRAM_BOT_HANDLE;
+        $("tg-payload").textContent = text || a.href;
+        const links = tgLinks(text);
+        $("tg-open").dataset.app = links.app;
+        $("tg-web-btn").dataset.web = links.web;
+        $("tg-hint").classList.remove("visible");
+        tgDialog.showModal();
+      });
+      $("tg-open").addEventListener("click", () => {
+        location.href = $("tg-open").dataset.app;
+        clearTimeout(tgTimer);
+        tgTimer = setTimeout(() => $("tg-hint").classList.add("visible"), 2000);
+      });
+      $("tg-web-btn").addEventListener("click", () => {
+        const url = $("tg-web-btn").dataset.web;
+        if (url) window.open(url, "_blank", "noopener");
+      });
+      $("tg-close").addEventListener("click", () => tgDialog.close());
+      tgDialog.addEventListener("click", (e) => {
+        if (e.target === tgDialog) tgDialog.close();
+      });
+      tgDialog.addEventListener("close", () => clearTimeout(tgTimer));
 
       // Load the popular listings on first visit so the page is never empty.
       window.addEventListener("DOMContentLoaded", doPopular);

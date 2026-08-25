@@ -1,4 +1,4 @@
-# Torrent Search MCP Server & API
+# Torrent Search MCP/API/WebUI
 
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://docs.astral.sh/uv/getting-started/installation/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
@@ -7,10 +7,10 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
-This repository provides a Python API and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**. It allows for easy integration into other applications or services.
+This repository provides a Python API/WebUI and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**. It allows for easy integration into other applications or services.
 
 <div align="center" style="margin: 20px 0;">
-  <img src=".github/assets/cover.png" alt="Torrent Search web UI — popular torrents view" width="720" />
+  <img src=".github/assets/cover.png" alt="Torrent Search web UI - popular torrents view" width="720" />
 </div>
 
 ## Quickstart
@@ -92,7 +92,7 @@ uvx torrent-search-mcp --mode fastapi
 | BitTorrented        | `bittorrented.com`     | HTTP API        |
 | UIndex              | `uindex.org`           | HTTP top list   |
 
-> **Note on UIndex:** the site exposes no programmatic search endpoint (its search path is protected by a browser challenge), so queries are matched client-side against its live top list — which conveniently carries magnet links inline.
+> **Note on UIndex:** the site exposes no programmatic search endpoint (its search path is protected by a browser challenge), so queries are matched client-side against its live top list - which conveniently carries magnet links inline.
 
 Sources can be excluded individually via the [`EXCLUDE_SOURCES`](#configuration-optional) env var.
 
@@ -113,7 +113,7 @@ The application reads configuration from environment variables. The recommended 
 | `INCLUDE_LINKS`          | `false`  | When `true`, include magnet links in the MCP `search_torrents` / `popular_torrents` results. Left off by default to greatly reduce token usage.                 |
 | `EXCLUDE_SOURCES`        | _(none)_ | Comma-separated list of sources to exclude from results (e.g. `nyaa.si,1337x.to`).                                                                              |
 | `CRAWLER_IDLE_TIMEOUT`   | `120`    | Seconds of inactivity before the headless browser (used for HTML sources like ThePirateBay) is shut down; the timer resets on every search. Set `0` to disable. |
-| `TORRENT_SEARCH_API_URL` | _(none)_ | MCP only: base URL of a running Torrent Search REST API — tools proxy it instead of scraping locally. Unset = standalone.                                       |
+| `TORRENT_SEARCH_API_URL` | _(none)_ | MCP only: base URL of a running Torrent Search REST API - tools proxy it instead of scraping locally. Unset = standalone.                                       |
 | `TELEGRAM_BOT_HANDLE`    | _(none)_ | Telegram bot handle used by the Web UI torrent action. The Telegram button is hidden when unset.                                                                |
 
 ### Installation
@@ -220,8 +220,8 @@ The package exposes a single entry point, `torrent-search-mcp` (installed by `pi
 
 | Mode              | Endpoint | Description                                                                                                            |
 | ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `cli`             | —        | Run a single search query and print results to stdout.                                                                 |
-| `stdio`           | —        | MCP server over stdio (default).                                                                                       |
+| `cli`             | -        | Run a single search query and print results to stdout.                                                                 |
+| `stdio`           | -        | MCP server over stdio (default).                                                                                       |
 | `http`            | `/mcp`   | MCP server using streamable HTTP (fastmcp's canonical HTTP alias).                                                     |
 | `streamable-http` | `/mcp`   | Same as `http`; the modern, MCP-spec-recommended HTTP transport.                                                       |
 | `sse`             | `/sse`   | MCP server using Server-Sent Events. Legacy HTTP transport (deprecated by the MCP spec in favor of `streamable-http`). |
@@ -258,7 +258,7 @@ for torrent in results:
     )
 ```
 
-`search_torrents` is async and accepts an optional `max_items` (default `10`). `popular_torrents(per_source=10)` returns the current most popular torrents from sources with a top listing — up to `per_source` results per source, merged and ranked by seeders + leechers. Each `Torrent` exposes `id`, `filename`, `size`, `seeders`, `leechers`, `date`, `source`, and (when available) `magnet_link`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link.
+`search_torrents` is async and accepts an optional `max_items` (default `10`). `popular_torrents(per_source=10)` returns the current most popular torrents from sources with a top listing - up to `per_source` results per source, merged and ranked by seeders + leechers. Each `Torrent` exposes `id`, `filename`, `size`, `seeders`, `leechers`, `date`, `source`, and (when available) `magnet_link`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link.
 
 ### As MCP Server
 
@@ -291,7 +291,7 @@ The FastAPI server will then be accessible at `http://<host>:<port>`.
 **Available Endpoints:**
 The FastAPI server exposes similar functionalities to the MCP server. Key endpoints include:
 
-- `GET /`: Built-in dark-mode terminal-style web UI — search, popular listings, sortable results with magnet links.
+- `GET /`: Built-in dark-mode terminal-style web UI - search, popular listings, sortable results with magnet links.
 - `POST /torrent/search`: Search for torrents. Query params: `query` (required) and `max_items` (optional, default `20`).
 - `GET /torrent/popular`: Get the most popular torrents. Query param: `per_source` (optional, default `10`).
 - `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as text.
@@ -308,7 +308,7 @@ Usable with any MCP-compatible client. Available tools:
   - `user_intent`: A short description reflecting the user's overall intention (e.g. `"latest episode of Breaking Bad"`).
   - `query`: Optimized, lowercase, space-separated keywords (e.g. `"breaking bad s01e05"`). Generic/filler/technical terms should be stripped per the tool's docstring.
   - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
-- `popular_torrents(per_source=10)`: Get the most popular torrents right now from sources with an official top listing (apibay, uindex, 1337x, YTS, nyaa, EZTV) — up to `per_source` results each, merged and pre-ranked by seeders + leechers.
+- `popular_torrents(per_source=10)`: Get the most popular torrents right now from sources with an official top listing (apibay, uindex, 1337x, YTS, nyaa, EZTV) - up to `per_source` results each, merged and pre-ranked by seeders + leechers.
   - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
 - `available_sources()`: Get the list of available torrent sources.
 - `get_torrent(torrent_id)`: Get the magnet link for a specific torrent by id (the `id` returned by `search_torrents` or `popular_torrents`).

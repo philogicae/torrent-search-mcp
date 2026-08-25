@@ -1,3 +1,41 @@
+## [4.0.0] - 2026-08-24
+
+### 🚀 Features
+
+- Feat: uindex source, popular torrents, web UI at /, dual-mode MCP, magnet-only
+
+Sources:
+
+- add uindex.org (top list w/ inline magnets; search path is CF-blocked)
+- nyaa popular via HTML table (RSS ignores sort); x1337 comma-safe counts
+
+Features:
+
+- popular_torrents: MCP tool + GET /torrent/popular (per-source caps)
+- GET /: dark terminal-style web UI (search, sorting, magnet copy),
+  served minified + gzip; Telegram button via TELEGRAM_BOT_HANDLE
+- GET /sources; available_sources: resource -> tool; Annotated schemas on all tools
+- MCP dual-mode: standalone or REST proxy via TORRENT_SEARCH_API_URL
+- compose: torrent-search-api (:8000) + torrent-search-mcp (:8001, proxies api),
+  shared network, one-shot build container
+- crawler kept warm w/ idle auto-shutdown (CRAWLER_IDLE_TIMEOUT=120)
+
+Changes:
+
+- search max_items default 20 (global seed-sorted cap); cache TTL 5min -> 2min
+- remove .torrent flow (FOLDER_TORRENT_FILES, torrent_file, volume, health route)
+- dev.sh: prettier for static/, pytest workers 3 -> 2
+
+Fixes:
+
+- keep stdout clean for stdio MCP; Windows-safe geteuid
+- aiocache key collisions (fn-scoped, kwarg-aware); tolerant id split ("-", 3)
+- x1337 comma counts; frozen-clock date test
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [3.0.1] - 2026-08-10
 
 ### 🐛 Bug Fixes

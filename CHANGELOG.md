@@ -1,3 +1,24 @@
+## [4.0.1] - 2026-08-25
+
+### 🐛 Bug Fixes
+
+- Fix: telegram popup preserves prefill, add footer, v4.0.1
+
+- telegram button opens themed confirm dialog firing tg://resolve directly,
+  fixing mobile apps dropping the ?text= draft on automatic t.me handoff
+- popup actions: Open in Telegram, t.me fallback (new tab), Close,
+  with hint when the app doesn't open
+- footer bar: MIT license + 2026 Philogicae (left), GitHub repo link (right)
+- README: retitle to "Torrent Search MCP/API/WebUI", normalize dashes
+
+### 📚 Documentation
+
+- Docs: replace Glama badge with web UI screenshot in README
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.0.0] - 2026-08-24
 
 ### 🚀 Features

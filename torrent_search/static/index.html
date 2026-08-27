@@ -7,6 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
     <script data-key="oat.min.js" data-src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
     <link rel="stylesheet" data-key="oat.min.css" data-src="https://unpkg.com/@knadh/oat/oat.min.css" />
+    <script data-key="qrcode.min.js" data-src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" defer></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -26,6 +27,17 @@
         --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         --up: #2ee56b;
         --down: #ff6169;
+        /* Orbit spinner: pastel rings pop on the night sky. */
+        --orbit-blue: #91daffa5;
+        --orbit-green: #91ffbfa5;
+        --orbit-red: #ffca91a5;
+        --orbit-white: #ffffff;
+        /* Deterministic hue chips/titles: saturation+lightness per theme so
+           every source keeps its color and stays readable in both modes. */
+        --src-fg-s: 70%;
+        --src-fg-l: 72%;
+        --src-bg-s: 45%;
+        --src-bg-l: 17%;
       }
       body[data-theme="dark"] {
         color-scheme: dark;
@@ -73,6 +85,15 @@
         --accent-dim: rgba(85, 115, 29, 0.1);
         --accent-line: #c5ff4a;
         --input-bg: #ffffff;
+        --src-fg-s: 55%;
+        --src-fg-l: 30%;
+        --src-bg-s: 40%;
+        --src-bg-l: 87%;
+        /* Orbit spinner on paper: saturated ink rings stay visible. */
+        --orbit-blue: #1c6fbd;
+        --orbit-green: #148a52;
+        --orbit-red: #d9480f;
+        --orbit-white: #33362e;
       }
       html,
       body {
@@ -95,6 +116,22 @@
       input,
       select {
         font-family: inherit;
+      }
+      /* Thin, mobile-like scrollbars everywhere (incl. WebKit) */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-strong) transparent;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 3px;
       }
       /* ------------------------------------------------------------------
          Pairing gate: fullscreen overlay over the shared sky, with a
@@ -196,19 +233,22 @@
         border-color: var(--border-strong);
         color: var(--text);
       }
-      /* Theme flip: constant deep-sea chip in both themes. */
+      /* Theme flip: one sky-blue chip in both themes (reads as night or day
+         depending on the mode; never cyan). */
       #theme-toggle {
-        background: #123a7a;
-        border-color: #0d2c5c;
-        color: #dbeafe;
+        background: #3d85c6;
+        border-color: #2f6ba3;
+        color: #f0f7ff;
       }
       #auth-lock.authed {
-        color: var(--up);
-        border-color: color-mix(in srgb, var(--up) 45%, transparent);
+        background: var(--up);
+        border-color: color-mix(in srgb, var(--up) 70%, black);
+        color: #06210f;
       }
       #auth-lock.locked {
-        color: var(--down);
-        border-color: color-mix(in srgb, var(--down) 45%, transparent);
+        background: var(--down);
+        border-color: color-mix(in srgb, var(--down) 70%, black);
+        color: #2b0608;
       }
       main.container {
         flex: 1;
@@ -331,6 +371,21 @@
         text-transform: uppercase;
         color: var(--text-muted);
       }
+      #results thead th[data-sort] {
+        cursor: pointer;
+        user-select: none;
+      }
+      #results thead th[data-sort]:hover {
+        color: var(--accent);
+      }
+      #results thead th.sort-asc::after {
+        content: " ▲";
+        font-size: 0.55rem;
+      }
+      #results thead th.sort-desc::after {
+        content: " ▼";
+        font-size: 0.55rem;
+      }
       #results tbody tr {
         border-bottom: 1px solid var(--border-faint);
       }
@@ -365,10 +420,11 @@
         font-size: 0.72rem;
         color: var(--text-2);
       }
-      td.se {
+      /* Seed/leech colors must out-rank `#results td` (id specificity). */
+      #results td.se {
         color: var(--up);
       }
-      td.le {
+      #results td.le {
         color: var(--down);
       }
       td.name-cell {
@@ -405,11 +461,11 @@
         overflow: hidden;
         text-overflow: ellipsis;
         border-radius: 2px;
-        padding: 0 0.32rem;
+        padding: 0 0.26rem;
         font-family: var(--mono);
-        font-size: 0.6rem;
-        letter-spacing: 0.04em;
-        line-height: 1.5;
+        font-size: 0.48rem; /* greatly reduced so chips always fit one row */
+        letter-spacing: 0.02em;
+        line-height: 1.45;
         text-decoration: none; /* source chips are links */
       }
       a.chip:hover {
@@ -568,6 +624,12 @@
         flex-direction: column;
         gap: 0.05rem;
       }
+      .tile-name-row {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-width: 0;
+      }
       .tile-name {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -634,11 +696,20 @@
         flex: 1;
         min-height: 0;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
+        gap: 0.75rem;
       }
       #loading[hidden] {
         display: none;
+      }
+      .loading-label {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--text-muted);
       }
       .spinner-box {
         width: 300px;
@@ -656,22 +727,22 @@
       .blue-orbit {
         width: 165px;
         height: 165px;
-        border: 1px solid #91daffa5;
+        border: 1px solid var(--orbit-blue);
       }
       .green-orbit {
         width: 120px;
         height: 120px;
-        border: 1px solid #91ffbfa5;
+        border: 1px solid var(--orbit-green);
       }
       .red-orbit {
         width: 90px;
         height: 90px;
-        border: 1px solid #ffca91a5;
+        border: 1px solid var(--orbit-red);
       }
       .white-orbit {
         width: 60px;
         height: 60px;
-        border: 2px solid #ffffff;
+        border: 2px solid var(--orbit-white);
       }
       #empty-state {
         flex: 1;
@@ -825,37 +896,24 @@
         width: 0.9rem;
         height: 0.9rem;
       }
-      dialog .dlg-sub {
-        margin: 0 0 var(--space-3);
-        font-size: 0.72rem;
-        color: var(--text-2);
-      }
-      dialog .dlg-sub strong {
-        color: var(--accent);
-      }
-      dialog .dlg-payload {
-        margin: 0 0 var(--space-3);
-        padding: var(--space-2) var(--space-3);
-        max-height: 6rem;
-        overflow: auto;
-        background: var(--input-bg);
-        border: 1px solid var(--border);
-        border-left: 2px solid var(--accent);
-        border-radius: 2px;
-        font-family: var(--mono);
-        font-size: 0.68rem;
-        line-height: 1.45;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-        user-select: all;
-        color: var(--text-3);
-      }
       dialog .dlg-actions {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: var(--space-2);
+      }
+      /* Single-row variant used by the pairing + forward dialogs. */
+      dialog .dlg-actions.row {
+        flex-wrap: nowrap;
+        justify-content: center;
+      }
+      dialog .dlg-actions.row button {
+        white-space: nowrap;
+        font-size: 0.56rem;
+        letter-spacing: 0.06em;
+        padding-inline: 0.5rem;
+        height: 1.75rem;
+        min-height: 1.75rem;
       }
       dialog .dlg-actions button {
         height: 1.9rem;
@@ -875,27 +933,18 @@
         border-color: var(--accent);
         color: var(--heading);
       }
-      dialog .dlg-actions .spacer {
-        flex: 1;
-      }
-      dialog .dlg-hint {
-        display: none;
-        margin: var(--space-2) 0 0;
-        font-size: 0.65rem;
-        color: var(--text-muted);
-      }
-      dialog .dlg-hint.visible {
-        display: block;
-      }
-      #auth-status {
-        margin: 0 0 var(--space-3);
+      /* Shared centered status line under the pairing/forward actions. */
+      .pair-status {
+        margin: var(--space-3) 0 0;
+        text-align: center;
         font-family: var(--mono);
         font-size: 0.68rem;
         letter-spacing: 0.06em;
         color: var(--text-2);
         min-height: 1rem;
       }
-      #auth-status.waiting {
+      #auth-status.waiting,
+      #tg-status.waiting {
         color: #ffb454;
         animation: authPulse 1.2s ease-in-out infinite;
       }
@@ -908,11 +957,49 @@
           opacity: 0.4;
         }
       }
-      #auth-status.ok {
+      #auth-status.ok,
+      #tg-status.ok {
         color: var(--up);
       }
-      #auth-status.bad {
+      #auth-status.bad,
+      #tg-status.bad {
         color: var(--down);
+      }
+      /* QR pairing code on a white card (dark modules need contrast) */
+      .qr-box {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 0 var(--space-3);
+        background: #ffffff;
+        border-radius: 6px;
+        padding: 0.2rem; /* white backing hugs the code, no fat border */
+        width: fit-content;
+      }
+      .qr-box.center {
+        margin-inline: auto;
+      }
+      .qr-box svg {
+        width: 10.5rem;
+        height: 10.5rem;
+        display: block;
+      }
+      .or-sep {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin: 0 0 var(--space-3);
+        color: var(--text-muted);
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        letter-spacing: 0.25em;
+      }
+      .or-sep::before,
+      .or-sep::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border-faint);
       }
       @media (max-width: 1024px) {
         #tiles {
@@ -1035,6 +1122,7 @@
               <div class="white-orbit w2 leo"></div>
               <div class="white-orbit w3 leo"></div>
             </div>
+            <div class="loading-label">&nbsp&nbsp&nbspLoading...</div>
           </div>
           <div id="empty-state" hidden><span class="empty-glyph">⌀</span><span id="empty-text">No torrents found</span></div>
           <div class="results-scroll" id="table-wrap" hidden>
@@ -1049,11 +1137,11 @@
               </colgroup>
               <thead>
                 <tr>
-                  <th>File</th>
-                  <th>Date</th>
-                  <th>Size</th>
-                  <th class="c-num">SE</th>
-                  <th class="c-num">LE</th>
+                  <th data-sort="name">File</th>
+                  <th data-sort="date">Date</th>
+                  <th data-sort="size">Size</th>
+                  <th class="c-num" data-sort="se">SE</th>
+                  <th class="c-num" data-sort="le">LE</th>
                   <th>Links</th>
                 </tr>
               </thead>
@@ -1092,15 +1180,14 @@
         <h2 id="auth-title">
           <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Telegram Authentification
         </h2>
-        <p class="dlg-sub">
-          Prompt Message to log in with <strong>@<span id="tg-handle"></span></strong>
-        </p>
-        <pre class="dlg-payload" id="auth-code"></pre>
-        <p id="auth-status" class="waiting">Waiting for approval... (10min)</p>
-        <div class="dlg-actions">
+        <div class="qr-box center" id="auth-qr" aria-label="Pairing QR code"></div>
+        <div class="or-sep"><span>- OR -</span></div>
+        <div class="dlg-actions row">
           <button id="auth-open">Open in Telegram</button>
           <button id="auth-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
+          <button id="auth-copy-msg" title="Copy the login message to send to the bot">Copy Login Message</button>
         </div>
+        <p id="auth-status" class="pair-status waiting">Waiting for approval...</p>
       </div>
     </dialog>
 
@@ -1110,16 +1197,14 @@
         <h2 id="tg-title">
           <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Forward to Telegram
         </h2>
-        <p class="dlg-sub">
-          Prompt Message to download with <strong>@<span id="tg-handle"></span></strong>
-        </p>
-        <pre class="dlg-payload" id="tg-payload"></pre>
-        <div class="dlg-actions">
+        <div class="qr-box center" id="tg-qr" aria-label="Forward QR code"></div>
+        <div class="or-sep"><span>- OR -</span></div>
+        <div class="dlg-actions row">
           <button id="tg-open">Open in Telegram</button>
-          <span class="spacer"></span>
           <button id="tg-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
+          <button id="tg-copy-msg" title="Copy the download message to send to the bot">Copy Message</button>
         </div>
-        <p class="dlg-hint" id="tg-hint">Telegram didn't open? The app may not be installed - use the t.me button instead.</p>
+        <p id="tg-status" class="pair-status"></p>
       </div>
     </dialog>
     <script src="https://unpkg.com/@knadh/indexed-cache@0.4.4/dist/indexed-cache.min.js"></script>
@@ -1173,7 +1258,7 @@
       const SOURCE_ORDER = ["thepiratebay.org", "1337x.to", "uindex.org", "eztvx.to", "yts.vg", "nyaa.si", "fitgirl-repacks.site", "subsplease.org", "bittorrented.com"];
       const SESSION_KEY = "telegram_session_token";
       let viewMode = "sections"; // "search" = table, "sections" = popular tiles
-      const session = { enabled: false, authenticated: false, handle: null };
+      const session = { enabled: false, authenticated: false, handle: null, prune: false };
 
       const $ = (id) => document.getElementById(id);
 
@@ -1250,11 +1335,15 @@
       }
 
       // ---- Table row (search view) --------------------------------------------
-      function tgButtons(magnet) {
-        if (!session.authenticated || !session.handle || !magnet) {
+      function tgButtons(r) {
+        if (!session.authenticated || !session.handle || !r.magnet_link) {
           return `<span title="Telegram unavailable" aria-label="Telegram unavailable">🚫</span>`;
         }
-        return `<a href="#" data-tg data-magnet="${escapeHtml(magnet)}" title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>`;
+        return `<a href="#" data-tg data-magnet="${escapeHtml(r.magnet_link)}" data-filename="${escapeHtml(r.filename)}" title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>`;
+      }
+
+      function infoButtonHtml(r) {
+        return `<button class="info-btn ghost" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
       }
 
       function rowHtml(r) {
@@ -1265,12 +1354,16 @@
         const copy = magnet
           ? `<button class="ghost" data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
           : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
-        const tg = magnet ? tgButtons(magnet) : "";
-        const info = `<button class="info-btn ghost" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
+        const tg = tgButtons(r);
+        const info = infoButtonHtml(r);
         const srcHue = hueFor(r.source || "");
         const catHue = hueFor(r.category || "");
-        const source = r.source ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} 80% 70%); background: hsl(${srcHue} 50% 18%)"`, 'class="chip"') : "";
-        const category = r.category ? `<span class="chip" style="color: hsl(${catHue} 60% 74%); background: hsl(${catHue} 35% 16%)">${escapeHtml(r.category)}</span>` : "";
+        const source = r.source
+          ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} var(--src-fg-s) var(--src-fg-l)); background: hsl(${srcHue} var(--src-bg-s) var(--src-bg-l))"`, 'class="chip"')
+          : "";
+        const category = r.category
+          ? `<span class="chip" style="color: hsl(${catHue} calc(var(--src-fg-s) - 10%) var(--src-fg-l)); background: hsl(${catHue} calc(var(--src-bg-s) - 5%) var(--src-bg-l))">${escapeHtml(r.category)}</span>`
+          : "";
         const detail = source || category ? `<span class="torrent-detail">${source}${category}</span>` : "";
         return `<tr>
               <td class="name-cell">${info}<span class="filename-details"><span class="filename">${escapeHtml(r.filename)}</span>${detail}</span></td>
@@ -1282,9 +1375,49 @@
             </tr>`;
       }
 
-      function renderTable() {
-        $("rows").innerHTML = rows.map(rowHtml).join("");
+      // ---- Column sorting (search table) --------------------------------------
+      let sortState = null; // { key, dir: 1 asc | -1 desc }
+      function parseSize(s) {
+        const m = String(s || "").match(/([\d.]+)\s*([KMGT]?)i?B/i);
+        if (!m) return -1;
+        const units = { "": 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 };
+        return parseFloat(m[1]) * units[m[2].toUpperCase()];
       }
+      function sortValue(r, key) {
+        if (key === "size") return parseSize(r.size);
+        if (key === "se") return r.seeders ?? 0;
+        if (key === "le") return r.leechers ?? 0;
+        if (key === "date") return r.date || "";
+        return (r.filename || "").toLowerCase();
+      }
+      function sortedRows() {
+        if (!sortState) return rows;
+        const { key, dir } = sortState;
+        return [...rows].sort((a, b) => {
+          const va = sortValue(a, key);
+          const vb = sortValue(b, key);
+          return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+        });
+      }
+      function paintSortIndicators() {
+        document.querySelectorAll("#results thead th[data-sort]").forEach((th) => {
+          th.classList.toggle("sort-asc", !!sortState && sortState.key === th.dataset.sort && sortState.dir === 1);
+          th.classList.toggle("sort-desc", !!sortState && sortState.key === th.dataset.sort && sortState.dir === -1);
+        });
+      }
+      function renderTable() {
+        $("rows").innerHTML = sortedRows().map(rowHtml).join("");
+        paintSortIndicators();
+      }
+      document.querySelector("#results thead").addEventListener("click", (e) => {
+        const th = e.target.closest("th[data-sort]");
+        if (!th) return;
+        const key = th.dataset.sort;
+        // First click: text columns ascend, metrics descend (most seeds / biggest first).
+        const nextDir = sortState && sortState.key === key ? -sortState.dir : key === "name" ? 1 : -1;
+        sortState = { key, dir: nextDir };
+        renderTable();
+      });
 
       // ---- Popular tiles -------------------------------------------------------
       function buildSections() {
@@ -1309,26 +1442,27 @@
         const copy = magnet
           ? `<button data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
           : `<button title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
-        return `${tgButtons(magnet)}${magnetBtn}${copy}`;
+        return `${tgButtons(r)}${magnetBtn}${copy}`;
+      }
+
+      function tileRowHtml(r, chipsHtml) {
+        return `<div class="tile-row">
+                <div class="tile-main">
+                  <span class="tile-name-row">${infoButtonHtml(r)}<span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(r.filename)}</span></span>
+                  ${chipsHtml || ""}
+                  <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(r.date)}</span></span>
+                </div>
+                <div class="tile-actions">${tileActionsHtml(r)}</div>
+              </div>`;
       }
 
       function tileHtml(section, mobile) {
         const isTop = section.label.startsWith("🏆");
         const hue = !isTop ? hueFor(section.label) : null;
-        const titleColor = hue === null ? "var(--accent)" : `hsl(${hue} 80% 70%)`;
+        const titleColor = hue === null ? "var(--accent)" : `hsl(${hue} var(--src-fg-s) var(--src-fg-l))`;
         const title = isTop ? escapeHtml(section.label) : sourceLinkHtml(section.label, "", 'class="tile-source-link"');
         const openClass = mobile && isTop ? " open" : "";
-        const rowsHtml = section.rows
-          .map(
-            (r) => `<div class="tile-row">
-                <div class="tile-main">
-                  <span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(r.filename)}</span>
-                  <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(r.date)}</span></span>
-                </div>
-                <div class="tile-actions">${tileActionsHtml(r)}</div>
-              </div>`,
-          )
-          .join("");
+        const rowsHtml = section.rows.map((r) => tileRowHtml(r, "")).join("");
         return `<div class="tile${isTop ? " tile-top" : ""}${openClass}">
             <div class="tile-head" data-tile-head><span class="tile-title" style="color: ${titleColor}">${title}</span><span class="tile-count">${section.rows.length}</span><span class="tile-chevron">▼</span></div>
             <div class="tile-body">${rowsHtml}</div>
@@ -1352,17 +1486,14 @@
           .map((r) => {
             const srcHue = hueFor(r.source || "");
             const catHue = hueFor(r.category || "");
-            const source = r.source ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} 80% 70%); background: hsl(${srcHue} 50% 18%)"`, 'class="chip"') : "";
-            const category = r.category ? `<span class="chip" style="color: hsl(${catHue} 60% 74%); background: hsl(${catHue} 35% 16%)">${escapeHtml(r.category)}</span>` : "";
+            const source = r.source
+              ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} var(--src-fg-s) var(--src-fg-l)); background: hsl(${srcHue} var(--src-bg-s) var(--src-bg-l))"`, 'class="chip"')
+              : "";
+            const category = r.category
+              ? `<span class="chip" style="color: hsl(${catHue} calc(var(--src-fg-s) - 10%) var(--src-fg-l)); background: hsl(${catHue} calc(var(--src-bg-s) - 5%) var(--src-bg-l))">${escapeHtml(r.category)}</span>`
+              : "";
             const chips = source || category ? `<span class="torrent-detail">${source}${category}</span>` : "";
-            return `<div class="tile-row">
-                <div class="tile-main">
-                  <span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(r.filename)}</span>
-                  ${chips}
-                  <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(r.date)}</span></span>
-                </div>
-                <div class="tile-actions">${tileActionsHtml(r)}</div>
-              </div>`;
+            return tileRowHtml(r, chips);
           })
           .join("");
       }
@@ -1484,6 +1615,7 @@
           session.enabled = !!state.enabled;
           session.authenticated = !!state.authenticated;
           session.handle = state.handle || null;
+          session.prune = !!state.prune_magnet_links;
         } catch {
           session.enabled = false;
           session.authenticated = true; // offline server: don't gate the UI
@@ -1518,12 +1650,19 @@
       // ---- Auth pairing dialog ------------------------------------------------
       const authDialog = $("auth-dialog");
       let authCode = null;
-      let authPollTimer = null;
+      let authMessage = "";
+      let authPollTimer = null; // 2s approval poll
+      let authCountdownTimer = null; // 1s ttl ticker
+      let authSecondsLeft = 0;
 
       function stopAuthPolling() {
         if (authPollTimer) {
           clearInterval(authPollTimer);
           authPollTimer = null;
+        }
+        if (authCountdownTimer) {
+          clearInterval(authCountdownTimer);
+          authCountdownTimer = null;
         }
       }
 
@@ -1534,27 +1673,66 @@
         if (cls) el.classList.add(cls);
       }
 
+      // Draw a QR for a deep link. The generator loads through indexed-cache
+      // like the toast lib, so retry until it lands (capped).
+      function drawQr(boxId, text, attempt) {
+        if ((attempt || 0) > 20) return;
+        if (!window.qrcode) {
+          setTimeout(() => drawQr(boxId, text, (attempt || 0) + 1), 500);
+          return;
+        }
+        try {
+          const qr = window.qrcode(0, "M");
+          qr.addData(text);
+          qr.make();
+          $(boxId).innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+        } catch {
+          $(boxId).innerHTML = ""; // QR failed; the buttons remain usable
+        }
+      }
+
+      function renderAuthWaiting() {
+        const mm = String(Math.floor(authSecondsLeft / 60)).padStart(2, "0");
+        const ss = String(authSecondsLeft % 60).padStart(2, "0");
+        setAuthStatus(`Waiting for approval... ${mm}:${ss}`, "waiting");
+      }
+
       async function createChallenge() {
         stopAuthPolling();
         setAuthStatus("Generating pairing code...");
         try {
           const data = await fetchJson("/telegram/auth/challenge", { method: "POST" });
           authCode = data.code;
-          $("auth-code").textContent = data.code;
-          // Same pattern as the send popup: deep link into the bot with the
-          // authorization message prefilled - the user just has to send it.
-          const message = `Authorize session: ${data.code}`;
+          // Exact message the bot expects from the user's chat.
+          authMessage = `Authorize ${data.code} for Torrent Search`;
+          // Copy affordance rides the shared data-copy dispatcher.
+          const copyBtn = $("auth-copy-msg");
+          copyBtn.dataset.copy = authMessage;
+          copyBtn.dataset.toastLabel = "Login message copied - paste it in your Telegram chat with the bot";
+          // Deep link into the bot with the authorization message prefilled -
+          // the user just has to send it. The QR encodes the same link.
           const links = {
-            app: `tg://resolve?domain=${encodeURIComponent(session.handle)}&text=${encodeURIComponent(message)}`,
-            web: `https://t.me/${encodeURIComponent(session.handle)}?text=${encodeURIComponent(message)}`,
+            app: `tg://resolve?domain=${encodeURIComponent(session.handle)}&text=${encodeURIComponent(authMessage)}`,
+            web: `https://t.me/${encodeURIComponent(session.handle)}?text=${encodeURIComponent(authMessage)}`,
           };
           $("auth-open").dataset.app = links.app;
           $("auth-web-btn").dataset.web = links.web;
-          setAuthStatus("Waiting for approval...");
+          drawQr("auth-qr", links.app);
+          // 10-minute countdown; on expiry the challenge resets itself.
+          authSecondsLeft = Math.max(1, Math.round(data.expires_in || 600));
+          renderAuthWaiting();
+          authCountdownTimer = setInterval(() => {
+            authSecondsLeft -= 1;
+            if (authSecondsLeft <= 0) {
+              createChallenge();
+              return;
+            }
+            renderAuthWaiting();
+          }, 1000);
           authPollTimer = setInterval(pollChallenge, 2000);
         } catch (err) {
           authCode = null;
-          $("auth-code").textContent = "-";
+          $("auth-qr").innerHTML = "";
           setAuthStatus(`Could not create pairing code: ${err.message} - retrying...`, "bad");
           setTimeout(createChallenge, 15000);
         }
@@ -1577,9 +1755,8 @@
               doPopular();
             }, 900);
           } else if (data.status !== "pending") {
-            stopAuthPolling();
-            setAuthStatus("Code expired - generating a new one.", "bad");
-            setTimeout(createChallenge, 1500);
+            // Approved elsewhere or swept server-side: reset right away.
+            createChallenge();
           }
         } catch {
           /* transient network error: keep polling */
@@ -1592,7 +1769,8 @@
       }
 
       // Authenticate or leave: the pairing popup cannot be dismissed. It
-      // closes by itself once the code is approved.
+      // closes by itself once the code is approved. After any action the
+      // countdown doubles as a fallback hint.
       $("auth-open").addEventListener("click", () => {
         location.href = $("auth-open").dataset.app;
       });
@@ -1600,8 +1778,48 @@
         const url = $("auth-web-btn").dataset.web;
         if (url) window.open(url, "_blank", "noopener");
       });
+      // Authenticate or leave: the pairing popup cannot be dismissed. It
+      // closes by itself once the code is approved. Copy shares the generic
+      // data-copy dispatcher (same path as the torrent rows).
       authDialog.addEventListener("cancel", (e) => e.preventDefault()); // block Escape
       authDialog.addEventListener("close", () => stopAuthPolling());
+
+      // ---- Copy (single shared path for every copy affordance) ------------------
+      async function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+        // Fallback for plain-HTTP (non-secure) origins. Host the helper
+        // textarea inside the active modal dialog if one is open: siblings of
+        // a dialog[open] are inert, so body-level nodes cannot hold a
+        // selection there and execCommand('copy') would silently no-op.
+        const host = document.querySelector("dialog[open]") || document.body;
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        host.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand("copy");
+        ta.remove();
+        if (!ok) throw new Error("copy command failed");
+      }
+
+      document.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-copy]");
+        if (!btn || btn.disabled || !btn.dataset.copy) return;
+        try {
+          await copyText(btn.dataset.copy);
+          toast(btn.dataset.toastLabel || "Magnet link copied", "📋", {
+            variant: "success",
+            duration: 2500,
+          });
+        } catch {
+          toast(btn.dataset.toastError || "Copy failed", "📋", { variant: "error", duration: 2500 });
+        }
+      });
 
       // ---- Filename tooltip toggle (ⓘ) ----------------------------------------
       const filenameTooltip = $("filename-tooltip");
@@ -1631,56 +1849,35 @@
         btn.setAttribute("aria-expanded", "true");
       }
 
-      $("rows").addEventListener("click", (e) => {
+      document.addEventListener("click", (e) => {
         const btn = e.target.closest("button[data-info]");
-        if (!btn) return;
+        if (!btn) {
+          closeFilenameTooltip();
+          return;
+        }
         const shouldOpen = !btn.classList.contains("tooltip-open");
         closeFilenameTooltip();
         if (shouldOpen) openFilenameTooltip(btn);
       });
-      document.addEventListener("click", (e) => {
-        if (!e.target.closest("button[data-info]")) closeFilenameTooltip();
-      });
       document.querySelector(".results-scroll").addEventListener("scroll", closeFilenameTooltip);
       window.addEventListener("resize", closeFilenameTooltip);
 
-      // ---- Copy-magnet (icon button, event delegation) --------------------------
-      async function copyText(text) {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-          return;
-        }
-        // Fallback for plain-HTTP (non-secure) origins
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        ta.remove();
-      }
-
-      document.addEventListener("click", async (e) => {
-        const btn = e.target.closest("button[data-copy]");
-        if (!btn || btn.disabled) return;
-        try {
-          await copyText(btn.dataset.copy);
-          toast("Magnet link copied", "📋", {
-            variant: "success",
-            duration: 2500,
-          });
-        } catch {
-          toast("Copy failed", "📋", { variant: "error", duration: 2500 });
-        }
-      });
-
-      // ---- Send-to-Telegram popup ----------------------------------------------
-      // The https t.me auto-handoff drops the ?text= draft on some phones; an
-      // explicit tap on tg://resolve preserves it, so the button opens this
-      // confirm popup and fires the scheme directly.
+      // ---- Forward-to-Telegram popup -------------------------------------------
+      // Same layout as the pairing popup: title (dismissible here), QR, - OR -,
+      // three actions, centered status. PRUNE_MAGNET_LINKS=true prunes the
+      // draft magnet here AND in /forward_telegram (every Telegram path);
+      // copy/magnet buttons always keep the full original magnet.
       const tgDialog = $("tg-dialog");
       let tgTimer = null;
+      let tgMessage = "";
+      function prunedMagnet(magnet) {
+        const m = String(magnet || "");
+        const xt = m.match(/[?&]xt=urn:btih:([^&]+)/i);
+        if (!xt) return m;
+        const dnMatch = m.match(/[?&]dn=([^&]*)/i);
+        const dn = dnMatch ? decodeURIComponent(dnMatch[1]) : "";
+        return `magnet:?xt=urn:btih:${xt[1]}${dn ? `&dn=${encodeURIComponent(dn)}` : ""}`;
+      }
       function tgLinks(text) {
         return {
           app: `tg://resolve?domain=${encodeURIComponent(session.handle)}&text=${encodeURIComponent(text)}`,
@@ -1688,13 +1885,24 @@
         };
       }
 
-      function openTgDialog(text) {
-        $("tg-handle").textContent = session.handle;
-        $("tg-payload").textContent = text;
-        const links = tgLinks(text);
+      function setTgStatus(text, cls) {
+        const el = $("tg-status");
+        el.textContent = text;
+        el.classList.remove("ok", "bad", "waiting");
+        if (cls) el.classList.add(cls);
+      }
+
+      function openTgDialog(magnet) {
+        const raw = magnet || "";
+        tgMessage = `Download this torrent: ${session.prune ? prunedMagnet(raw) : raw}`;
+        const copyBtn = $("tg-copy-msg");
+        copyBtn.dataset.copy = tgMessage;
+        copyBtn.dataset.toastLabel = "Download message copied - paste it in your Telegram chat with the bot";
+        const links = tgLinks(tgMessage);
         $("tg-open").dataset.app = links.app;
         $("tg-web-btn").dataset.web = links.web;
-        $("tg-hint").classList.remove("visible");
+        $("tg-status").textContent = "";
+        drawQr("tg-qr", links.app);
         tgDialog.showModal();
       }
 
@@ -1702,12 +1910,18 @@
         const a = e.target.closest("a[data-tg]");
         if (!a) return;
         e.preventDefault();
+        if (!session.authenticated || !session.handle) {
+          toast("Telegram is not paired on this browser", "Telegram", { variant: "warning" });
+          return;
+        }
         openTgDialog(a.dataset.magnet || "");
       });
       $("tg-open").addEventListener("click", () => {
         location.href = $("tg-open").dataset.app;
         clearTimeout(tgTimer);
-        tgTimer = setTimeout(() => $("tg-hint").classList.add("visible"), 2000);
+        tgTimer = setTimeout(() => {
+          setTgStatus("Telegram didn't open? The app may not be installed - use t.me or Copy Message instead.", "waiting");
+        }, 2000);
       });
       $("tg-web-btn").addEventListener("click", () => {
         const url = $("tg-web-btn").dataset.web;

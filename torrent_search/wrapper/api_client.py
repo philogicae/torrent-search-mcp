@@ -1,8 +1,9 @@
 import logging
+from asyncio import Task, create_task, shield
 from contextlib import suppress
 from os import getenv
 from sys import argv
-from typing import Any
+from typing import Any, ClassVar
 
 from aiocache import cached
 
@@ -74,6 +75,21 @@ class TorrentSearchApi:
     """A client for searching torrents."""
 
     CACHE: Cache = Cache()
+    _inflight: ClassVar[dict[str, Task[Any]]] = {}
+
+    async def _single_flight(self, key: str, factory: Any) -> Any:
+        """Coalesce concurrent identical cold misses into one task."""
+        while True:
+            existing = self._inflight.get(key)
+            if existing is None:
+                break
+            return await shield(existing)
+        task = create_task(factory())
+        self._inflight[key] = task
+        try:
+            return await task
+        finally:
+            self._inflight.pop(key, task)
 
     def available_sources(self) -> list[str]:
         """Get the list of available torrent sources (display domains)."""
@@ -96,7 +112,10 @@ class TorrentSearchApi:
             A list of torrent results.
         """
         query = query.lower()
-        found_torrents = await search_torrents(query, SOURCES)
+        found_torrents = await self._single_flight(
+            f"search:{query}:{max_items}",
+            lambda: search_torrents(query, SOURCES),
+        )
 
         found_torrents = sorted(
             found_torrents,
@@ -124,7 +143,10 @@ class TorrentSearchApi:
         Returns:
             A list of torrent results ranked by seeders + leechers.
         """
-        found_torrents = await scrape_popular_torrents(per_source=per_source)
+        found_torrents = await self._single_flight(
+            f"popular:{per_source}",
+            lambda: scrape_popular_torrents(per_source=per_source),
+        )
 
         for torrent in found_torrents:
             torrent.source = display_source(torrent.source or "")

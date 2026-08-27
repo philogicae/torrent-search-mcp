@@ -3,8 +3,15 @@ from typing import Any
 
 import pytest
 
+from torrent_search import api_server
 from torrent_search.wrapper import parser
 from torrent_search.wrapper.models import Torrent
+
+
+@pytest.fixture(autouse=True)
+def hermetic_prune_flag(monkeypatch: Any) -> None:
+    """Ambient .env (auto-loaded by uv run) must not flip module constants."""
+    monkeypatch.setattr(api_server, "_PRUNE_MAGNET_LINKS", False)
 
 
 @pytest.fixture(autouse=True)

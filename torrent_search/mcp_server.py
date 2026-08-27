@@ -148,6 +148,12 @@ async def search_torrents(
     - Recommend the **top 3-5** results maximum.
     - For each recommendation, include: Filename, Size, Seeds/Leechs, Date, Source, and a 1-sentence "Why this?" reason.
     - If results are poor, irrelevant or too diverse, suggest specific keywords to improve the search.
+
+    # Pruned magnets (PRUNE_MAGNET_LINKS=true):
+    - Pruned magnets look like magnet:?xt=urn:btih:INFO_HASH&dn=URL_ENCODED_DISPLAY_NAME (trackers stripped).
+    - When reusing one, replace the dn value with a clean/readable/normalized re-encoded display name:
+      percent-decode it, tidy separators (dots/underscores/dashes -> spaces), strip release noise
+      (e.g. quality/tag suffixes) unless requested, then percent-encode the result for use in the URI.
     """
     _ = user_intent
     logger.info(f"Searching for torrents: {query}")
@@ -203,7 +209,14 @@ async def get_torrent(
         ),
     ],
 ) -> str:
-    """Get the magnet link for a specific torrent by id."""
+    """Get the magnet link for a specific torrent by id.
+
+    Note on pruned magnets (when PRUNE_MAGNET_LINKS=true): pruned magnets keep
+    only magnet:?xt=urn:btih:INFO_HASH&dn=URL_ENCODED_DISPLAY_NAME — every
+    &tr= tracker is stripped. When re-using one, replace the dn value with a
+    clean/readable/normalized re-encoded display name: percent-decode it,
+    tidy separators (dots/dashes -> spaces), then percent-encode the result.
+    """
     logger.info(f"Getting magnet link for torrent: {torrent_id}")
     if API_BASE_URL:
         try:

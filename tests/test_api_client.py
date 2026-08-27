@@ -230,3 +230,29 @@ def test_key_builder_scopes_by_function() -> None:
 
     assert ac.key_builder(one) != ac.key_builder(two)
     assert ac.key_builder(one) == ac.key_builder(one)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cold_misses_coalesce(monkeypatch: Any) -> None:
+    """Identical concurrent searches share one scrape (single-flight)."""
+    import asyncio
+
+    calls: list[str] = []
+
+    async def fake_search(
+        query: str, sources: list[str] | None = None
+    ) -> list[Torrent]:
+        calls.append(query)
+        await asyncio.sleep(0.05)
+        return [_torrent(9, f"magnet:?xt=urn:btih:{'d' * 40}&dn=x")]
+
+    monkeypatch.setattr(ac, "search_torrents", fake_search)
+    await ac.TorrentSearchApi.search_torrents.cache.clear()
+    api = ac.TorrentSearchApi()
+    results = await asyncio.gather(
+        api.search_torrents("flight query"),
+        api.search_torrents("Flight QUERY"),  # key_builder lowercases
+    )
+    assert len(calls) == 1  # one underlying scrape for both callers
+    assert results[0] == results[1]
+    await ac.TorrentSearchApi.search_torrents.cache.clear()

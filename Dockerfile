@@ -9,5 +9,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY torrent_search /app/torrent_search
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
+ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 CMD ["torrent-search-mcp", "--mode", "http"]

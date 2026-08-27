@@ -142,7 +142,12 @@ def test_rate_limiter_drops_expired_events(monkeypatch: Any) -> None:
 def test_session_states(client: TestClient, auth_env: Any) -> None:
     unauth = client.get("/telegram/session").json()
     # The handle is public (pairing deep links need it); tokens are the gate.
-    assert unauth == {"enabled": True, "authenticated": False, "handle": "mybot"}
+    assert unauth == {
+        "enabled": True,
+        "authenticated": False,
+        "handle": "mybot",
+        "prune_magnet_links": False,
+    }
     # A bogus token is rejected.
     bogus = client.get(
         "/telegram/session", headers={"Authorization": "Bearer nope"}
@@ -182,7 +187,12 @@ def test_full_pairing_flow(client: TestClient, auth_env: Any) -> None:
     session = client.get(
         "/telegram/session", headers={"Authorization": f"Bearer {token}"}
     ).json()
-    assert session == {"enabled": True, "authenticated": True, "handle": "mybot"}
+    assert session == {
+        "enabled": True,
+        "authenticated": True,
+        "handle": "mybot",
+        "prune_magnet_links": False,
+    }
 
     # Logout revokes the token server-side.
     assert (
@@ -240,6 +250,7 @@ def test_disabled_without_bot_handle(monkeypatch: Any) -> None:
         "enabled": False,
         "authenticated": True,
         "handle": None,
+        "prune_magnet_links": False,
     }
 
 

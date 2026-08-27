@@ -3,10 +3,12 @@ import secrets
 from os import getenv
 from pathlib import Path as PathLib
 
+import httpx
 from fastapi import FastAPI, HTTPException, Path, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from minify_html import minify
+from pydantic import BaseModel
 
 from .wrapper import Torrent, TorrentSearchApi
 from .wrapper.telegram_auth import (
@@ -15,6 +17,7 @@ from .wrapper.telegram_auth import (
     TelegramAuthStore,
     new_session_token,
 )
+from .wrapper.utils import prune_magnet
 
 logger = logging.getLogger("Torrent Search")
 
@@ -26,6 +29,13 @@ api_client = TorrentSearchApi()
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 _STATIC_DIR = PathLib(__file__).parent / "static"
 _TELEGRAM_BOT_HANDLE = getenv("TELEGRAM_BOT_HANDLE") or None
+_TELEGRAM_BOT_TOKEN = getenv("TELEGRAM_BOT_TOKEN") or None
+_PRUNE_MAGNET_LINKS = str(getenv("PRUNE_MAGNET_LINKS", "false")).strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
 _REGISTER_SECRET = getenv("TORRENT_SEARCH_API_KEY") or None
 _WEBUI_HTML = minify(
     (_STATIC_DIR / "index.html").read_text(encoding="utf-8"),
@@ -37,6 +47,16 @@ _CHALLENGES = ChallengeManager()
 _CHALLENGE_LIMITER = RateLimiter(max_events=5, per_seconds=60)
 _REGISTER_LIMITER = RateLimiter(max_events=10, per_seconds=60)
 _POLL_LIMITER = RateLimiter(max_events=60, per_seconds=60)
+_FORWARD_LIMITER = RateLimiter(max_events=20, per_seconds=60)
+_bot_client: httpx.AsyncClient | None = None
+
+
+def _bot() -> httpx.AsyncClient:
+    global _bot_client
+    if _bot_client is None:
+        _bot_client = httpx.AsyncClient(base_url="https://api.telegram.org", timeout=15)
+    return _bot_client
+
 
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
@@ -169,6 +189,7 @@ async def telegram_session(request: Request) -> dict[str, object]:
         "enabled": enabled,
         "authenticated": authenticated or not enabled,
         "handle": _TELEGRAM_BOT_HANDLE,
+        "prune_magnet_links": _PRUNE_MAGNET_LINKS,
     }
 
 
@@ -277,3 +298,65 @@ async def telegram_logout(request: Request) -> dict[str, str]:
     if revoked:
         logger.info("Telegram session revoked via logout.")
     return {"status": "logged_out"}
+
+
+class ForwardPayload(BaseModel):
+    """Torrent info accepted by ``/forward_telegram``."""
+
+    filename: str
+    magnet_link: str
+    size: str | None = None
+    seeders: int | None = None
+
+
+@app.post(
+    "/forward_telegram",
+    summary="Forward Torrent To Telegram",
+    tags=["Telegram"],
+)
+async def forward_telegram(request: Request, payload: ForwardPayload) -> dict[str, str]:
+    """
+    Send a torrent to the Telegram chat bound to the browser's session token.
+    Requires ``TELEGRAM_BOT_TOKEN``. When ``PRUNE_MAGNET_LINKS`` is enabled the
+    forwarded magnet is pruned to ``magnet:?xt=urn:btih:HASH&dn=<filename>``;
+    otherwise the original magnet (trackers included) is sent as-is.
+    """
+    chat_id = _AUTH_STORE.chat_id_for_token(_bearer_token(request))
+    if not _TELEGRAM_BOT_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Telegram forwarding disabled: TELEGRAM_BOT_TOKEN not configured.",
+        )
+    if not chat_id:
+        raise HTTPException(status_code=401, detail="Valid session required.")
+    if not _FORWARD_LIMITER.allow(chat_id):
+        raise HTTPException(status_code=429, detail="Too many forwards.")
+    magnet = (
+        prune_magnet(payload.magnet_link, payload.filename)
+        if _PRUNE_MAGNET_LINKS
+        else payload.magnet_link
+    )
+    lines = [f"🐋 {payload.filename}"]
+    if payload.size:
+        lines.append(f"Size: {payload.size}")
+    if payload.seeders is not None:
+        lines.append(f"Seeders: {payload.seeders}")
+    lines.append(magnet)
+    try:
+        bot_response = await _bot().post(
+            f"/bot{_TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={
+                "chat_id": chat_id,
+                "text": "\n".join(lines),
+                "disable_web_page_preview": True,
+            },
+        )
+        bot_response.raise_for_status()
+        data = bot_response.json()
+        if not data.get("ok"):
+            raise ValueError(str(data.get("description", "unknown error")))
+    except Exception as e:
+        logger.warning("Telegram forward failed for chat %s: %s", chat_id, e)
+        raise HTTPException(status_code=502, detail="Telegram send failed.") from e
+    logger.info("Torrent forwarded to chat %s.", chat_id)
+    return {"status": "sent"}

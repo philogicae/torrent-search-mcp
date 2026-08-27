@@ -244,9 +244,13 @@ async def authorize_webapp(
 ) -> str:
     """Authorize a browser on the Torrent Search webapp via its pairing code.
 
-    Ask the user for the code displayed in their Telegram Access gate, then call this
-    tool once with it and your Telegram chat id. Codes are single-use and expire
-    after ~15 minutes. The browser polls until confirmed, then stores its token.
+    The code comes from the user's chat: they click "Open in Telegram", scan
+    the QR code, or copy the login message on the webapp gate, which sends
+    "Authorize <CODE> for Torrent Search" to the bot. Take the code from that
+    message and call this tool with it and the user's Telegram chat id.
+    Codes are single-use and expire after 5 minutes. After approval the user
+    MUST go back to the website tab: the browser polls and completes the
+    authentication there (it shows "Access granted" and unlocks the app).
     """
     logger.info("Authorizing webapp access for chat %s", chat_id)
     secret = getenv("TORRENT_SEARCH_API_KEY")
@@ -270,16 +274,27 @@ async def authorize_webapp(
     if response.status_code == 401:
         return "Authorization rejected: TORRENT_SEARCH_API_KEY does not match the API server."
     response.raise_for_status()
-    return "Access granted. The Web UI will confirm within a few seconds and remember this browser."
+    return (
+        "Access granted. Tell the user to go back to the webapp tab: the "
+        "browser will confirm the pairing there within a few seconds and "
+        "remember it. Until they return to the site, authentication is not "
+        "complete."
+    )
 
 
 @mcp.tool()
 async def torrent_webapp() -> str:
     """Present the Torrent Search web UI and its Telegram pairing access system.
 
-    Returns the webapp URL (WEBUI_URL) plus how a browser gets authorized:
-    the user opens the URL, a pairing code appears, and calling
-    authorize_webapp with that code grants the browser permanent access.
+    Returns the webapp URL (WEBUI_URL) plus how a browser gets authorized.
+    Tell the user to open the URL: on first visit the site shows a pairing
+    dialog with a QR code and buttons ("Open in Telegram", "Copy Login").
+    Ask the user to scan the QR code, click "Open in Telegram", or copy the
+    login message and send it to the bot in their Telegram chat — do NOT ask
+    them to paste the pairing code here. That message ("Authorize <CODE> for
+    Torrent Search") carries the code; when it arrives, extract it and call
+    authorize_webapp with it and the user's Telegram chat id. Codes expire
+    after 5 minutes.
     """
     url = getenv("WEBUI_URL", "").rstrip("/")
     if not url:
@@ -295,5 +310,5 @@ async def torrent_webapp() -> str:
         "Access is pairing-gated: on first visit the site shows a one-time "
         "pairing code. Ask the user for that code, then call the "
         "authorize_webapp tool with it (and your Telegram chat id) to grant "
-        "the browser permanent access. Codes expire after ~15 minutes."
+        "the browser permanent access. Codes expire after 5 minutes."
     )

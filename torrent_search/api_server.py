@@ -49,9 +49,9 @@ _WEBUI_HTML = minify(
 )
 _AUTH_STORE = TelegramAuthStore()
 _CHALLENGES = ChallengeManager()
-_CHALLENGE_LIMITER = RateLimiter(max_events=5, per_seconds=60)
-_REGISTER_LIMITER = RateLimiter(max_events=10, per_seconds=60)
-_POLL_LIMITER = RateLimiter(max_events=60, per_seconds=60)
+_CHALLENGE_LIMITER = RateLimiter(max_events=60, per_seconds=60)
+_REGISTER_LIMITER = RateLimiter(max_events=30, per_seconds=60)
+_POLL_LIMITER = RateLimiter(max_events=300, per_seconds=60)
 _FORWARD_LIMITER = RateLimiter(max_events=20, per_seconds=60)
 _bot_client: httpx.AsyncClient | None = None
 

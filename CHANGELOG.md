@@ -1,3 +1,17 @@
+## [4.3.1] - 2026-08-27
+
+### 🐛 Bug Fixes
+
+- Fix: relax rate limits, clarify webapp auth flow in tool docstrings
+
+- challenge/register/poll limiters raised to 60/30/300 per minute (from 5/10/60)
+- authorize_webapp: explain code comes from user's Telegram message after QR/button action, stress user must return to webapp tab to complete pairing
+- torrent_webapp: detail pairing dialog (QR, buttons), clarify user sends login message to bot (not paste code), correct 5min expiry
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.3.0] - 2026-08-27
 
 ### 🚀 Features

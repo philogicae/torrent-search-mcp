@@ -147,6 +147,7 @@ def test_session_states(client: TestClient, auth_env: Any) -> None:
         "authenticated": False,
         "handle": "mybot",
         "prune_magnet_links": False,
+        "agent_name": None,
     }
     # A bogus token is rejected.
     bogus = client.get(
@@ -192,6 +193,7 @@ def test_full_pairing_flow(client: TestClient, auth_env: Any) -> None:
         "authenticated": True,
         "handle": "mybot",
         "prune_magnet_links": False,
+        "agent_name": None,
     }
 
     # Logout revokes the token server-side.
@@ -251,6 +253,7 @@ def test_disabled_without_bot_handle(monkeypatch: Any) -> None:
         "authenticated": True,
         "handle": None,
         "prune_magnet_links": False,
+        "agent_name": None,
     }
 
 

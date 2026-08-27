@@ -9,9 +9,16 @@ from torrent_search.wrapper.models import Torrent
 
 
 @pytest.fixture(autouse=True)
-def hermetic_prune_flag(monkeypatch: Any) -> None:
+def hermetic_env(monkeypatch: Any) -> None:
     """Ambient .env (auto-loaded by uv run) must not flip module constants."""
     monkeypatch.setattr(api_server, "_PRUNE_MAGNET_LINKS", False)
+    monkeypatch.setattr(api_server, "_TELEGRAM_BOT_HANDLE", None)
+    monkeypatch.setattr(api_server, "_TELEGRAM_BOT_TOKEN", None)
+    monkeypatch.setattr(api_server, "_TELEGRAM_AGENT_NAME", None)
+    monkeypatch.setattr(api_server, "_TELEGRAM_MSG_FORWARD", None)
+    monkeypatch.setattr(api_server, "_AGENT_RELAY_URL", None)
+    monkeypatch.setattr(api_server, "_AGENT_RELAY_TOKEN", None)
+    monkeypatch.setattr(api_server, "_AGENT_MODE", False)
 
 
 @pytest.fixture(autouse=True)

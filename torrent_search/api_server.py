@@ -30,6 +30,11 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 _STATIC_DIR = PathLib(__file__).parent / "static"
 _TELEGRAM_BOT_HANDLE = getenv("TELEGRAM_BOT_HANDLE") or None
 _TELEGRAM_BOT_TOKEN = getenv("TELEGRAM_BOT_TOKEN") or None
+_TELEGRAM_AGENT_NAME = getenv("TELEGRAM_AGENT_NAME") or None
+_TELEGRAM_MSG_FORWARD = getenv("TELEGRAM_MSG_FORWARD") or None
+_AGENT_RELAY_URL = getenv("AGENT_RELAY_URL") or None
+_AGENT_RELAY_TOKEN = getenv("AGENT_RELAY_TOKEN") or None
+_AGENT_MODE = all((_AGENT_RELAY_URL, _AGENT_RELAY_TOKEN))
 _PRUNE_MAGNET_LINKS = str(getenv("PRUNE_MAGNET_LINKS", "false")).strip().lower() in (
     "1",
     "true",
@@ -56,6 +61,16 @@ def _bot() -> httpx.AsyncClient:
     if _bot_client is None:
         _bot_client = httpx.AsyncClient(base_url="https://api.telegram.org", timeout=15)
     return _bot_client
+
+
+_relay_client: httpx.AsyncClient | None = None
+
+
+def _relay() -> httpx.AsyncClient:
+    global _relay_client
+    if _relay_client is None:
+        _relay_client = httpx.AsyncClient(timeout=15)
+    return _relay_client
 
 
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
@@ -190,6 +205,7 @@ async def telegram_session(request: Request) -> dict[str, object]:
         "authenticated": authenticated or not enabled,
         "handle": _TELEGRAM_BOT_HANDLE,
         "prune_magnet_links": _PRUNE_MAGNET_LINKS,
+        "agent_name": _TELEGRAM_AGENT_NAME if _AGENT_MODE else None,
     }
 
 
@@ -317,12 +333,16 @@ class ForwardPayload(BaseModel):
 async def forward_telegram(request: Request, payload: ForwardPayload) -> dict[str, str]:
     """
     Send a torrent to the Telegram chat bound to the browser's session token.
-    Requires ``TELEGRAM_BOT_TOKEN``. When ``PRUNE_MAGNET_LINKS`` is enabled the
-    forwarded magnet is pruned to ``magnet:?xt=urn:btih:HASH&dn=<filename>``;
-    otherwise the original magnet (trackers included) is sent as-is.
+    When ``PRUNE_MAGNET_LINKS`` is enabled the forwarded magnet is pruned to
+    ``magnet:?xt=urn:btih:HASH&dn=<filename>``; otherwise the original magnet
+    (trackers included) is sent as-is. In agent mode (``AGENT_RELAY_URL`` plus
+    ``AGENT_RELAY_TOKEN``) the torrent is POSTed to the agent's HTTP relay
+    instead of the Telegram Bot API (bots never receive bot-authored
+    Telegram messages); ``TELEGRAM_AGENT_NAME`` and ``TELEGRAM_MSG_FORWARD``
+    provide the relay sender and notice.
     """
     chat_id = _AUTH_STORE.chat_id_for_token(_bearer_token(request))
-    if not _TELEGRAM_BOT_TOKEN:
+    if not _TELEGRAM_BOT_TOKEN and not _AGENT_MODE:
         raise HTTPException(
             status_code=503,
             detail="Telegram forwarding disabled: TELEGRAM_BOT_TOKEN not configured.",
@@ -336,18 +356,36 @@ async def forward_telegram(request: Request, payload: ForwardPayload) -> dict[st
         if _PRUNE_MAGNET_LINKS
         else payload.magnet_link
     )
+    if _AGENT_MODE:
+        try:
+            relay_response = await _relay().post(
+                _AGENT_RELAY_URL or "",
+                json={
+                    "chat_id": chat_id,
+                    "sender": _TELEGRAM_AGENT_NAME or "TorrentSearch",
+                    "notice": _TELEGRAM_MSG_FORWARD or "",
+                    "prompt": f"Download this torrent: {magnet}",
+                },
+                headers={"X-Relay-Token": _AGENT_RELAY_TOKEN or ""},
+            )
+            relay_response.raise_for_status()
+        except Exception as e:
+            logger.warning("Agent relay failed for chat %s: %s", chat_id, e)
+            raise HTTPException(status_code=502, detail="Agent relay failed.") from e
+        logger.info("Torrent forwarded to agent for chat %s.", chat_id)
+        return {"status": "sent"}
     lines = [f"🐋 {payload.filename}"]
     if payload.size:
         lines.append(f"Size: {payload.size}")
     if payload.seeders is not None:
         lines.append(f"Seeders: {payload.seeders}")
-    lines.append(magnet)
+    text = "\n".join([*lines, magnet])
     try:
         bot_response = await _bot().post(
             f"/bot{_TELEGRAM_BOT_TOKEN}/sendMessage",
             json={
                 "chat_id": chat_id,
-                "text": "\n".join(lines),
+                "text": text,
                 "disable_web_page_preview": True,
             },
         )

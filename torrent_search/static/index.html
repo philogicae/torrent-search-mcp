@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Lato:wght@300;400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <style>
@@ -38,10 +38,14 @@
         --src-fg-l: 72%;
         --src-bg-s: 45%;
         --src-bg-l: 17%;
+        /* Spacing scale fallback: oat.css loads async, dialogs must never
+           render with zero padding/margins before it lands. Same values. */
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
       }
       body[data-theme="dark"] {
         color-scheme: dark;
-        --bg: #101014;
         --bg-deep: #0a0a0d;
         /* Parallax-stars sky: template hues (#1B2735/#090A0F), lifted. */
         --sky-hi: #243349;
@@ -52,20 +56,18 @@
         --border: #3a4a63;
         --border-faint: #2a3850;
         --border-strong: #4d5f7d;
-        --text-muted: #7a7a7a;
-        --text-2: #8a8a8a;
-        --text-3: #c5c5c5;
-        --text: #e5e5e5;
+        --text-muted: #9a9a9a;
+        --text-2: #a8a8a8;
+        --text-3: #d6d6d6;
+        --text: #f2f2f2;
         --heading: #ffffff;
         --accent: #c5ff4a;
-        --accent-ink: #0c1200;
         --accent-dim: rgba(197, 255, 74, 0.1);
         --accent-line: #597321;
         --input-bg: #1d2635;
       }
       body[data-theme="light"] {
         color-scheme: light;
-        --bg: #e4e4d8;
         --bg-deep: #d6d6c8;
         --sky-hi: #ececdf;
         --sky-lo: #c9c9b8;
@@ -75,13 +77,12 @@
         --border: #d7d7cb;
         --border-faint: #e5e5db;
         --border-strong: #bcbcb0;
-        --text-muted: #83867a;
-        --text-2: #55584e;
-        --text-3: #33362e;
-        --text: #1d1f1a;
+        --text-muted: #5f6254;
+        --text-2: #45483f;
+        --text-3: #262922;
+        --text: #111310;
         --heading: #101208;
         --accent: #55731d;
-        --accent-ink: #ffffff;
         --accent-dim: rgba(85, 115, 29, 0.1);
         --accent-line: #c5ff4a;
         --input-bg: #ffffff;
@@ -113,8 +114,7 @@
         flex-direction: column;
       }
       button,
-      input,
-      select {
+      input {
         font-family: inherit;
       }
       /* Thin, mobile-like scrollbars everywhere (incl. WebKit) */
@@ -134,27 +134,21 @@
         border-radius: 3px;
       }
       /* ------------------------------------------------------------------
-         Pairing gate: fullscreen overlay over the shared sky, with a
-         centered pairing card. Shown whenever the browser has no valid token.
+         Pairing gate: fullscreen black scene, shown
+         whenever the browser has no valid token.
          ------------------------------------------------------------------ */
       #gate {
         position: fixed;
         inset: 0;
         z-index: 500;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        background: #0d0d0d; /* 95% black */
       }
-      /* Without this, the shield's display:flex would beat the hidden
-         attribute and keep blocking every wheel/click on the app. */
       #gate[hidden] {
         display: none;
       }
-      /* The pairing dialog floats centered above the app. */
-      #gate #auth-dialog,
-      #gate dialog[open] {
-        position: relative;
-        z-index: 2;
+      body:has(#gate:not([hidden])) #masthead,
+      body:has(#gate:not([hidden])) #page-footer {
+        display: none;
       }
       /* ------------------------------------------------------------------
          App shell
@@ -204,7 +198,7 @@
       }
       h1 .wave {
         font-size: 1.1rem;
-        transform: translateY(0.05rem);
+        transform: translateY(-0.2rem);
       }
       h1 .word-accent {
         font-style: italic;
@@ -236,18 +230,18 @@
       /* Theme flip: one sky-blue chip in both themes (reads as night or day
          depending on the mode; never cyan). */
       #theme-toggle {
-        background: #3d85c6;
-        border-color: #2f6ba3;
+        background: #0e33ab;
+        border-color: #011040;
         color: #f0f7ff;
       }
       #auth-lock.authed {
-        background: var(--up);
-        border-color: color-mix(in srgb, var(--up) 70%, black);
+        background: #33a158;
+        border-color: #063817;
         color: #06210f;
       }
       #auth-lock.locked {
-        background: var(--down);
-        border-color: color-mix(in srgb, var(--down) 70%, black);
+        background: #872b30;
+        border-color: #54080c;
         color: #2b0608;
       }
       main.container {
@@ -824,7 +818,8 @@
       /* Dialogs (send + auth pairing) */
       dialog {
         --dlg-pad: var(--space-4);
-        width: min(24rem, calc(100vw - 2rem));
+        width: min(18rem, calc(100vw - 2rem)); /* one size for every dialog */
+        max-height: calc(100dvh - 2rem); /* short/landscape screens: scroll, never clip */
         padding: 0;
         background: var(--card);
         color: var(--text);
@@ -838,6 +833,8 @@
       }
       dialog .dlg-body {
         position: relative;
+        max-height: inherit;
+        overflow: auto;
         padding: var(--dlg-pad);
       }
       /* Dismiss (download popup only; the pairing gate is intentionally
@@ -864,30 +861,27 @@
         border-color: var(--border-strong);
         color: var(--text);
       }
-      dialog .dlg-body::before {
-        content: "";
-        display: block;
-        height: 2px;
-        width: 2.2rem;
-        background: var(--accent);
-        margin-bottom: var(--space-3);
-      }
       dialog h2 {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        margin: 0 0 var(--space-2);
+        /* Full-bleed header band: hairline divider spans the whole modal,
+           edge to edge, with real padding below it before the content. */
+        margin: calc(-1 * var(--dlg-pad)) calc(-1 * var(--dlg-pad)) var(--space-3);
+        padding: calc(var(--dlg-pad) - 0.1rem) var(--dlg-pad) var(--space-2);
+        border-bottom: 1px solid var(--border);
         font-family: var(--serif);
         font-weight: 300;
-        font-size: 1.15rem;
+        font-size: 0.95rem;
+        white-space: nowrap;
         color: var(--heading);
       }
       dialog h2 .tg-badge {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 1.6rem;
-        height: 1.6rem;
+        width: 1.4rem;
+        height: 1.4rem;
         border-radius: 4px;
         background: var(--accent-dim);
         border: 1px solid var(--accent-line);
@@ -902,18 +896,21 @@
         align-items: center;
         gap: var(--space-2);
       }
-      /* Single-row variant used by the pairing + forward dialogs. */
+      /* Single-row variant used by the pairing + forward dialogs: stretched
+         to the same width as the QR panel above it. */
       dialog .dlg-actions.row {
         flex-wrap: nowrap;
         justify-content: center;
+        gap: 0.25rem;
       }
       dialog .dlg-actions.row button {
+        flex: 1 1 0; /* equal widths: every modal button the same size */
+        min-width: 0;
         white-space: nowrap;
-        font-size: 0.56rem;
-        letter-spacing: 0.06em;
-        padding-inline: 0.5rem;
-        height: 1.75rem;
-        min-height: 1.75rem;
+        font-size: 0.5rem;
+        letter-spacing: 0.01em;
+        padding-inline: 0.3rem;
+        height: 1.9rem; /* same height as the base .dlg-actions button */
       }
       dialog .dlg-actions button {
         height: 1.9rem;
@@ -965,7 +962,8 @@
       #tg-status.bad {
         color: var(--down);
       }
-      /* QR pairing code on a white card (dark modules need contrast) */
+      /* QR panel: white backing (dark modules + quiet zone need contrast),
+         stretched to a 0.4rem breathing gap from the modal borders. */
       .qr-box {
         display: flex;
         align-items: center;
@@ -973,15 +971,12 @@
         margin: 0 0 var(--space-3);
         background: #ffffff;
         border-radius: 6px;
-        padding: 0.2rem; /* white backing hugs the code, no fat border */
-        width: fit-content;
-      }
-      .qr-box.center {
-        margin-inline: auto;
+        padding: 0.4rem; /* doubles as the QR quiet zone */
       }
       .qr-box svg {
-        width: 10.5rem;
-        height: 10.5rem;
+        width: 100%; /* spans the same width as the actions row below */
+        height: auto;
+        aspect-ratio: 1;
         display: block;
       }
       .or-sep {
@@ -1000,6 +995,59 @@
         flex: 1;
         height: 1px;
         background: var(--border-faint);
+      }
+      /* Agent relay mode: torrent card inside the forward dialog */
+      #tg-agent[hidden] {
+        display: none;
+      }
+      .agent-lead {
+        margin: 0 0 var(--space-3);
+        font-size: 0.8rem;
+        color: var(--text-3);
+      }
+      .agent-card {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        padding: var(--space-3);
+        background: color-mix(in srgb, var(--raised) 60%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+      }
+      .agent-card dl {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.2rem 0.7rem;
+        align-items: center;
+        margin: 0;
+      }
+      .agent-card dt {
+        font-family: var(--mono);
+        font-size: 0.56rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+      .agent-card dd {
+        margin: 0;
+        font-size: 0.76rem;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .agent-card dd.wrap {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      .agent-card dd.se {
+        color: var(--up);
+      }
+      .agent-card dd.le {
+        color: var(--down);
+      }
+      #tg-agent .dlg-actions {
+        margin-top: var(--space-3);
       }
       @media (max-width: 1024px) {
         #tiles {
@@ -1185,7 +1233,7 @@
         <div class="dlg-actions row">
           <button id="auth-open">Open in Telegram</button>
           <button id="auth-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
-          <button id="auth-copy-msg" title="Copy the login message to send to the bot">Copy Login Message</button>
+          <button id="auth-copy-msg" title="Copy the login message to send to the bot">Copy Login</button>
         </div>
         <p id="auth-status" class="pair-status waiting">Waiting for approval...</p>
       </div>
@@ -1197,12 +1245,22 @@
         <h2 id="tg-title">
           <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Forward to Telegram
         </h2>
-        <div class="qr-box center" id="tg-qr" aria-label="Forward QR code"></div>
-        <div class="or-sep"><span>- OR -</span></div>
-        <div class="dlg-actions row">
-          <button id="tg-open">Open in Telegram</button>
-          <button id="tg-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
-          <button id="tg-copy-msg" title="Copy the download message to send to the bot">Copy Message</button>
+        <div id="tg-classic">
+          <div class="qr-box center" id="tg-qr" aria-label="Forward QR code"></div>
+          <div class="or-sep"><span>- OR -</span></div>
+          <div class="dlg-actions row">
+            <button id="tg-open">Open in Telegram</button>
+            <button id="tg-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
+            <button id="tg-copy-msg" title="Copy the download message to send to the bot">Copy Prompt</button>
+          </div>
+        </div>
+        <div id="tg-agent" hidden>
+          <p class="agent-lead" id="tg-agent-lead"></p>
+          <div class="agent-card" id="tg-agent-card"></div>
+          <div class="dlg-actions row">
+            <button id="tg-confirm">Confirm</button>
+            <button id="tg-cancel">Cancel</button>
+          </div>
         </div>
         <p id="tg-status" class="pair-status"></p>
       </div>
@@ -1212,7 +1270,6 @@
       // The oat UI library loads through indexed-cache (async blob swap), so
       // `ot` can be undefined when the app boots on a cold cache. Queue toasts
       // fired before it lands; flush once it defines itself.
-      window.ot = undefined;
       const otQueue = [];
       function toast(title, body, opts) {
         if (window.ot && window.ot.toast) window.ot.toast(title, body, opts);
@@ -1258,7 +1315,13 @@
       const SOURCE_ORDER = ["thepiratebay.org", "1337x.to", "uindex.org", "eztvx.to", "yts.vg", "nyaa.si", "fitgirl-repacks.site", "subsplease.org", "bittorrented.com"];
       const SESSION_KEY = "telegram_session_token";
       let viewMode = "sections"; // "search" = table, "sections" = popular tiles
-      const session = { enabled: false, authenticated: false, handle: null, prune: false };
+      const session = {
+        enabled: false,
+        authenticated: false,
+        handle: null,
+        prune: false,
+        agent_name: null,
+      };
 
       const $ = (id) => document.getElementById(id);
 
@@ -1339,11 +1402,33 @@
         if (!session.authenticated || !session.handle || !r.magnet_link) {
           return `<span title="Telegram unavailable" aria-label="Telegram unavailable">🚫</span>`;
         }
-        return `<a href="#" data-tg data-magnet="${escapeHtml(r.magnet_link)}" data-filename="${escapeHtml(r.filename)}" title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>`;
+        const attrs = [
+          `data-magnet="${escapeHtml(r.magnet_link)}"`,
+          `data-filename="${escapeHtml(r.filename)}"`,
+          `data-size="${escapeHtml(r.size)}"`,
+          `data-date="${escapeHtml(r.date)}"`,
+          `data-source="${escapeHtml(r.source)}"`,
+          `data-category="${escapeHtml(r.category)}"`,
+          `data-seeders="${escapeHtml(r.seeders)}"`,
+          `data-leechers="${escapeHtml(r.leechers)}"`,
+        ].join(" ");
+        return `<a href="#" data-tg ${attrs} title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>`;
       }
 
       function infoButtonHtml(r) {
-        return `<button class="info-btn ghost" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
+        return `<button class="info-btn" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
+      }
+
+      // Deterministic-hue chips, identical to the result list rendering.
+      function sourceChipHtml(r) {
+        if (!r.source) return "";
+        const hue = hueFor(r.source);
+        return sourceLinkHtml(r.source, ` style="color: hsl(${hue} var(--src-fg-s) var(--src-fg-l)); background: hsl(${hue} var(--src-bg-s) var(--src-bg-l))"`, 'class="chip"');
+      }
+      function categoryChipHtml(r) {
+        if (!r.category) return "";
+        const hue = hueFor(r.category);
+        return `<span class="chip" style="color: hsl(${hue} calc(var(--src-fg-s) - 10%) var(--src-fg-l)); background: hsl(${hue} calc(var(--src-bg-s) - 5%) var(--src-bg-l))">${escapeHtml(r.category)}</span>`;
       }
 
       function rowHtml(r) {
@@ -1352,19 +1437,12 @@
           ? `<a href="${escapeHtml(magnet)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>`
           : `<span title="No magnet link available" aria-label="No magnet link available">🚫</span>`;
         const copy = magnet
-          ? `<button class="ghost" data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
-          : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
+          ? `<button data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
+          : `<button title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
         const tg = tgButtons(r);
         const info = infoButtonHtml(r);
-        const srcHue = hueFor(r.source || "");
-        const catHue = hueFor(r.category || "");
-        const source = r.source
-          ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} var(--src-fg-s) var(--src-fg-l)); background: hsl(${srcHue} var(--src-bg-s) var(--src-bg-l))"`, 'class="chip"')
-          : "";
-        const category = r.category
-          ? `<span class="chip" style="color: hsl(${catHue} calc(var(--src-fg-s) - 10%) var(--src-fg-l)); background: hsl(${catHue} calc(var(--src-bg-s) - 5%) var(--src-bg-l))">${escapeHtml(r.category)}</span>`
-          : "";
-        const detail = source || category ? `<span class="torrent-detail">${source}${category}</span>` : "";
+        const chips = sourceChipHtml(r) + categoryChipHtml(r);
+        const detail = chips ? `<span class="torrent-detail">${chips}</span>` : "";
         return `<tr>
               <td class="name-cell">${info}<span class="filename-details"><span class="filename">${escapeHtml(r.filename)}</span>${detail}</span></td>
               <td class="date-cell">${escapeHtml(r.date)}</td>
@@ -1380,7 +1458,13 @@
       function parseSize(s) {
         const m = String(s || "").match(/([\d.]+)\s*([KMGT]?)i?B/i);
         if (!m) return -1;
-        const units = { "": 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 };
+        const units = {
+          "": 1,
+          K: 1024,
+          M: 1024 ** 2,
+          G: 1024 ** 3,
+          T: 1024 ** 4,
+        };
         return parseFloat(m[1]) * units[m[2].toUpperCase()];
       }
       function sortValue(r, key) {
@@ -1484,16 +1568,8 @@
         $("tiles").classList.add("tile-cards");
         $("tiles").innerHTML = rows
           .map((r) => {
-            const srcHue = hueFor(r.source || "");
-            const catHue = hueFor(r.category || "");
-            const source = r.source
-              ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} var(--src-fg-s) var(--src-fg-l)); background: hsl(${srcHue} var(--src-bg-s) var(--src-bg-l))"`, 'class="chip"')
-              : "";
-            const category = r.category
-              ? `<span class="chip" style="color: hsl(${catHue} calc(var(--src-fg-s) - 10%) var(--src-fg-l)); background: hsl(${catHue} calc(var(--src-bg-s) - 5%) var(--src-bg-l))">${escapeHtml(r.category)}</span>`
-              : "";
-            const chips = source || category ? `<span class="torrent-detail">${source}${category}</span>` : "";
-            return tileRowHtml(r, chips);
+            const chips = sourceChipHtml(r) + categoryChipHtml(r);
+            return tileRowHtml(r, chips ? `<span class="torrent-detail">${chips}</span>` : "");
           })
           .join("");
       }
@@ -1532,7 +1608,11 @@
       }
 
       async function fetchJson(url, options) {
-        const res = await fetch(url, { cache: "no-store", ...options, headers: { ...authHeaders(), ...(options && options.headers) } });
+        const res = await fetch(url, {
+          cache: "no-store",
+          ...options,
+          headers: { ...authHeaders(), ...(options && options.headers) },
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       }
@@ -1616,6 +1696,7 @@
           session.authenticated = !!state.authenticated;
           session.handle = state.handle || null;
           session.prune = !!state.prune_magnet_links;
+          session.agent_name = state.agent_name || null;
         } catch {
           session.enabled = false;
           session.authenticated = true; // offline server: don't gate the UI
@@ -1631,14 +1712,19 @@
           return;
         }
         if (session.authenticated) {
-          fetch("/telegram/auth/logout", { method: "POST", headers: authHeaders() })
+          fetch("/telegram/auth/logout", {
+            method: "POST",
+            headers: authHeaders(),
+          })
             .catch(() => {})
             .finally(() => {
               setToken("");
               session.authenticated = false;
               session.handle = null;
               paintLock();
-              toast("Logged out - Telegram access revoked", "Telegram", { variant: "success" });
+              toast("Logged out - Telegram access revoked", "Telegram", {
+                variant: "success",
+              });
               showGate();
               openAuthDialog();
             });
@@ -1682,10 +1768,14 @@
           return;
         }
         try {
-          const qr = window.qrcode(0, "M");
+          const qr = window.qrcode(0, "L");
           qr.addData(text);
           qr.make();
-          $(boxId).innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+          $(boxId).innerHTML = qr.createSvgTag({
+            cellSize: 4,
+            margin: 0,
+            scalable: true,
+          });
         } catch {
           $(boxId).innerHTML = ""; // QR failed; the buttons remain usable
         }
@@ -1701,7 +1791,9 @@
         stopAuthPolling();
         setAuthStatus("Generating pairing code...");
         try {
-          const data = await fetchJson("/telegram/auth/challenge", { method: "POST" });
+          const data = await fetchJson("/telegram/auth/challenge", {
+            method: "POST",
+          });
           authCode = data.code;
           // Exact message the bot expects from the user's chat.
           authMessage = `Authorize ${data.code} for Torrent Search`;
@@ -1778,9 +1870,6 @@
         const url = $("auth-web-btn").dataset.web;
         if (url) window.open(url, "_blank", "noopener");
       });
-      // Authenticate or leave: the pairing popup cannot be dismissed. It
-      // closes by itself once the code is approved. Copy shares the generic
-      // data-copy dispatcher (same path as the torrent rows).
       authDialog.addEventListener("cancel", (e) => e.preventDefault()); // block Escape
       authDialog.addEventListener("close", () => stopAuthPolling());
 
@@ -1817,7 +1906,10 @@
             duration: 2500,
           });
         } catch {
-          toast(btn.dataset.toastError || "Copy failed", "📋", { variant: "error", duration: 2500 });
+          toast(btn.dataset.toastError || "Copy failed", "📋", {
+            variant: "error",
+            duration: 2500,
+          });
         }
       });
 
@@ -1870,6 +1962,7 @@
       const tgDialog = $("tg-dialog");
       let tgTimer = null;
       let tgMessage = "";
+      let tgPayload = null;
       function prunedMagnet(magnet) {
         const m = String(magnet || "");
         const xt = m.match(/[?&]xt=urn:btih:([^&]+)/i);
@@ -1892,17 +1985,44 @@
         if (cls) el.classList.add(cls);
       }
 
-      function openTgDialog(magnet) {
-        const raw = magnet || "";
-        tgMessage = `Download this torrent: ${session.prune ? prunedMagnet(raw) : raw}`;
-        const copyBtn = $("tg-copy-msg");
-        copyBtn.dataset.copy = tgMessage;
-        copyBtn.dataset.toastLabel = "Download message copied - paste it in your Telegram chat with the bot";
-        const links = tgLinks(tgMessage);
-        $("tg-open").dataset.app = links.app;
-        $("tg-web-btn").dataset.web = links.web;
+      function openTgDialog(ds) {
+        const raw = ds.magnet || "";
+        const magnet = session.prune ? prunedMagnet(raw) : raw;
+        tgMessage = `Download this torrent: ${magnet}`;
+        const agentMode = !!session.agent_name;
+        $("tg-classic").hidden = agentMode;
+        $("tg-agent").hidden = !agentMode;
         $("tg-status").textContent = "";
-        drawQr("tg-qr", links.app);
+        if (agentMode) {
+          // Agent relay: show the card, confirm posts /forward_telegram.
+          $("tg-agent-lead").textContent = `Forward this torrent to ${session.agent_name}`;
+          const rows = [
+            { label: "File", value: ds.filename || "", cls: "wrap" },
+            { label: "Source", value: sourceChipHtml(ds), raw: true },
+            { label: "Category", value: categoryChipHtml(ds), raw: true },
+            { label: "Date", value: ds.date || "" },
+            { label: "Size", value: ds.size || "" },
+            { label: "Seeders", value: ds.seeders ?? "", cls: "se" },
+            { label: "Leechers", value: ds.leechers ?? "", cls: "le" },
+          ].filter((row) => String(row.value).trim() !== "");
+          $("tg-agent-card").innerHTML = `<dl>${rows
+            .map((row) => `<dt>${row.label}</dt><dd${row.cls ? ` class="${row.cls}"` : ""}>${row.raw ? row.value : escapeHtml(row.value)}</dd>`)
+            .join("")}</dl>`;
+          tgPayload = {
+            filename: ds.filename || "",
+            magnet_link: raw,
+            size: ds.size || null,
+            seeders: ds.seeders !== "" && ds.seeders !== undefined ? Number(ds.seeders) : null,
+          };
+        } else {
+          const copyBtn = $("tg-copy-msg");
+          copyBtn.dataset.copy = tgMessage;
+          copyBtn.dataset.toastLabel = "Download message copied - paste it in your Telegram chat with the bot";
+          const links = tgLinks(tgMessage);
+          $("tg-open").dataset.app = links.app;
+          $("tg-web-btn").dataset.web = links.web;
+          drawQr("tg-qr", links.app);
+        }
         tgDialog.showModal();
       }
 
@@ -1911,11 +2031,34 @@
         if (!a) return;
         e.preventDefault();
         if (!session.authenticated || !session.handle) {
-          toast("Telegram is not paired on this browser", "Telegram", { variant: "warning" });
+          toast("Telegram is not paired on this browser", "Telegram", {
+            variant: "warning",
+          });
           return;
         }
-        openTgDialog(a.dataset.magnet || "");
+        openTgDialog(a.dataset);
       });
+      $("tg-confirm").addEventListener("click", async () => {
+        const btn = $("tg-confirm");
+        if (!tgPayload || btn.disabled) return;
+        btn.disabled = true;
+        try {
+          await fetchJson("/forward_telegram", {
+            method: "POST",
+            body: JSON.stringify(tgPayload),
+            headers: { "Content-Type": "application/json" },
+          });
+          setTgStatus("✅ Sent - check your chat with the agent.", "ok");
+          tgTimer = setTimeout(() => {
+            if (tgDialog.open) tgDialog.close();
+          }, 1200);
+        } catch (err) {
+          setTgStatus(`Forward failed: ${err.message}`, "bad");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      $("tg-cancel").addEventListener("click", () => tgDialog.close());
       $("tg-open").addEventListener("click", () => {
         location.href = $("tg-open").dataset.app;
         clearTimeout(tgTimer);

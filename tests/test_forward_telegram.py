@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from typing import Any
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -160,3 +161,67 @@ def test_forward_rate_limited_per_chat(
         headers={"Authorization": f"Bearer {paired}"},
     )
     assert response.status_code == 429
+
+
+class _FakeRelayClient:
+    def __init__(self, *, ok: bool = True) -> None:
+        self.sent: list[dict[str, Any]] = []
+        self._ok = ok
+
+    async def post(
+        self, url: str, json: Any = None, headers: Any = None
+    ) -> _FakeBotResponse:
+        self.sent.append({"url": url, "json": json, "headers": headers})
+        return _FakeBotResponse({}, fail=not self._ok)
+
+
+def test_agent_mode_posts_to_agent_relay(
+    paired: str, client: TestClient, monkeypatch: Any
+) -> None:
+    """Relay URL + token set => payload POSTed to the agent's HTTP relay."""
+    monkeypatch.setattr(api_server, "_TELEGRAM_AGENT_NAME", "My Agent")
+    monkeypatch.setattr(api_server, "_TELEGRAM_MSG_FORWARD", "Torrent received!")
+    monkeypatch.setattr(api_server, "_AGENT_RELAY_URL", "http://agent:4041/relay")
+    monkeypatch.setattr(api_server, "_AGENT_RELAY_TOKEN", "relay-secret")
+    monkeypatch.setattr(api_server, "_AGENT_MODE", True)
+    fake_relay = _FakeRelayClient()
+    monkeypatch.setattr(api_server, "_relay", lambda: fake_relay)
+    api_server._FORWARD_LIMITER._events.pop(
+        "12345", None
+    )  # shared limiter across tests
+    response = client.post(
+        "/forward_telegram",
+        json={"filename": FILENAME, "magnet_link": MAGNET, "size": "1.2 GiB"},
+        headers={"Authorization": f"Bearer {paired}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "sent"}
+    call = fake_relay.sent[0]
+    assert call["url"] == "http://agent:4041/relay"
+    assert call["json"]["chat_id"] == "12345"
+    assert call["json"]["sender"] == "My Agent"
+    assert call["json"]["notice"] == "Torrent received!"
+    assert call["json"]["prompt"] == f"Download this torrent: {MAGNET}"
+    assert call["headers"]["X-Relay-Token"] == "relay-secret"
+
+
+def test_agent_mode_relay_failure_maps_to_502(
+    paired: str, client: TestClient, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(api_server, "_AGENT_RELAY_URL", "http://agent:4041/relay")
+    monkeypatch.setattr(api_server, "_AGENT_RELAY_TOKEN", "relay-secret")
+    monkeypatch.setattr(api_server, "_AGENT_MODE", True)
+    monkeypatch.setattr(api_server, "_relay", lambda: _FakeRelayClient(ok=False))
+    api_server._FORWARD_LIMITER._events.pop("12345", None)
+    response = client.post(
+        "/forward_telegram",
+        json={"filename": FILENAME, "magnet_link": MAGNET},
+        headers={"Authorization": f"Bearer {paired}"},
+    )
+    assert response.status_code == 502
+
+
+def test_relay_client_is_configured() -> None:
+    """The shared relay client has no Bot API base (absolute URLs)."""
+    relay = api_server._relay()
+    assert relay.base_url == httpx.URL()

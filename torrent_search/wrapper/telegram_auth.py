@@ -23,7 +23,7 @@ logger = logging.getLogger("Torrent Search")
 
 SESSION_TTL_SECONDS = 365 * 24 * 3600  # "forever" within browser limits
 DEFAULT_AUTH_FILE = "./authorized_tokens.json"
-DEFAULT_CHALLENGE_TTL = 600.0  # 10 minutes to get the code approved
+DEFAULT_CHALLENGE_TTL = 300.0  # 5 minutes to get the code approved
 MAX_PENDING_CHALLENGES = 50
 
 

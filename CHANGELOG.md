@@ -1,3 +1,25 @@
+## [4.3.0] - 2026-08-27
+
+### 🚀 Features
+
+- Feat: agent relay forwarding, pairing gate redesign, dialog polish
+
+- /forward_telegram: agent mode (AGENT_RELAY_URL + AGENT_RELAY_TOKEN) POSTs
+  torrents to an HTTP relay instead of the Bot API; /telegram/session exposes
+  agent_name; relay failure maps to 502
+- .env.example: reorganized, agent relay vars, PRUNE_MAGNET_LINKS=true,
+  INCLUDE_LINKS=false default
+- Web UI: fullscreen black pairing gate (hide masthead/footer), fixed theme
+  colors, dropped Lato font, spacing fallback vars, dialog full-bleed header
+  band, uniform modal buttons, QR panel gaps, dialog width/max-height scroll
+- pairing challenge TTL 10min -> 5min
+- tests: agent relay (success + 502), hermetic env fixture pins relay vars,
+  agent_name assertions; new ARCHI_TODO.md backlog
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.2.0] - 2026-08-27
 
 ### 🚀 Features

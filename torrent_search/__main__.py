@@ -1,30 +1,9 @@
 import argparse
-import subprocess
 import sys
-from contextlib import suppress
-from os import geteuid
 
 import uvicorn
-from playwright._impl._driver import compute_driver_executable, get_driver_env
 
 from .mcp_server import mcp
-
-
-def install_playwright_drivers() -> None:
-    with suppress(Exception):
-        driver_executable, driver_cli = compute_driver_executable()
-        playwright_command = [driver_executable, driver_cli, "install"]
-        if sys.platform != "win32" and geteuid() == 0:
-            playwright_command.extend(["--with-deps", "chromium"])
-        completed_process = subprocess.run(
-            playwright_command,
-            env=get_driver_env(),
-            check=True,
-        )
-        if completed_process.returncode == 0:
-            print("Playwright drivers installed.", file=sys.stderr)
-            return
-    print("Failed to install Playwright drivers.", file=sys.stderr)
 
 
 def main() -> None:
@@ -32,7 +11,7 @@ def main() -> None:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["cli", "stdio", "http", "sse", "streamable-http", "fastapi"],
+        choices=["cli", "stdio", "http", "sse", "streamable-http", "api"],
         default="stdio",
         help="Mode to run in. Default: stdio.",
     )
@@ -51,10 +30,15 @@ def main() -> None:
         help="Enable auto-reload for development.",
     )
     parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Development mode: hot reload on file changes (implies --reload).",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=1,
-        help="Number of worker processes to use for the FastAPI server.",
+        help="Number of worker processes to use for the API server.",
     )
     parser.add_argument(
         "query",
@@ -65,21 +49,19 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    install_playwright_drivers()
-
     if args.mode == "cli":
         from asyncio import run
 
         from .wrapper import TorrentSearchApi
 
         run(TorrentSearchApi().cli(args.query))
-    elif args.mode == "fastapi":
-        print(f"Starting FastAPI server on {args.host}:{args.port}", file=sys.stderr)
+    elif args.mode == "api":
+        print(f"Starting API server on {args.host}:{args.port}", file=sys.stderr)
         uvicorn.run(
-            "torrent_search.fastapi_server:app",
+            "torrent_search.api_server:app",
             host=args.host,
             port=args.port,
-            reload=args.reload,
+            reload=args.reload or args.dev,
             workers=args.workers,
         )
     else:

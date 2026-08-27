@@ -1,13 +1,12 @@
 [project]
 name = "torrent-search-mcp"
-version = "4.0.1"
+version = "4.1.0"
 description = "Torrent Search MCP Server"
 authors = [{ name = "philogicae" }]
 requires-python = ">=3.10,<4.0"
 readme = "README.md"
 license = "MIT"
 dependencies = [
-    "crawl4ai",
     "aiocache",
     "fastmcp>=3,<4",
     "fastapi",
@@ -40,8 +39,5 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
     "ignore::authlib.deprecate.AuthlibDeprecationWarning",
-    # third-party SyntaxWarning: 'return' in a 'finally' block
-    "ignore::SyntaxWarning:crawl4ai\\.content_scraping_strategy",
-    # third-party deprecation from starlette.testclient
     "ignore::starlette.exceptions.StarletteDeprecationWarning",
 ]

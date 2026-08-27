@@ -7,13 +7,72 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
     <script data-key="oat.min.js" data-src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
     <link rel="stylesheet" data-key="oat.min.css" data-src="https://unpkg.com/@knadh/oat/oat.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Lato:wght@300;400&display=swap"
+      rel="stylesheet"
+    />
     <style>
+      /* ------------------------------------------------------------------
+         zkPass-derived design system ("encrypted terminal meets classified
+         broadsheet"): near-black surfaces layered by tone, hairline borders,
+         no shadows, one Signal Lime accent. Light mode inverts to a paper
+         broadsheet with olive ink; lime survives as a highlighter fill.
+         ------------------------------------------------------------------ */
       :root {
-        /* Cyberpunk accent + swarm health colors - defined once, flip with the theme */
-        --accent: light-dark(#00a97f, #00ffa3);
-        --accent-dim: light-dark(#00a97f40, #00ffa340);
-        --up: light-dark(#0c8a4d, #2ee56b);
-        --down: light-dark(#c2373c, #ff6169);
+        --serif: "Source Serif 4", "PT Serif", Georgia, "Times New Roman", serif;
+        --sans: "Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --up: #2ee56b;
+        --down: #ff6169;
+      }
+      body[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #101014;
+        --bg-deep: #0a0a0d;
+        /* Parallax-stars sky: template hues (#1B2735/#090A0F), lifted. */
+        --sky-hi: #243349;
+        --sky-lo: #131722;
+        --surface: #202a3a;
+        --card: #263246;
+        --raised: #2f3d55;
+        --border: #3a4a63;
+        --border-faint: #2a3850;
+        --border-strong: #4d5f7d;
+        --text-muted: #7a7a7a;
+        --text-2: #8a8a8a;
+        --text-3: #c5c5c5;
+        --text: #e5e5e5;
+        --heading: #ffffff;
+        --accent: #c5ff4a;
+        --accent-ink: #0c1200;
+        --accent-dim: rgba(197, 255, 74, 0.1);
+        --accent-line: #597321;
+        --input-bg: #1d2635;
+      }
+      body[data-theme="light"] {
+        color-scheme: light;
+        --bg: #e4e4d8;
+        --bg-deep: #d6d6c8;
+        --sky-hi: #ececdf;
+        --sky-lo: #c9c9b8;
+        --surface: #fbfbf7;
+        --card: #ffffff;
+        --raised: #efefe6;
+        --border: #d7d7cb;
+        --border-faint: #e5e5db;
+        --border-strong: #bcbcb0;
+        --text-muted: #83867a;
+        --text-2: #55584e;
+        --text-3: #33362e;
+        --text: #1d1f1a;
+        --heading: #101208;
+        --accent: #55731d;
+        --accent-ink: #ffffff;
+        --accent-dim: rgba(85, 115, 29, 0.1);
+        --accent-line: #c5ff4a;
+        --input-bg: #ffffff;
       }
       html,
       body {
@@ -21,63 +80,135 @@
         padding: 0;
         height: 100%;
         height: 100dvh;
-        overflow: hidden; /* the results table is the only scroller */
+        overflow: hidden; /* the results area is the only scroller */
       }
       body {
-        font-family: "Cascadia Mono", "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-family: var(--sans);
+        font-size: 14px;
+        /* Radial night sky (single gradient, no animation). */
+        background: radial-gradient(ellipse at bottom, var(--sky-hi) 0%, var(--sky-lo) 100%);
+        color: var(--text);
         display: flex;
         flex-direction: column;
       }
-      body[data-theme="dark"] {
-        color-scheme: dark;
-        /* Softer palette: deep slate, not pure black */
-        --background: #151821;
-        --card: #1c2029;
-        --secondary: #262b38;
-        --muted: #262b38;
-        --faint: #20242f;
-        --border: #2e3442;
-        --input: #2e3442;
+      button,
+      input,
+      select {
+        font-family: inherit;
       }
-      body[data-theme="light"] {
-        color-scheme: light;
-        /* Softer palette: soft gray, not pure white */
-        --background: #eef0f4;
-        --card: #f7f8fa;
-        --secondary: #e3e6ec;
-        --muted: #e3e6ec;
-        --faint: #f1f3f6;
-        --border: #ccd2dc;
-        --input: #ccd2dc;
-      }
-      /* Subtle CRT scanlines */
-      body::after {
-        content: "";
+      /* ------------------------------------------------------------------
+         Pairing gate: fullscreen overlay over the shared sky, with a
+         centered pairing card. Shown whenever the browser has no valid token.
+         ------------------------------------------------------------------ */
+      #gate {
         position: fixed;
         inset: 0;
-        pointer-events: none;
-        background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.05) 2px 4px);
-        z-index: 400;
+        z-index: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-      #theme-toggle {
-        width: 2rem;
-        min-width: 2rem;
-        height: 2rem;
+      /* Without this, the shield's display:flex would beat the hidden
+         attribute and keep blocking every wheel/click on the app. */
+      #gate[hidden] {
+        display: none;
+      }
+      /* The pairing dialog floats centered above the app. */
+      #gate #auth-dialog,
+      #gate dialog[open] {
+        position: relative;
+        z-index: 2;
+      }
+      /* ------------------------------------------------------------------
+         App shell
+         ------------------------------------------------------------------ */
+      #app {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+      }
+      #app[hidden] {
+        display: none;
+      }
+      /* Header: deep bar + single neon divider between major regions */
+      #masthead {
+        position: relative;
+        z-index: 600; /* above the pairing shield: visible + usable pre-auth */
+        background: var(--bg-deep);
+        border-bottom: 4px solid var(--accent-line);
+      }
+      #masthead-inner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.55rem 1rem;
+        max-width: 90rem;
+        margin: 0 auto;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      h1 {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+        margin: 0;
+        font-family: var(--serif);
+        font-weight: 300;
+        font-size: 1.35rem;
+        letter-spacing: -0.01em;
+        color: var(--heading);
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      h1 .wave {
+        font-size: 1.1rem;
+        transform: translateY(0.05rem);
+      }
+      h1 .word-accent {
+        font-style: italic;
+        color: var(--accent);
+      }
+      .head-actions {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+      }
+      .icon-btn {
+        width: 1.9rem;
+        height: 1.9rem;
         padding: 0;
-        border-radius: var(--radius-medium);
-        font-size: 0.85rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95rem;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-2);
+        cursor: pointer;
       }
-      body[data-theme="dark"] #theme-toggle {
-        --_hov: #68b9ef;
-        color: #ffffff;
-        background-color: #4298d4;
-        border-color: #78c7f7;
+      .icon-btn:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
       }
-      body[data-theme="light"] #theme-toggle {
-        --_hov: #263555;
-        color: #f7df72;
-        background-color: #18233d;
-        border-color: #34466f;
+      /* Theme flip: constant deep-sea chip in both themes. */
+      #theme-toggle {
+        background: #123a7a;
+        border-color: #0d2c5c;
+        color: #dbeafe;
+      }
+      #auth-lock.authed {
+        color: var(--up);
+        border-color: color-mix(in srgb, var(--up) 45%, transparent);
+      }
+      #auth-lock.locked {
+        color: var(--down);
+        border-color: color-mix(in srgb, var(--down) 45%, transparent);
       }
       main.container {
         flex: 1;
@@ -85,183 +216,154 @@
         display: flex;
         flex-direction: column;
         width: 100%;
-        max-width: none; /* always full width - no side gutters */
-        margin-inline: 0;
-        padding: var(--space-4) var(--space-4) var(--space-3);
+        max-width: 90rem;
+        margin: 0 auto;
+        padding: 0.7rem 1rem 0.5rem;
         box-sizing: border-box;
       }
-      h1 {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        width: 100%;
-        font-size: var(--text-2);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin: 0 0 var(--space-2);
-      }
-      /* Toolbar: every control on one baseline, identical heights */
+      /* Toolbar */
       #toolbar {
-        --compact-control-width: 7.5rem;
         display: grid;
-        grid-template-columns: minmax(14rem, 1fr) repeat(3, var(--compact-control-width));
-        gap: var(--space-3);
-        align-items: end;
-        margin-bottom: var(--space-3);
+        grid-template-columns: minmax(12rem, 1fr) auto auto;
+        gap: 0.5rem;
+        align-items: stretch;
+        margin-bottom: 0.6rem;
       }
       #toolbar label[data-field] {
         margin: 0;
+        padding: 0;
+        display: flex;
+        line-height: 0;
       }
-      #toolbar label[data-field]:nth-child(2),
-      #toolbar button {
-        width: var(--compact-control-width);
-        min-width: var(--compact-control-width);
+      #toolbar label[data-field] input {
+        flex: 1;
+        margin: 0; /* inputs carry a UA margin; it un-aligns the row */
       }
-      #toolbar label[data-field] input,
-      #toolbar label[data-field] select {
-        height: 2.6rem;
-      }
-      #query,
-      #limit {
+      #query {
         width: 100%;
+        height: 2.2rem;
+        box-sizing: border-box;
+        background: color-mix(in srgb, var(--input-bg) 40%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        padding: 0 0.6rem;
+        font-size: 0.85rem;
+      }
+      #query:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      #query::placeholder {
+        color: var(--text-muted);
       }
       #toolbar button {
-        height: 2.6rem;
-        padding-block: 0;
+        height: 2.2rem;
+        padding: 0 0.9rem;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--card) 40%, transparent);
+        color: var(--text-3);
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        cursor: pointer;
         white-space: nowrap;
-        box-sizing: border-box;
+        /* Flex centering keeps label glyphs (emoji included) on the same
+           vertical axis as the input text. */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35em;
       }
-      #btn-search:hover,
-      #btn-popular:hover {
-        box-shadow: 0 0 0.6rem var(--accent-dim);
+      #toolbar button:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--heading);
       }
+      #toolbar button:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
+      /* Results card */
       #results-card {
         flex: 1;
         min-height: 0;
         display: flex;
         flex-direction: column;
-        padding: 0;
+        /* Glass over the starfield, matching the popular tiles. */
+        background: color-mix(in srgb, var(--card) 62%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 4px;
         overflow: hidden;
-        border: none;
-        border-radius: 0;
       }
-      #results-card > header {
-        display: flex;
-        align-items: center;
-        gap: var(--space-3);
-        padding: var(--space-3) var(--space-4);
-        border-bottom: 1px solid var(--border);
-      }
-      .term-dots {
-        display: flex;
-        gap: 0.4rem;
-      }
-      .term-dots span {
-        width: 0.7rem;
-        height: 0.7rem;
-        border-radius: 50%;
-        background: var(--border);
-      }
-      .term-dots span:nth-child(1) {
-        background: light-dark(#e06c75, #ff5f56);
-      }
-      .term-dots span:nth-child(2) {
-        background: light-dark(#e5c07b, #ffbd2e);
-      }
-      .term-dots span:nth-child(3) {
-        background: light-dark(#98c379, #27c93f);
-      }
-      #status-line {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: var(--space-3);
-        flex-wrap: wrap;
-        flex: 1;
-        min-width: 0;
-      }
-      #summary::before {
-        content: "❯ ";
-        color: var(--accent);
-      }
-      /* The one and only scroller */
-      .table {
+      /* Table (search view) */
+      .results-scroll {
         flex: 1;
         min-height: 0;
         overflow: auto;
       }
+      .results-scroll[hidden] {
+        display: none;
+      }
       #results {
         width: 100%;
-        min-width: 50.5rem;
+        min-width: 36rem;
         table-layout: fixed;
+        border-collapse: collapse;
       }
       #results th,
       #results td {
         text-align: left;
-        padding: 0.35rem var(--space-3);
-        line-height: 1.2;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        padding: 0.28rem 0.6rem;
+        line-height: 1.3;
         white-space: nowrap;
       }
       #results thead th {
         position: sticky;
         top: 0;
-        background: var(--background);
         z-index: 10;
+        background: color-mix(in srgb, var(--surface) 78%, transparent);
         border-bottom: 1px solid var(--border);
+        font-size: 0.62rem;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--text-muted);
       }
-      col.c-name {
-        width: auto;
+      #results tbody tr {
+        border-bottom: 1px solid var(--border-faint);
       }
-      col.c-size {
-        width: 6.5rem;
+      #results tbody tr:hover {
+        background: var(--raised);
       }
-      col.c-num {
-        width: 4.5rem;
+      #results td {
+        font-size: 0.78rem;
+        color: var(--text-3);
       }
       col.c-date {
-        width: 8rem;
+        width: 5.75rem;
+      }
+      col.c-size {
+        width: 5.5rem;
+      }
+      col.c-num {
+        width: 3.9rem;
       }
       col.c-actions {
-        width: 7rem;
-      }
-      th.sortable {
-        cursor: pointer;
-        user-select: none;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      th.sortable::after {
-        content: "↕";
-        opacity: 0.35;
-        margin-left: 0.3em;
-      }
-      th.sortable[data-dir="asc"]::after {
-        content: "↑";
-        opacity: 1;
-        color: var(--accent);
-      }
-      th.sortable[data-dir="desc"]::after {
-        content: "↓";
-        opacity: 1;
-        color: var(--accent);
-      }
-      tbody tr {
-        border-bottom: 1px solid var(--border);
-      }
-      tbody tr:hover {
-        background: var(--accent-dim);
+        width: 7.4rem;
       }
       td.num,
-      th.c-num,
-      #results th:nth-child(2),
-      #results td:nth-child(2),
-      #results th:last-child,
-      td.actions-cell {
+      th.c-num {
         text-align: right;
         font-variant-numeric: tabular-nums;
+        font-family: var(--mono);
+        font-size: 0.72rem;
+      }
+      td.date-cell {
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        color: var(--text-2);
       }
       td.se {
         color: var(--up);
@@ -269,82 +371,365 @@
       td.le {
         color: var(--down);
       }
-      td.actions-cell a,
-      td.actions-cell button,
-      td.actions-cell > span {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1.75rem;
-        height: 1.75rem;
-        padding: 0;
-        text-decoration: none;
-        vertical-align: middle;
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 1rem;
-      }
-      td.actions-cell img {
-        width: 1rem;
-        height: 1rem;
-      }
-      td.actions-cell a:hover,
-      td.actions-cell button:hover:not(:disabled) {
-        filter: drop-shadow(0 0 0.35rem var(--accent));
-      }
-      td.actions-cell button:disabled,
-      td.actions-cell > span {
-        opacity: 0.3;
-        cursor: not-allowed;
-      }
-      #summary.error-text {
-        color: var(--down);
-      }
       td.name-cell {
         display: flex;
         align-items: center;
-        gap: 0.25rem;
-        overflow: visible;
+        gap: 0.3rem;
+        overflow: hidden;
       }
       td.name-cell .filename-details {
         flex: 1;
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.1rem;
+        gap: 0.05rem;
         overflow: hidden;
       }
-      td.name-cell .filename,
-      td.name-cell .torrent-source {
+      td.name-cell .filename {
         overflow: hidden;
         text-overflow: ellipsis;
+        font-weight: 500;
+        color: var(--text);
       }
       td.name-cell .torrent-detail {
         display: flex;
+        align-items: center;
+        gap: 0.35rem;
         min-width: 0;
-        font-size: 0.65rem;
-        line-height: 1;
-        opacity: 0.55;
+        font-size: 0.62rem;
+        line-height: 1.1;
       }
-      td.name-cell .torrent-source {
-        min-width: 0;
+      .chip {
+        display: inline-block;
+        max-width: 11rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        border-radius: 2px;
+        padding: 0 0.32rem;
+        font-family: var(--mono);
+        font-size: 0.6rem;
+        letter-spacing: 0.04em;
+        line-height: 1.5;
+        text-decoration: none; /* source chips are links */
       }
-      td.name-cell .torrent-category {
-        flex: none;
+      a.chip:hover {
+        text-decoration: underline;
+      }
+      .tile-source-link {
+        color: inherit;
+        text-decoration: none;
+      }
+      .tile-source-link:hover {
+        text-decoration: underline;
       }
       .info-btn {
         background: none;
         border: none;
         cursor: pointer;
-        padding: 0 0.25rem 0 0;
-        opacity: 0.55;
-        font-size: 0.85rem;
+        padding: 0 0.15rem 0 0;
+        opacity: 0.5;
+        font-size: 0.75rem;
+        color: var(--text-2);
       }
       .info-btn:hover,
       .info-btn.tooltip-open {
         opacity: 1;
+        color: var(--accent);
       }
+      td.actions-cell {
+        text-align: right;
+      }
+      #results th:last-child {
+        text-align: right;
+      }
+      td.actions-cell a,
+      td.actions-cell button,
+      td.actions-cell > span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.6rem;
+        height: 1.6rem;
+        padding: 0;
+        text-decoration: none;
+        vertical-align: middle;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      td.actions-cell img {
+        width: 0.95rem;
+        height: 0.95rem;
+      }
+      td.actions-cell a:hover,
+      td.actions-cell button:hover:not(:disabled) {
+        filter: drop-shadow(0 0 0.3rem var(--accent-dim));
+      }
+      td.actions-cell button:disabled,
+      td.actions-cell > span {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+      /* Popular tiles: fixed 3-column grid, uniform heights, glassy cards. */
+      #tiles {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.6rem;
+        align-content: start;
+        padding: 0.6rem;
+      }
+      /* author display values would otherwise beat the hidden attribute */
+      #tiles[hidden],
+      .results-scroll[hidden] {
+        display: none;
+      }
+      .tile {
+        display: flex;
+        flex-direction: column;
+        height: 16rem;
+        /* semi-transparent card over the page background */
+        background: color-mix(in srgb, var(--card) 62%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      /* Top tile always spans the full row; its list flows into the same
+         3 columns, scrolling as one. Same height as every other tile. */
+      .tile-top {
+        grid-column: 1 / -1;
+      }
+      .tile-top .tile-body {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-content: start;
+      }
+      .tile-top .tile-row {
+        border-right: 1px solid var(--border-faint);
+      }
+      .tile-head {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.4rem 0.6rem;
+        border-bottom: 1px solid var(--border-faint);
+        background: color-mix(in srgb, var(--surface) 55%, transparent);
+      }
+      .tile-chevron {
+        display: none;
+      }
+      .tile-title {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.66rem;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+      .tile-count {
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        border-radius: 2px;
+        padding: 0 0.35rem;
+      }
+      .tile-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        /* No overscroll-behavior: contain — when a list ends, the wheel
+           must chain into the outer grid scroller instead of dying. */
+      }
+      .tile-row {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
+        padding: 0.28rem 0.55rem;
+        border-bottom: 1px solid var(--border-faint);
+      }
+      .tile-row:last-child {
+        border-bottom: none;
+      }
+      .tile-row:hover {
+        background: var(--raised);
+      }
+      .tile-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.05rem;
+      }
+      .tile-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.74rem;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .tile-meta {
+        display: flex;
+        gap: 0.5rem;
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .tile-meta span {
+        flex-shrink: 0;
+      }
+      /* Date is the least important fact: on narrow tiles it shrinks with
+         an ellipsis instead of hard-clipping mid-glyph. */
+      .tile-meta span:last-child {
+        flex-shrink: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tile-meta .m-se {
+        color: var(--up);
+      }
+      .tile-meta .m-le {
+        color: var(--down);
+      }
+      .tile-actions {
+        display: flex;
+        gap: 0.1rem;
+        opacity: 0.75;
+      }
+      .tile-actions a,
+      .tile-actions button {
+        width: 1.5rem;
+        height: 1.5rem;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        text-decoration: none;
+      }
+      .tile-actions img {
+        width: 0.9rem;
+        height: 0.9rem;
+      }
+      .tile-actions button:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+      /* Loading spinner + empty state (no filler rows) */
+      #loading {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #loading[hidden] {
+        display: none;
+      }
+      .spinner-box {
+        width: 300px;
+        height: 300px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .leo {
+        position: absolute;
+        border-radius: 50%;
+        box-sizing: border-box;
+        will-change: transform;
+      }
+      .blue-orbit {
+        width: 165px;
+        height: 165px;
+        border: 1px solid #91daffa5;
+      }
+      .green-orbit {
+        width: 120px;
+        height: 120px;
+        border: 1px solid #91ffbfa5;
+      }
+      .red-orbit {
+        width: 90px;
+        height: 90px;
+        border: 1px solid #ffca91a5;
+      }
+      .white-orbit {
+        width: 60px;
+        height: 60px;
+        border: 2px solid #ffffff;
+      }
+      #empty-state {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        color: var(--text-muted);
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      #empty-state[hidden] {
+        display: none;
+      }
+      #empty-state .empty-glyph {
+        font-size: 1.6rem;
+        opacity: 0.6;
+      }
+      /* Footer */
+      #page-footer {
+        position: relative;
+        z-index: 600; /* above the pairing shield: visible + usable pre-auth */
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.15rem 1rem; /* slim bar: ~2px of breathing room */
+        font-size: 0.6rem;
+        line-height: 1.2;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border-faint);
+        background: var(--bg-deep);
+      }
+      .foot-left {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+      .foot-left svg {
+        width: 0.7rem;
+        height: 0.7rem;
+      }
+      #page-footer a {
+        color: var(--text-muted);
+        display: inline-flex;
+      }
+      #page-footer a svg {
+        width: 0.7rem;
+        height: 0.7rem;
+      }
+      #page-footer a:hover {
+        color: var(--accent);
+      }
+      /* Filename tooltip */
       #filename-tooltip {
         position: fixed;
         z-index: 600;
@@ -353,13 +738,11 @@
         max-height: calc(100vh - 2rem);
         max-height: calc(100dvh - 2rem);
         padding: var(--space-2) var(--space-3);
-        color: var(--foreground);
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-large);
-        box-shadow: var(--shadow-large);
-        font-size: 0.65rem;
-        line-height: 1.35;
+        background: var(--raised);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+        border-radius: 4px;
+        font-size: 0.72rem;
         text-align: left;
         white-space: normal;
         overflow: auto;
@@ -367,350 +750,401 @@
         word-break: break-word;
         pointer-events: none;
       }
-      /* Send-to-Telegram confirm popup */
-      #tg-dialog {
-        --tg-pad: var(--space-4);
+      /* Dialogs (send + auth pairing) */
+      dialog {
+        --dlg-pad: var(--space-4);
         width: min(24rem, calc(100vw - 2rem));
         padding: 0;
         background: var(--card);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+        border-radius: 4px;
+        overscroll-behavior: contain;
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(2px);
+      }
+      dialog .dlg-body {
+        position: relative;
+        padding: var(--dlg-pad);
+      }
+      /* Dismiss (download popup only; the pairing gate is intentionally
+         undismissable). */
+      dialog .dlg-close {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.55rem;
+        width: 1.6rem;
+        height: 1.6rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
         border: 1px solid var(--border);
-        border-radius: var(--radius-large);
-        box-shadow: var(--shadow-large);
-        overflow: hidden;
-        font-size: 0.75rem;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-2);
+        font-size: 0.8rem;
+        line-height: 1;
+        cursor: pointer;
       }
-      #tg-dialog::backdrop {
-        background: rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(3px);
+      dialog .dlg-close:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
       }
-      #tg-dialog .tg-body {
-        padding: var(--tg-pad);
-      }
-      #tg-dialog .tg-body::before {
+      dialog .dlg-body::before {
         content: "";
         display: block;
         height: 2px;
-        margin: calc(-1 * var(--tg-pad)) calc(-1 * var(--tg-pad)) var(--space-3);
-        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        width: 2.2rem;
+        background: var(--accent);
+        margin-bottom: var(--space-3);
       }
-      #tg-dialog h2 {
+      dialog h2 {
         display: flex;
         align-items: center;
         gap: 0.5rem;
         margin: 0 0 var(--space-2);
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
+        font-family: var(--serif);
+        font-weight: 300;
+        font-size: 1.15rem;
+        color: var(--heading);
       }
-      #tg-dialog h2 .tg-badge {
+      dialog h2 .tg-badge {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        flex: none;
-        width: 1.5rem;
-        height: 1.5rem;
+        width: 1.6rem;
+        height: 1.6rem;
+        border-radius: 4px;
         background: var(--accent-dim);
-        border-radius: var(--radius-medium);
+        border: 1px solid var(--accent-line);
       }
-      #tg-dialog h2 .tg-badge img {
+      dialog h2 .tg-badge img {
         width: 0.9rem;
         height: 0.9rem;
       }
-      #tg-dialog .tg-bot {
+      dialog .dlg-sub {
         margin: 0 0 var(--space-3);
-        opacity: 0.65;
+        font-size: 0.72rem;
+        color: var(--text-2);
       }
-      #tg-dialog .tg-bot strong {
+      dialog .dlg-sub strong {
         color: var(--accent);
       }
-      #tg-dialog .tg-payload {
-        margin: 0;
+      dialog .dlg-payload {
+        margin: 0 0 var(--space-3);
         padding: var(--space-2) var(--space-3);
         max-height: 6rem;
         overflow: auto;
-        background: var(--faint);
+        background: var(--input-bg);
         border: 1px solid var(--border);
         border-left: 2px solid var(--accent);
-        border-radius: var(--radius-medium);
-        font-family: inherit;
-        font-size: 0.62rem;
+        border-radius: 2px;
+        font-family: var(--mono);
+        font-size: 0.68rem;
         line-height: 1.45;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         word-break: break-word;
-        opacity: 0.85;
         user-select: all;
+        color: var(--text-3);
       }
-      #tg-dialog .tg-actions {
+      dialog .dlg-actions {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 0.45rem;
-        margin-top: var(--space-3);
+        gap: var(--space-2);
       }
-      #tg-dialog .tg-actions button {
+      dialog .dlg-actions button {
         height: 1.9rem;
         min-height: 1.9rem;
         padding-inline: 0.7rem;
-        font-size: 0.68rem;
-        border-radius: var(--radius-medium);
+        border-radius: 4px;
+        border: 1px solid var(--border);
+        background: var(--raised);
+        color: var(--text-3);
+        font-size: 0.66rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        cursor: pointer;
       }
-      #tg-dialog .tg-actions .spacer {
+      dialog .dlg-actions button:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--heading);
+      }
+      dialog .dlg-actions .spacer {
         flex: 1;
       }
-      #tg-dialog .tg-hint {
+      dialog .dlg-hint {
         display: none;
         margin: var(--space-2) 0 0;
         font-size: 0.65rem;
-        color: var(--down);
+        color: var(--text-muted);
       }
-      #tg-dialog .tg-hint.visible {
+      dialog .dlg-hint.visible {
         display: block;
       }
-      /* Page footer */
-      #page-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--space-3);
-        margin-top: auto;
-        padding-top: var(--space-2);
-        font-size: 0.62rem;
-        opacity: 0.55;
+      #auth-status {
+        margin: 0 0 var(--space-3);
+        font-family: var(--mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.06em;
+        color: var(--text-2);
+        min-height: 1rem;
       }
-      #page-footer .foot-left {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
+      #auth-status.waiting {
+        color: #ffb454;
+        animation: authPulse 1.2s ease-in-out infinite;
       }
-      #page-footer a {
-        display: inline-flex;
-        align-items: center;
-        color: inherit;
+      @keyframes authPulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
       }
-      #page-footer a:hover {
-        color: var(--accent);
-        opacity: 1;
+      #auth-status.ok {
+        color: var(--up);
       }
-      #page-footer svg {
-        width: 0.9rem;
-        height: 0.9rem;
+      #auth-status.bad {
+        color: var(--down);
       }
-      /* Small screens: shrink everything, stack the toolbar */
-
+      @media (max-width: 1024px) {
+        #tiles {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .tile-top .tile-body {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
       @media (max-width: 640px) {
-        html {
-          font-size: 14px;
+        body {
+          font-size: 13px;
         }
-        body::after {
-          display: none;
-        }
+        #masthead-inner,
         main.container {
-          padding: 0.5rem;
+          padding-left: 0.6rem;
+          padding-right: 0.6rem;
         }
         h1 {
-          min-height: 1.75rem;
-          margin-bottom: 0.4rem;
-          font-size: 1rem;
-          letter-spacing: 0.05em;
-        }
-        #theme-toggle {
-          width: 1.75rem;
-          min-width: 1.75rem;
-          height: 1.75rem;
-          font-size: 0.75rem;
+          font-size: 1.05rem;
         }
         #toolbar {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: 1fr 1fr;
           gap: 0.4rem;
-          margin-bottom: 0.5rem;
         }
         #toolbar label[data-field]:first-child {
           grid-column: 1 / -1;
         }
-        #toolbar label[data-field]:nth-child(2),
-        #toolbar button {
-          width: 100%;
-          min-width: 0;
+        /* Mobile search view: same card rows as the popular tiles. */
+        #tiles.tile-cards {
+          display: flex;
+          flex-direction: column;
+          padding: 0.45rem;
         }
-        #toolbar label[data-field] input,
-        #toolbar label[data-field] select,
-        #toolbar button {
-          height: 2rem;
-          padding-inline: 0.5rem;
-          font-size: 0.75rem;
+        dialog {
+          --dlg-pad: var(--space-3);
         }
-        #results-card > header {
-          gap: 0.5rem;
-          padding: 0.4rem 0.5rem;
-          font-size: 0.75rem;
+        #tiles {
+          display: flex;
+          flex-direction: column;
+          grid-template-columns: 1fr;
+          padding: 0.45rem;
         }
-        .term-dots {
-          gap: 0.25rem;
+        /* Accordion tiles: whole title bar toggles, one open at a time. */
+        .tile {
+          height: auto; /* desktop pins 16rem; collapsed must hug the head */
+          max-height: none;
+          flex-shrink: 0; /* keep every section head visible as a switcher */
         }
-        .term-dots span {
-          width: 0.45rem;
-          height: 0.45rem;
+        /* The open section absorbs every free pixel left by the other
+           sections (which keep their order); its list scrolls inside. */
+        .tile.open {
+          flex: 1 1 0%;
+          min-height: 0;
         }
-        #status-line {
-          gap: 0.5rem;
+        .tile .tile-body {
+          display: none;
         }
-        #results {
-          min-width: 42rem;
+        .tile.open .tile-body {
+          display: block;
         }
-        #results th,
-        #results td {
-          padding: 0.22rem 0.4rem;
-          font-size: 0.72rem;
+        .tile-top.open .tile-body {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
         }
-        td.name-cell .torrent-detail {
-          font-size: 0.58rem;
+        .tile-chevron {
+          display: inline-flex;
+          margin-left: auto;
+          color: var(--text-muted);
+          font-size: 0.7rem;
+          transition: transform 0.15s ease;
         }
-        .info-btn {
-          font-size: 0.75rem;
+        .tile.open .tile-chevron {
+          transform: rotate(180deg);
         }
-        col.c-size {
-          width: 4.5rem;
-        }
-        col.c-num {
-          width: 3rem;
-        }
-        #tg-dialog {
-          --tg-pad: var(--space-3);
-        }
-        #results th.c-num,
-        #results td.se,
-        #results td.le {
-          padding-inline: 0.2rem;
-        }
-        col.c-date {
-          width: 6rem;
-        }
-        col.c-actions {
-          width: 5.5rem;
-        }
-        #results td.actions-cell {
-          padding-inline: 0;
-        }
-        td.actions-cell a,
-        td.actions-cell button,
-        td.actions-cell > span {
-          width: 1.2rem;
-          height: 1.2rem;
-          font-size: 0.85rem;
-        }
-        #filename-tooltip {
-          max-width: calc(100vw - 1rem);
-          max-height: calc(100vh - 1rem);
-          max-height: calc(100dvh - 1rem);
-          padding: 0.4rem 0.5rem;
-          font-size: 0.6rem;
-        }
-        #tg-dialog {
-          padding: var(--space-3);
+        .tile-head {
+          cursor: pointer;
         }
       }
     </style>
   </head>
   <body data-theme="dark">
-    <main class="container">
-      <h1>
-        <span>🌊</span>
-        <span>Torrent Search</span>
-        <button id="theme-toggle" class="outline" aria-label="Toggle light/dark theme" title="Toggle theme">🔆</button>
-      </h1>
+    <!-- Invisible shield while unpaired: blocks the app until approval. -->
+    <div id="gate" hidden></div>
 
-      <div id="toolbar">
-        <label data-field>
-          <input id="query" type="search" placeholder="Search torrents..." autocomplete="off" autofocus />
-        </label>
-        <label data-field>
-          <select id="limit">
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100" selected>100</option>
-            <option value="200">200</option>
-          </select>
-        </label>
-        <button id="btn-search" data-variant="secondary" aria-label="Search torrents">🔍 Search</button>
-        <button id="btn-popular" data-variant="secondary" aria-label="Load popular torrents">⭐ Popular</button>
-      </div>
-
-      <article class="card" id="results-card">
-        <header>
-          <div class="term-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-          <div id="status-line">
-            <strong id="summary">Loading...</strong>
-            <small id="sort-hint"></small>
-          </div>
-        </header>
-        <div class="table">
-          <table id="results">
-            <colgroup>
-              <col class="c-name" />
-              <col class="c-date" />
-              <col class="c-size" />
-              <col class="c-num" />
-              <col class="c-num" />
-              <col class="c-actions" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th class="sortable" data-key="filename">File</th>
-                <th class="sortable" data-key="date">Date</th>
-                <th class="sortable" data-key="_size">Size</th>
-                <th class="sortable c-num" data-key="seeders">SE</th>
-                <th class="sortable c-num" data-key="leechers">LE</th>
-                <th>LINKS</th>
-              </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-          </table>
+    <header id="masthead">
+      <div id="masthead-inner">
+        <h1>
+          <span class="wave">🌊</span>
+          <span>Torrent</span>
+          <span class="word-accent">Search</span>
+        </h1>
+        <div class="head-actions">
+          <button id="auth-lock" class="icon-btn authed" aria-label="Telegram access: log out" title="Telegram access granted - click to log out">🔓</button>
+          <button id="theme-toggle" class="icon-btn" aria-label="Toggle light/dark theme" title="Toggle theme">🔆</button>
         </div>
-      </article>
-      <footer id="page-footer">
-        <span class="foot-left" title="MIT License">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3v18" />
-            <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
-            <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
-            <path d="m5 8 3 8a5 5 0 0 1-6 0zV7" />
-            <path d="M7 21h10" />
-          </svg>
-          2026 Philogicae
-        </span>
-        <a href="https://github.com/philogicae/torrent-search-mcp" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="GitHub repository">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <path
-              d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656"
-            />
-          </svg>
-        </a>
-      </footer>
-    </main>
+      </div>
+    </header>
+
+    <div id="app" hidden>
+      <main class="container">
+        <div id="toolbar">
+          <label data-field>
+            <input id="query" type="search" placeholder="Search torrents..." autocomplete="off" autofocus />
+          </label>
+          <button id="btn-search" aria-label="Search torrents"><span class="btn-icon">🔍</span> Search</button>
+          <button id="btn-popular" aria-label="Load popular torrents"><span class="btn-icon">⭐</span> Popular</button>
+        </div>
+
+        <article id="results-card">
+          <div id="loading">
+            <div class="spinner-box">
+              <div class="blue-orbit leo"></div>
+
+              <div class="green-orbit leo"></div>
+
+              <div class="red-orbit leo"></div>
+
+              <div class="white-orbit w1 leo"></div>
+              <div class="white-orbit w2 leo"></div>
+              <div class="white-orbit w3 leo"></div>
+            </div>
+          </div>
+          <div id="empty-state" hidden><span class="empty-glyph">⌀</span><span id="empty-text">No torrents found</span></div>
+          <div class="results-scroll" id="table-wrap" hidden>
+            <table id="results">
+              <colgroup>
+                <col />
+                <col class="c-date" />
+                <col class="c-size" />
+                <col class="c-num" />
+                <col class="c-num" />
+                <col class="c-actions" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Date</th>
+                  <th>Size</th>
+                  <th class="c-num">SE</th>
+                  <th class="c-num">LE</th>
+                  <th>Links</th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+          <div id="tiles" hidden></div>
+        </article>
+      </main>
+    </div>
 
     <div id="filename-tooltip" role="tooltip" hidden></div>
 
-    <dialog id="tg-dialog" aria-labelledby="tg-title">
-      <div class="tg-body">
-        <h2 id="tg-title">
-          <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Send to Telegram
+    <footer id="page-footer">
+      <span class="foot-left" title="MIT License">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v18" />
+          <path d="m19 8 3 8a5 5 0 0 1-6 0zV7" />
+          <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1" />
+          <path d="m5 8 3 8a5 5 0 0 1-6 0zV7" />
+          <path d="M7 21h10" />
+        </svg>
+        2026 Philogicae
+      </span>
+      <a href="https://github.com/philogicae/torrent-search-mcp" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="GitHub repository">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path
+            d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656"
+          />
+        </svg>
+      </a>
+    </footer>
+
+    <dialog id="auth-dialog" aria-labelledby="auth-title">
+      <div class="dlg-body">
+        <h2 id="auth-title">
+          <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Telegram Authentification
         </h2>
-        <p class="tg-bot">
-          Message Draft for <strong>@<span id="tg-handle"></span></strong> - Confirmation.
+        <p class="dlg-sub">
+          Prompt Message to log in with <strong>@<span id="tg-handle"></span></strong>
         </p>
-        <pre class="tg-payload" id="tg-payload"></pre>
-        <div class="tg-actions">
-          <button id="tg-open">Open in Telegram</button>
-          <button id="tg-web-btn" data-variant="secondary" title="Open the t.me page in a new tab">t.me ↗</button>
-          <span class="spacer"></span>
-          <button id="tg-close" data-variant="secondary">Close</button>
+        <pre class="dlg-payload" id="auth-code"></pre>
+        <p id="auth-status" class="waiting">Waiting for approval... (10min)</p>
+        <div class="dlg-actions">
+          <button id="auth-open">Open in Telegram</button>
+          <button id="auth-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
         </div>
-        <p class="tg-hint" id="tg-hint">Telegram didn't open? The app may not be installed - use the t.me button instead.</p>
+      </div>
+    </dialog>
+
+    <dialog id="tg-dialog" aria-labelledby="tg-title">
+      <div class="dlg-body">
+        <button id="tg-close" class="dlg-close" aria-label="Close" title="Close">✕</button>
+        <h2 id="tg-title">
+          <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Forward to Telegram
+        </h2>
+        <p class="dlg-sub">
+          Prompt Message to download with <strong>@<span id="tg-handle"></span></strong>
+        </p>
+        <pre class="dlg-payload" id="tg-payload"></pre>
+        <div class="dlg-actions">
+          <button id="tg-open">Open in Telegram</button>
+          <span class="spacer"></span>
+          <button id="tg-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
+        </div>
+        <p class="dlg-hint" id="tg-hint">Telegram didn't open? The app may not be installed - use the t.me button instead.</p>
       </div>
     </dialog>
     <script src="https://unpkg.com/@knadh/indexed-cache@0.4.4/dist/indexed-cache.min.js"></script>
     <script>
+      // The oat UI library loads through indexed-cache (async blob swap), so
+      // `ot` can be undefined when the app boots on a cold cache. Queue toasts
+      // fired before it lands; flush once it defines itself.
+      window.ot = undefined;
+      const otQueue = [];
+      function toast(title, body, opts) {
+        if (window.ot && window.ot.toast) window.ot.toast(title, body, opts);
+        else otQueue.push([title, body, opts]);
+      }
+      Object.defineProperty(window, "ot", {
+        get: () => otValue,
+        set: (v) => {
+          otValue = v;
+          if (v && v.toast) {
+            while (otQueue.length) v.toast(...otQueue.shift());
+          }
+        },
+        configurable: true,
+      });
+      let otValue;
+
       // ---- Theme (house default: dark, persisted choice wins) -----------------
       const ic = new IndexedCache();
       ic.init()
@@ -732,27 +1166,52 @@
       themeBtn.onclick = () => setTheme(document.body.dataset.theme === "dark" ? "light" : "dark");
 
       // ---- State --------------------------------------------------------------
-      // The Results selector caps the overall list length for both search
-      // and popular listings.
       let rows = [];
-      let sortKey = "seeders";
-      let sortDir = "desc";
-      const SIZE_UNITS = {
-        B: 1,
-        KB: 1e3,
-        MB: 1e6,
-        GB: 1e9,
-        TB: 1e12,
-        KIB: 1024,
-        MIB: 1024 ** 2,
-        GIB: 1024 ** 3,
-        TIB: 1024 ** 4,
-      };
-      const SKELETON_ROWS = 12;
-      const TELEGRAM_BOT_HANDLE = __TELEGRAM_BOT_HANDLE__;
+      // Popular sections ordered by traffic (TorrentFreak 2026 ranking),
+      // using the public display domains (the API aliases its scraping
+      // mirrors: apibay.org -> thepiratebay.org, yts.mx -> yts.vg).
+      const SOURCE_ORDER = ["thepiratebay.org", "1337x.to", "uindex.org", "eztvx.to", "yts.vg", "nyaa.si", "fitgirl-repacks.site", "subsplease.org", "bittorrented.com"];
+      const SESSION_KEY = "telegram_session_token";
+      let viewMode = "sections"; // "search" = table, "sections" = popular tiles
+      const session = { enabled: false, authenticated: false, handle: null };
 
       const $ = (id) => document.getElementById(id);
 
+      function getToken() {
+        try {
+          return localStorage.getItem(SESSION_KEY) || "";
+        } catch {
+          return "";
+        }
+      }
+      function setToken(token) {
+        try {
+          if (token) localStorage.setItem(SESSION_KEY, token);
+          else localStorage.removeItem(SESSION_KEY);
+        } catch {}
+      }
+      function authHeaders() {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+      }
+
+      function sourceRank(s) {
+        const i = SOURCE_ORDER.indexOf(s);
+        return i === -1 ? SOURCE_ORDER.length : i;
+      }
+
+      // Deterministic hue per label so every source/category keeps its color.
+      function hueFor(s) {
+        let h = 0;
+        for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) % 360;
+        return h;
+      }
+
+      // Source labels are domains: link out to the site everywhere.
+      function sourceLinkHtml(source, style, classAttr) {
+        const href = `https://${escapeHtml(source)}/`;
+        return `<a ${classAttr} href="${href}" target="_blank" rel="noopener noreferrer" title="Open ${escapeHtml(source)}"${style}>${escapeHtml(source)}</a>`;
+      }
       function escapeHtml(s) {
         return String(s ?? "").replace(
           /[&<>"']/g,
@@ -767,139 +1226,232 @@
         );
       }
 
-      function parseSize(s) {
-        const m = /^([\d.]+)\s*([KMGT]?I?B)$/i.exec(String(s || "").trim());
-        return m ? parseFloat(m[1]) * (SIZE_UNITS[m[2].toUpperCase()] || 1) : -1;
+      // ---- View switching (spinner / empty / table / tiles) -------------------
+      function showLoading() {
+        $("loading").hidden = false;
+        $("empty-state").hidden = true;
+        $("table-wrap").hidden = true;
+        $("tiles").hidden = true;
+      }
+      function showEmpty(message) {
+        $("loading").hidden = true;
+        $("empty-state").hidden = false;
+        $("empty-text").textContent = message || "No torrents found";
+        $("table-wrap").hidden = true;
+        $("tiles").hidden = true;
+      }
+      function showResults() {
+        const mobile = mobileQuery.matches;
+        $("loading").hidden = true;
+        $("empty-state").hidden = true;
+        // Mobile search renders cards in #tiles; the table can't fit a phone.
+        $("table-wrap").hidden = viewMode !== "search" || mobile;
+        $("tiles").hidden = viewMode === "search" && !mobile;
       }
 
-      function sortValue(row, key) {
-        if (key === "_size") return parseSize(row.size);
-        return row[key];
+      // ---- Table row (search view) --------------------------------------------
+      function tgButtons(magnet) {
+        if (!session.authenticated || !session.handle || !magnet) {
+          return `<span title="Telegram unavailable" aria-label="Telegram unavailable">🚫</span>`;
+        }
+        return `<a href="#" data-tg data-magnet="${escapeHtml(magnet)}" title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>`;
       }
 
-      function applySort() {
-        const dir = sortDir === "asc" ? 1 : -1;
-        rows.sort((a, b) => {
-          const va = sortValue(a, sortKey),
-            vb = sortValue(b, sortKey);
-          if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
-          return (
-            String(va ?? "").localeCompare(String(vb ?? ""), undefined, {
-              sensitivity: "base",
-            }) * dir
-          );
-        });
+      function rowHtml(r) {
+        const magnet = r.magnet_link || "";
+        const magnetBtn = magnet
+          ? `<a href="${escapeHtml(magnet)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>`
+          : `<span title="No magnet link available" aria-label="No magnet link available">🚫</span>`;
+        const copy = magnet
+          ? `<button class="ghost" data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
+          : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
+        const tg = magnet ? tgButtons(magnet) : "";
+        const info = `<button class="info-btn ghost" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
+        const srcHue = hueFor(r.source || "");
+        const catHue = hueFor(r.category || "");
+        const source = r.source ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} 80% 70%); background: hsl(${srcHue} 50% 18%)"`, 'class="chip"') : "";
+        const category = r.category ? `<span class="chip" style="color: hsl(${catHue} 60% 74%); background: hsl(${catHue} 35% 16%)">${escapeHtml(r.category)}</span>` : "";
+        const detail = source || category ? `<span class="torrent-detail">${source}${category}</span>` : "";
+        return `<tr>
+              <td class="name-cell">${info}<span class="filename-details"><span class="filename">${escapeHtml(r.filename)}</span>${detail}</span></td>
+              <td class="date-cell">${escapeHtml(r.date)}</td>
+              <td class="num">${escapeHtml(r.size)}</td>
+              <td class="num se">${r.seeders}</td>
+              <td class="num le">${r.leechers}</td>
+              <td class="actions-cell">${tg}${magnetBtn}${copy}</td>
+            </tr>`;
       }
 
-      function renderSkeleton() {
-        const cols = document.querySelectorAll("#results th").length;
-        const cell = `<td><span class="skeleton line" style="display:block">&nbsp;</span></td>`;
-        $("rows").innerHTML = `<tr>${cell.repeat(cols)}</tr>`.repeat(SKELETON_ROWS);
+      function renderTable() {
+        $("rows").innerHTML = rows.map(rowHtml).join("");
       }
 
-      function render() {
-        applySort();
-        document.querySelectorAll("#results th.sortable").forEach((th) => {
-          if (th.dataset.key === sortKey) th.dataset.dir = sortDir;
-          else delete th.dataset.dir;
-        });
-        $("rows").innerHTML = rows
+      // ---- Popular tiles -------------------------------------------------------
+      function buildSections() {
+        const bySeeders = (a, b) => b.seeders - a.seeders;
+        // Top section lists every result; per-source sections repeat their
+        // own full share, both sorted by seeders descending.
+        const sections = [{ label: "🏆 Top Torrents", rows: [...rows].sort(bySeeders) }];
+        const bySource = new Map();
+        for (const r of rows) {
+          const key = r.source || "unknown";
+          if (!bySource.has(key)) bySource.set(key, []);
+          bySource.get(key).push(r);
+        }
+        const sources = [...bySource.keys()].sort((a, b) => sourceRank(a) - sourceRank(b) || a.localeCompare(b));
+        for (const s of sources) sections.push({ label: s, rows: bySource.get(s).sort(bySeeders) });
+        return sections.filter((section) => section.rows.length);
+      }
+
+      function tileActionsHtml(r) {
+        const magnet = r.magnet_link || "";
+        const magnetBtn = magnet ? `<a href="${escapeHtml(magnet)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>` : `<span title="No magnet link available">🚫</span>`;
+        const copy = magnet
+          ? `<button data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
+          : `<button title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
+        return `${tgButtons(magnet)}${magnetBtn}${copy}`;
+      }
+
+      function tileHtml(section, mobile) {
+        const isTop = section.label.startsWith("🏆");
+        const hue = !isTop ? hueFor(section.label) : null;
+        const titleColor = hue === null ? "var(--accent)" : `hsl(${hue} 80% 70%)`;
+        const title = isTop ? escapeHtml(section.label) : sourceLinkHtml(section.label, "", 'class="tile-source-link"');
+        const openClass = mobile && isTop ? " open" : "";
+        const rowsHtml = section.rows
+          .map(
+            (r) => `<div class="tile-row">
+                <div class="tile-main">
+                  <span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(r.filename)}</span>
+                  <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(r.date)}</span></span>
+                </div>
+                <div class="tile-actions">${tileActionsHtml(r)}</div>
+              </div>`,
+          )
+          .join("");
+        return `<div class="tile${isTop ? " tile-top" : ""}${openClass}">
+            <div class="tile-head" data-tile-head><span class="tile-title" style="color: ${titleColor}">${title}</span><span class="tile-count">${section.rows.length}</span><span class="tile-chevron">▼</span></div>
+            <div class="tile-body">${rowsHtml}</div>
+          </div>`;
+      }
+
+      const mobileQuery = window.matchMedia("(max-width: 640px)");
+
+      function renderTiles() {
+        $("tiles").classList.remove("tile-cards");
+        $("tiles").innerHTML = buildSections()
+          .map((section) => tileHtml(section, mobileQuery.matches))
+          .join("");
+      }
+
+      // Mobile search view: the fixed-columns table cannot fit a phone, so
+      // results render as the same card rows the popular tiles use.
+      function renderCards() {
+        $("tiles").classList.add("tile-cards");
+        $("tiles").innerHTML = rows
           .map((r) => {
-            const magnet = r.magnet_link
-              ? `<a href="${escapeHtml(r.magnet_link)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>`
-              : `<span title="No magnet link available" aria-label="No magnet link available">🚫</span>`;
-            const copy = r.magnet_link
-              ? `<button class="ghost" data-copy="${escapeHtml(r.magnet_link)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
-              : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
-            const telegramUrl =
-              r.magnet_link && TELEGRAM_BOT_HANDLE ? `https://t.me/${encodeURIComponent(TELEGRAM_BOT_HANDLE)}?text=${encodeURIComponent(`Download this torrent: ${r.magnet_link}`)}` : "";
-            const telegram = TELEGRAM_BOT_HANDLE
-              ? r.magnet_link
-                ? `<a href="${escapeHtml(telegramUrl)}" data-tg title="Send to Telegram" aria-label="Send to Telegram"><img src="/static/telegram.svg" alt="" /></a>`
-                : `<button class="ghost" title="No magnet link available" aria-label="No magnet link available" disabled><img src="/static/telegram.svg" alt="" /></button>`
-              : "";
-            const info = `<button class="info-btn ghost" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
-            const source = r.source ? `<span class="torrent-source">${escapeHtml(r.source)}</span>` : "";
-            const category = r.category ? `<span class="torrent-category">${source ? "&nbsp;-&nbsp;" : ""}${escapeHtml(r.category)}</span>` : "";
-            const detail = source || category ? `<small class="torrent-detail">${source}${category}</small>` : "";
-            return `<tr>
-                  <td class="name-cell">${info}<span class="filename-details"><span class="filename">${escapeHtml(r.filename)}</span>${detail}</span></td>
-                  <td>${escapeHtml(r.date)}</td>
-                  <td class="num">${escapeHtml(r.size)}</td>
-                  <td class="num se">${r.seeders}</td>
-                  <td class="num le">${r.leechers}</td>
-                  <td class="actions-cell">${telegram}${magnet}${copy}</td>
-                </tr>`;
+            const srcHue = hueFor(r.source || "");
+            const catHue = hueFor(r.category || "");
+            const source = r.source ? sourceLinkHtml(r.source, ` style="color: hsl(${srcHue} 80% 70%); background: hsl(${srcHue} 50% 18%)"`, 'class="chip"') : "";
+            const category = r.category ? `<span class="chip" style="color: hsl(${catHue} 60% 74%); background: hsl(${catHue} 35% 16%)">${escapeHtml(r.category)}</span>` : "";
+            const chips = source || category ? `<span class="torrent-detail">${source}${category}</span>` : "";
+            return `<div class="tile-row">
+                <div class="tile-main">
+                  <span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(r.filename)}</span>
+                  ${chips}
+                  <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(r.date)}</span></span>
+                </div>
+                <div class="tile-actions">${tileActionsHtml(r)}</div>
+              </div>`;
           })
           .join("");
       }
 
-      function setStatus(text) {
-        $("summary").textContent = text;
-      }
+      // Mobile accordion: the whole title bar toggles a tile; opening one
+      // closes the others. Desktop tiles are always expanded.
+      $("tiles").addEventListener("click", (e) => {
+        const head = e.target.closest("[data-tile-head]");
+        if (!head || e.target.closest("a")) return; // links navigate, never toggle
+        if (!window.matchMedia("(max-width: 640px)").matches) return;
+        const tile = head.closest(".tile");
+        const wasOpen = tile.classList.contains("open");
+        document.querySelectorAll("#tiles .tile.open").forEach((t) => t.classList.remove("open"));
+        if (!wasOpen) tile.classList.add("open");
+      });
+      mobileQuery.addEventListener("change", () => {
+        render();
+      });
 
-      function showError(msg) {
-        // Surface failures on the status line instead of a separate banner.
-        const el = $("summary");
-        el.textContent = msg;
-        el.classList.add("error-text");
+      function render() {
+        if (!rows.length) {
+          showEmpty();
+          return;
+        }
+        showResults();
+        const mobile = mobileQuery.matches;
+        if (viewMode === "search") {
+          if (mobile) {
+            renderCards();
+          } else {
+            renderTable();
+          }
+        } else {
+          renderTiles();
+        }
       }
 
       async function fetchJson(url, options) {
-        const res = await fetch(url, { cache: "no-store", ...options });
+        const res = await fetch(url, { cache: "no-store", ...options, headers: { ...authHeaders(), ...(options && options.headers) } });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       }
 
-      async function run(url, options, summaryText, activeBtn) {
-        $("summary").classList.remove("error-text");
-        renderSkeleton();
+      let requestSeq = 0;
+      async function run(url, options, activeBtn) {
+        const seq = ++requestSeq;
+        showLoading();
         $("btn-search").disabled = true;
         $("btn-popular").disabled = true;
-        // The clicked button's label becomes an hourglass while loading.
-        const originalLabel = activeBtn.innerHTML;
-        const originalAriaLabel = activeBtn.getAttribute("aria-label");
-        activeBtn.setAttribute("aria-label", "Loading");
-        activeBtn.textContent = "⏳";
+        const icon = activeBtn.querySelector(".btn-icon");
+        const originalIcon = icon ? icon.textContent : null;
+        if (icon) icon.textContent = "⏳";
         try {
           const data = await fetchJson(url, options);
-          rows = data;
-          // Default view: most seeded first.
-          sortKey = "seeders";
-          sortDir = "desc";
+          if (seq !== requestSeq) return; // a newer request superseded this one
+          rows = [...data].sort((a, b) => (b.seeders ?? 0) - (a.seeders ?? 0));
           render();
-          setStatus(rows.length ? summaryText.replace("{n}", String(rows.length)) : "No torrents found.");
+          if (!rows.length) showEmpty();
         } catch (err) {
-          $("rows").innerHTML = "";
-          showError(`Request failed: ${err.message}. Is the server running?`);
+          if (seq !== requestSeq) return;
+          rows = [];
+          showEmpty();
+          toast(`Request failed: ${err.message}. Is the server running?`, "Torrent Search", {
+            variant: "danger",
+          });
         } finally {
-          activeBtn.innerHTML = originalLabel;
-          activeBtn.setAttribute("aria-label", originalAriaLabel);
-          $("btn-search").disabled = false;
-          $("btn-popular").disabled = false;
+          if (seq === requestSeq) {
+            if (icon && originalIcon !== null) icon.textContent = originalIcon;
+            $("btn-search").disabled = false;
+            $("btn-popular").disabled = false;
+          }
         }
       }
 
       function doSearch() {
         const q = $("query").value.trim();
         if (!q) {
-          ot.toast("Enter a query first", "Torrent Search", {
+          toast("Enter a query first", "Torrent Search", {
             variant: "warning",
           });
           return;
         }
-        const limit = parseInt($("limit").value, 10) || 100;
-        run(`/torrent/search?query=${encodeURIComponent(q)}&max_items=${limit}`, { method: "POST" }, `{n} results for “${q}”`, $("btn-search"));
+        viewMode = "search";
+        run(`/torrent/search?query=${encodeURIComponent(q)}&max_items=1000`, { method: "POST" }, $("btn-search"));
       }
 
       function doPopular() {
-        const limit = parseInt($("limit").value, 10) || 100;
-        run(`/torrent/popular?per_source=${limit}`, {}, "Popular Torrents", $("btn-popular")).then(() => {
-          if (rows.length) {
-            rows = rows.slice(0, limit);
-            render();
-          }
-        });
+        viewMode = "sections";
+        run(`/torrent/popular?per_source=1000`, {}, $("btn-popular"));
       }
 
       $("btn-search").onclick = doSearch;
@@ -908,33 +1460,150 @@
         if (e.key === "Enter") doSearch();
       });
 
-      // Freeze button widths so the loading label swap never reflows the toolbar.
-      // Measured at startup and again once webfonts settle.
-      function freezeButtonWidths() {
-        const width = $("limit").offsetWidth;
-        for (const id of ["btn-search", "btn-popular"]) {
-          $(id).style.width = `${width}px`;
+      // ---- Telegram session (lock button + gate) ------------------------------
+      function showGate() {
+        $("gate").hidden = false;
+        $("app").hidden = true;
+      }
+      function showApp() {
+        $("gate").hidden = true;
+        $("app").hidden = false;
+      }
+
+      function paintLock() {
+        const lock = $("auth-lock");
+        lock.textContent = session.authenticated ? "🔓" : "🔒";
+        lock.classList.toggle("authed", session.authenticated);
+        lock.classList.toggle("locked", !session.authenticated);
+        lock.title = session.authenticated ? `Telegram access granted (@${session.handle}) - click to log out` : "Telegram access: not authenticated - click to pair";
+      }
+
+      async function refreshSession() {
+        try {
+          const state = await fetchJson("/telegram/session");
+          session.enabled = !!state.enabled;
+          session.authenticated = !!state.authenticated;
+          session.handle = state.handle || null;
+        } catch {
+          session.enabled = false;
+          session.authenticated = true; // offline server: don't gate the UI
+          session.handle = null;
+        }
+        paintLock();
+        return session;
+      }
+
+      $("auth-lock").onclick = () => {
+        if (!session.enabled) {
+          toast("Telegram integration is disabled (TELEGRAM_BOT_HANDLE unset)", "Telegram", { variant: "warning" });
+          return;
+        }
+        if (session.authenticated) {
+          fetch("/telegram/auth/logout", { method: "POST", headers: authHeaders() })
+            .catch(() => {})
+            .finally(() => {
+              setToken("");
+              session.authenticated = false;
+              session.handle = null;
+              paintLock();
+              toast("Logged out - Telegram access revoked", "Telegram", { variant: "success" });
+              showGate();
+              openAuthDialog();
+            });
+        } else {
+          openAuthDialog();
+        }
+      };
+
+      // ---- Auth pairing dialog ------------------------------------------------
+      const authDialog = $("auth-dialog");
+      let authCode = null;
+      let authPollTimer = null;
+
+      function stopAuthPolling() {
+        if (authPollTimer) {
+          clearInterval(authPollTimer);
+          authPollTimer = null;
         }
       }
-      freezeButtonWidths();
-      window.addEventListener("resize", freezeButtonWidths);
-      if (document.fonts && document.fonts.ready) document.fonts.ready.then(freezeButtonWidths);
 
-      document.querySelectorAll("#results th.sortable").forEach((th) => {
-        th.onclick = () => {
-          const key = th.dataset.key;
-          if (sortKey === key) sortDir = sortDir === "asc" ? "desc" : "asc";
-          else {
-            sortKey = key;
-            sortDir = "desc";
+      function setAuthStatus(text, cls) {
+        const el = $("auth-status");
+        el.textContent = text;
+        el.classList.remove("ok", "bad");
+        if (cls) el.classList.add(cls);
+      }
+
+      async function createChallenge() {
+        stopAuthPolling();
+        setAuthStatus("Generating pairing code...");
+        try {
+          const data = await fetchJson("/telegram/auth/challenge", { method: "POST" });
+          authCode = data.code;
+          $("auth-code").textContent = data.code;
+          // Same pattern as the send popup: deep link into the bot with the
+          // authorization message prefilled - the user just has to send it.
+          const message = `Authorize session: ${data.code}`;
+          const links = {
+            app: `tg://resolve?domain=${encodeURIComponent(session.handle)}&text=${encodeURIComponent(message)}`,
+            web: `https://t.me/${encodeURIComponent(session.handle)}?text=${encodeURIComponent(message)}`,
+          };
+          $("auth-open").dataset.app = links.app;
+          $("auth-web-btn").dataset.web = links.web;
+          setAuthStatus("Waiting for approval...");
+          authPollTimer = setInterval(pollChallenge, 2000);
+        } catch (err) {
+          authCode = null;
+          $("auth-code").textContent = "-";
+          setAuthStatus(`Could not create pairing code: ${err.message} - retrying...`, "bad");
+          setTimeout(createChallenge, 15000);
+        }
+      }
+
+      async function pollChallenge() {
+        if (!authCode) return;
+        try {
+          const res = await fetch(`/telegram/auth/poll?code=${encodeURIComponent(authCode)}`, { cache: "no-store" });
+          const data = await res.json();
+          if (data.status === "approved" && data.token) {
+            stopAuthPolling();
+            authCode = null;
+            setToken(data.token);
+            setAuthStatus("✅ Access granted - this browser is paired.", "ok");
+            await refreshSession();
+            setTimeout(() => {
+              showApp();
+              if (authDialog.open) authDialog.close();
+              doPopular();
+            }, 900);
+          } else if (data.status !== "pending") {
+            stopAuthPolling();
+            setAuthStatus("Code expired - generating a new one.", "bad");
+            setTimeout(createChallenge, 1500);
           }
-          render();
-          const label = th.textContent.replace(/[↕↑↓]\s*$/, "");
-          $("sort-hint").textContent = `sorted by ${label} ${sortDir === "asc" ? "↑" : "↓"}`;
-        };
-      });
+        } catch {
+          /* transient network error: keep polling */
+        }
+      }
 
-      // Filename tooltip toggle (ⓘ)
+      function openAuthDialog() {
+        authDialog.showModal();
+        createChallenge();
+      }
+
+      // Authenticate or leave: the pairing popup cannot be dismissed. It
+      // closes by itself once the code is approved.
+      $("auth-open").addEventListener("click", () => {
+        location.href = $("auth-open").dataset.app;
+      });
+      $("auth-web-btn").addEventListener("click", () => {
+        const url = $("auth-web-btn").dataset.web;
+        if (url) window.open(url, "_blank", "noopener");
+      });
+      authDialog.addEventListener("cancel", (e) => e.preventDefault()); // block Escape
+      authDialog.addEventListener("close", () => stopAuthPolling());
+
+      // ---- Filename tooltip toggle (ⓘ) ----------------------------------------
       const filenameTooltip = $("filename-tooltip");
 
       function closeFilenameTooltip() {
@@ -972,10 +1641,10 @@
       document.addEventListener("click", (e) => {
         if (!e.target.closest("button[data-info]")) closeFilenameTooltip();
       });
-      document.querySelector(".table").addEventListener("scroll", closeFilenameTooltip);
+      document.querySelector(".results-scroll").addEventListener("scroll", closeFilenameTooltip);
       window.addEventListener("resize", closeFilenameTooltip);
 
-      // Copy-magnet (icon button, event delegation)
+      // ---- Copy-magnet (icon button, event delegation) --------------------------
       async function copyText(text) {
         if (navigator.clipboard && window.isSecureContext) {
           await navigator.clipboard.writeText(text);
@@ -992,51 +1661,48 @@
         ta.remove();
       }
 
-      $("rows").addEventListener("click", async (e) => {
+      document.addEventListener("click", async (e) => {
         const btn = e.target.closest("button[data-copy]");
         if (!btn || btn.disabled) return;
         try {
           await copyText(btn.dataset.copy);
-          ot.toast("Magnet link copied", "📋", {
+          toast("Magnet link copied", "📋", {
             variant: "success",
             duration: 2500,
           });
         } catch {
-          ot.toast("Copy failed", "📋", { variant: "error", duration: 2500 });
+          toast("Copy failed", "📋", { variant: "error", duration: 2500 });
         }
       });
 
-      // Send-to-Telegram popup. The https t.me auto-handoff drops the ?text=
-      // draft on some phones; an explicit tap on tg://resolve preserves it,
-      // so the button opens this confirm popup and fires the scheme directly.
+      // ---- Send-to-Telegram popup ----------------------------------------------
+      // The https t.me auto-handoff drops the ?text= draft on some phones; an
+      // explicit tap on tg://resolve preserves it, so the button opens this
+      // confirm popup and fires the scheme directly.
       const tgDialog = $("tg-dialog");
       let tgTimer = null;
       function tgLinks(text) {
         return {
-          app: `tg://resolve?domain=${encodeURIComponent(TELEGRAM_BOT_HANDLE)}&text=${encodeURIComponent(text)}`,
-          web: `https://t.me/${encodeURIComponent(TELEGRAM_BOT_HANDLE)}?text=${encodeURIComponent(text)}`,
+          app: `tg://resolve?domain=${encodeURIComponent(session.handle)}&text=${encodeURIComponent(text)}`,
+          web: `https://t.me/${encodeURIComponent(session.handle)}?text=${encodeURIComponent(text)}`,
         };
       }
-      $("rows").addEventListener("click", (e) => {
-        const a = e.target.closest("a[data-tg]");
-        if (!a || !TELEGRAM_BOT_HANDLE) return;
-        e.preventDefault();
-        const q = a.href.indexOf("?text=");
-        let text = "";
-        if (q >= 0) {
-          try {
-            text = decodeURIComponent(a.href.slice(q + 6));
-          } catch {
-            text = "";
-          }
-        }
-        $("tg-handle").textContent = TELEGRAM_BOT_HANDLE;
-        $("tg-payload").textContent = text || a.href;
+
+      function openTgDialog(text) {
+        $("tg-handle").textContent = session.handle;
+        $("tg-payload").textContent = text;
         const links = tgLinks(text);
         $("tg-open").dataset.app = links.app;
         $("tg-web-btn").dataset.web = links.web;
         $("tg-hint").classList.remove("visible");
         tgDialog.showModal();
+      }
+
+      document.addEventListener("click", (e) => {
+        const a = e.target.closest("a[data-tg]");
+        if (!a) return;
+        e.preventDefault();
+        openTgDialog(a.dataset.magnet || "");
       });
       $("tg-open").addEventListener("click", () => {
         location.href = $("tg-open").dataset.app;
@@ -1047,14 +1713,62 @@
         const url = $("tg-web-btn").dataset.web;
         if (url) window.open(url, "_blank", "noopener");
       });
-      $("tg-close").addEventListener("click", () => tgDialog.close());
       tgDialog.addEventListener("click", (e) => {
         if (e.target === tgDialog) tgDialog.close();
       });
       tgDialog.addEventListener("close", () => clearTimeout(tgTimer));
+      $("tg-close").addEventListener("click", () => tgDialog.close());
 
-      // Load the popular listings on first visit so the page is never empty.
-      window.addEventListener("DOMContentLoaded", doPopular);
+      // ---- Boot ----------------------------------------------------------------
+      (async () => {
+        const state = await refreshSession();
+        if (!state.enabled) {
+          // Telegram integration off: no gate, no telegram features.
+          showApp();
+          doPopular();
+          return;
+        }
+        if (state.authenticated && getToken()) {
+          showApp();
+          doPopular();
+          return;
+        }
+        // No valid token: gateway block - stars + pairing popup.
+        setToken("");
+        showGate();
+        openAuthDialog();
+      })();
+
+      // ---- Orbit spinner (rAF) ------------------------------------------------
+      // The spin3D keyframes are invalid (rotate3d(0deg)), so the template
+      // really interpolates: colored orbits spin -360deg about (0.5,0.5,0.5),
+      // white orbits slerp identity -> 90deg about their own axes. Driven with
+      // one rAF loop; no CSS animations involved.
+      const orbitConfigs = [
+        [".blue-orbit", [0.5, 0.5, 0.5], -360, 3, 0.2],
+        [".green-orbit", [0.5, 0.5, 0.5], -360, 2, 0],
+        [".red-orbit", [0.5, 0.5, 0.5], -360, 1, 0],
+        [".w1", [1, 1, 1], 90, 10, 0],
+        [".w2", [1, 2, 0.5], 90, 10, 0],
+        [".w3", [0.5, 1, 2], 90, 10, 0],
+      ].map(([sel, [x, y, z], sweep, dur, delay]) => ({
+        el: document.querySelector(sel),
+        x,
+        y,
+        z,
+        sweep,
+        dur,
+        delay,
+      }));
+      function orbitFrame(now) {
+        const t = now / 1000;
+        for (const o of orbitConfigs) {
+          const p = (Math.max(t - o.delay, 0) / o.dur) % 1;
+          o.el.style.transform = `rotate3d(${o.x},${o.y},${o.z},${(o.sweep < 0 ? -o.sweep : 0) + o.sweep * p}deg)`;
+        }
+        requestAnimationFrame(orbitFrame);
+      }
+      requestAnimationFrame(orbitFrame);
     </script>
   </body>
 </html>

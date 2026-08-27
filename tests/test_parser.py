@@ -183,54 +183,22 @@ async def test_get_first_no_hosts_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
-# CSV pipeline (parse_result / extract_torrents)
+# CSV extraction (extract_torrents)
 # ---------------------------------------------------------------------------
 
-TPB_HTML = """
-<ol id="torrents" class="view-single">
-<li class="list-header">junk</li>
-<li>Video - Movies > Breaking Bad S01 1080p > 2026-01-01 > magnet:?xt=urn:btih:abcdef&dn=x > 1.2 GB > 10 > 5 > uploader1</li>
-<li>Video - TV shows > Better Call Saul S01 720p > 2025-06-01 > magnet:?xt=urn:btih:fedcba&dn=y > 800 MB > 3 > 1 > uploader2</li>
-</ol>
-"""
 
-
-def test_parse_result_tpb_html() -> None:
-    out = parser.parse_result(
-        TPB_HTML,
-        ["some_texts", "local_links", "single_angle_bracket", "html_tags"],
-    )
-    lines = out.splitlines()
-    assert (
-        lines[0] == "category;filename;date;magnet_link;size;seeders;leechers;uploader"
-    )
-    assert len(lines) == 3
-    assert "Breaking Bad S01 1080p" in lines[1]
-
-
-def test_parse_result_without_exclusions_splits_on_li() -> None:
-    out = parser.parse_result("<li>Video - Movies > Name > 1 GB > 1 > 1</li>")
-    assert "Name" in out
-
-
-def test_parse_result_excludes_named_replacers() -> None:
-    # Excluding the '>' stripping replacers keeps the separators intact.
-    out = parser.parse_result(
-        "<li>Video - Movies > Name > 1 GB > 1 > 1</li>",
-        ["thepiratebay_to_csv", "single_angle_bracket"],
-    )
-    assert ">" in out
-    assert "Video - Movies" in out
-
-
-def test_extract_torrents_from_parser_text() -> None:
-    text = "SOURCE -> thepiratebay.org\n" + parser.parse_result(
-        TPB_HTML, ["some_texts", "local_links", "single_angle_bracket", "html_tags"]
+def test_extract_torrents_from_csv_text() -> None:
+    text = (
+        "SOURCE -> apibay.org\n"
+        + parser.CSV_HEADER
+        + "\n"
+        + "Breaking Bad S01 1080p;Video - Movies;1.2 GB;10;5;100;2026-01-01;magnet:?xt=urn:btih:abcdef&dn=x\n"
+        + "Better Call Saul S01 720p;Video - TV shows;800 MB;3;1;50;2025-06-01;magnet:?xt=urn:btih:fedcba&dn=y"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 2
     assert torrents[0].filename == "Breaking Bad S01 1080p"
-    assert torrents[0].source == "thepiratebay.org"
+    assert torrents[0].source == "apibay.org"
     assert torrents[0].seeders == 10
     assert torrents[0].date == "2026-01-01"
     assert torrents[0].magnet_link == "magnet:?xt=urn:btih:abcdef&dn=x"

@@ -152,6 +152,32 @@ async def test_popular_torrents_no_results(monkeypatch: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_popular_torrents_groups_by_source(monkeypatch: Any) -> None:
+    nyaa = _torrent(magnet=f"magnet:?xt=urn:btih:{'a' * 40}&dn=n")
+    yts = _torrent(magnet=f"magnet:?xt=urn:btih:{'b' * 40}&dn=y")
+    nyaa = nyaa.model_copy(update={"source": "nyaa.si"})
+    yts = yts.model_copy(update={"source": "yts.vg"})
+    monkeypatch.setattr(
+        mcp_server.torrent_search_api,
+        "popular_torrents",
+        await _fake_popular([nyaa, yts]),
+    )
+    text = await mcp_server.popular_torrents()
+    yts_pos, nyaa_pos = text.index("== yts.vg =="), text.index("== nyaa.si ==")
+    assert yts_pos < nyaa_pos  # traffic ranking: YTS before nyaa
+    assert text.count("== ") == 2
+
+
+def test_format_torrents_by_source_orders_unknown_last() -> None:
+    obscure = _torrent(magnet=f"magnet:?xt=urn:btih:{'c' * 40}&dn=o")
+    yts = _torrent(magnet=f"magnet:?xt=urn:btih:{'b' * 40}&dn=y")
+    obscure = obscure.model_copy(update={"source": "zzz-unknown.example"})
+    yts = yts.model_copy(update={"source": "yts.vg"})
+    text = mcp_server._format_torrents([obscure, yts], by_source=True)
+    assert text.index("== yts.vg ==") < text.index("== zzz-unknown.example ==")
+
+
+@pytest.mark.asyncio
 async def test_all_tools_exposed(mcp_client: Client[Any]) -> None:
     async with mcp_client:
         tools = await mcp_client.list_tools()
@@ -160,6 +186,8 @@ async def test_all_tools_exposed(mcp_client: Client[Any]) -> None:
         "popular_torrents",
         "get_torrent",
         "available_sources",
+        "authorize_webapp",
+        "torrent_webapp",
     }
 
 
@@ -176,6 +204,7 @@ async def test_remote_api_mode_proxies_tools(
         return [torrent.model_dump()]
 
     monkeypatch.setattr(mcp_server, "_api_get_json", fake_json)
+    monkeypatch.setattr(mcp_server, "_api_post_json", fake_json)
     async with mcp_client as client:
         search = await client.call_tool(
             "search_torrents",
@@ -230,6 +259,9 @@ async def test_remote_api_real_transport(monkeypatch: Any) -> None:
             return httpx.Response(200, json=mcp_server.SOURCES)
         if request.url.path == "/torrent/popular":
             return httpx.Response(200, json=[torrent.model_dump()])
+        if request.url.path == "/torrent/search":
+            assert request.method == "POST", "search must use POST"
+            return httpx.Response(200, json=[torrent.model_dump()])
         return httpx.Response(500)
 
     transport = httpx.MockTransport(handler)
@@ -242,6 +274,9 @@ async def test_remote_api_real_transport(monkeypatch: Any) -> None:
 
     assert await mcp_server._api_get_json("/sources") == mcp_server.SOURCES
     assert (await mcp_server._fetch_torrents("/torrent/popular", {}))[0].filename
+    assert (
+        await mcp_server._fetch_torrents("/torrent/search", {"query": "x"}, post=True)
+    )[0].filename
     assert isinstance(await mcp_server._api_get_text("/sources"), str)
     with pytest.raises(httpx.HTTPStatusError):
         await mcp_server._api_get_text("/torrent/unknown")
@@ -251,3 +286,53 @@ async def test_remote_api_real_transport(monkeypatch: Any) -> None:
 
     # The shared client is reused across calls
     assert mcp_server._api() is mcp_server._api_client
+
+
+@pytest.mark.asyncio
+async def test_authorize_webapp_disabled(monkeypatch: Any) -> None:
+    monkeypatch.delenv("TORRENT_SEARCH_API_KEY", raising=False)
+    result = await mcp_server.authorize_webapp("some-code", "12345")
+    assert "disabled" in result
+
+
+@pytest.mark.asyncio
+async def test_authorize_webapp_requires_api_url(monkeypatch: Any) -> None:
+    monkeypatch.setenv("TORRENT_SEARCH_API_KEY", "s")
+    result = await mcp_server.authorize_webapp("some-code", "12345")
+    assert "TORRENT_SEARCH_API_URL" in result
+
+
+@pytest.mark.asyncio
+async def test_authorize_webapp_remote(monkeypatch: Any) -> None:
+    monkeypatch.setenv("TORRENT_SEARCH_API_KEY", "reg-secret")
+    monkeypatch.setattr(mcp_server, "API_BASE_URL", "http://test")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["authorization"] == "Bearer reg-secret"
+        code = request.url.params["code"]
+        assert request.url.params["chat_id"] == "12345"
+        if code == "good":
+            return httpx.Response(200, json={"status": "approved"})
+        if code == "stale":
+            return httpx.Response(404, json={"detail": "unknown"})
+        return httpx.Response(401, json={"detail": "bad secret"})
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        mcp_server,
+        "_api_client",
+        httpx.AsyncClient(transport=transport, base_url="http://test"),
+    )
+    assert "Access granted" in await mcp_server.authorize_webapp("good", "12345")
+    assert "Unknown or expired" in await mcp_server.authorize_webapp("stale", "12345")
+    assert "does not match" in await mcp_server.authorize_webapp("other", "12345")
+
+
+@pytest.mark.asyncio
+async def test_torrent_webapp_tool(monkeypatch: Any) -> None:
+    monkeypatch.delenv("WEBUI_URL", raising=False)
+    assert "WEBUI_URL" in await mcp_server.torrent_webapp()
+    monkeypatch.setenv("WEBUI_URL", "http://web.local:8000/")
+    text = await mcp_server.torrent_webapp()
+    assert "http://web.local:8000" in text
+    assert "authorize_webapp" in text

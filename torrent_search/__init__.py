@@ -1,4 +1,4 @@
-from .fastapi_server import app as torrent_search_fastapi
+from .api_server import app as torrent_search_app
 from .mcp_server import mcp as torrent_search_mcp
 from .mcp_server import torrent_search_api
 from .wrapper import Torrent
@@ -6,6 +6,6 @@ from .wrapper import Torrent
 __all__ = [
     "Torrent",
     "torrent_search_api",
-    "torrent_search_fastapi",
+    "torrent_search_app",
     "torrent_search_mcp",
 ]

@@ -1,11 +1,11 @@
-"""FastAPI server tests with a mocked search API."""
+"""API server tests with a mocked search API."""
 
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from torrent_search import fastapi_server
+from torrent_search import api_server
 from torrent_search.wrapper.models import Torrent
 
 
@@ -29,9 +29,9 @@ def client(monkeypatch: Any) -> TestClient:
     async def fake_get(torrent_id: str) -> str | None:
         return "magnet:?xt=urn:btih:aaaa&dn=x"
 
-    monkeypatch.setattr(fastapi_server.api_client, "search_torrents", fake_search)
-    monkeypatch.setattr(fastapi_server.api_client, "get_torrent", fake_get)
-    return TestClient(fastapi_server.app)
+    monkeypatch.setattr(api_server.api_client, "search_torrents", fake_search)
+    monkeypatch.setattr(api_server.api_client, "get_torrent", fake_get)
+    return TestClient(api_server.app)
 
 
 def test_webui_served_at_root(client: TestClient) -> None:
@@ -69,7 +69,7 @@ def test_get_torrent_returns_magnet(client: TestClient) -> None:
 
 
 def test_list_sources_endpoint() -> None:
-    client = TestClient(fastapi_server.app)
+    client = TestClient(api_server.app)
     response = client.get("/sources")
     assert response.status_code == 200
     assert "thepiratebay.org" in response.json()
@@ -79,8 +79,8 @@ def test_get_popular_torrents(monkeypatch: Any) -> None:
     async def fake_popular(per_source: int = 10) -> list[Torrent]:
         return [_torrent()][:per_source]
 
-    monkeypatch.setattr(fastapi_server.api_client, "popular_torrents", fake_popular)
-    client = TestClient(fastapi_server.app)
+    monkeypatch.setattr(api_server.api_client, "popular_torrents", fake_popular)
+    client = TestClient(api_server.app)
 
     response = client.get("/torrent/popular", params={"per_source": 5})
     assert response.status_code == 200
@@ -97,7 +97,7 @@ def test_get_torrent_not_found(monkeypatch: Any) -> None:
     async def fake_get(torrent_id: str) -> str | None:
         return None
 
-    monkeypatch.setattr(fastapi_server.api_client, "get_torrent", fake_get)
-    client = TestClient(fastapi_server.app)
+    monkeypatch.setattr(api_server.api_client, "get_torrent", fake_get)
+    client = TestClient(api_server.app)
     response = client.get("/torrent/any-id")
     assert response.status_code == 404

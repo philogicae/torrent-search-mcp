@@ -41,10 +41,14 @@ services:
         required: true
     ports:
       - 8000:8000
-    command: ["torrent-search-mcp", "--mode", "fastapi"]
+    command: ["torrent-search-mcp", "--mode", "api"]
     env_file:
       - path: .env
         required: false
+    environment:
+      TELEGRAM_AUTH_FILE: /data/authorized_tokens.json
+    volumes:
+      - torrent-search-data:/data
     <<: [*default-networks, *default-logging]
 
   torrent-search-mcp:
@@ -67,3 +71,6 @@ services:
     environment:
       TORRENT_SEARCH_API_URL: http://torrent-search-api:8000
     <<: [*default-networks, *default-logging]
+
+volumes:
+  torrent-search-data:

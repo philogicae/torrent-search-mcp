@@ -22,10 +22,6 @@ This repository provides a Python API/WebUI and an MCP (Model Context Protocol) 
 > [Search directly from the command line](#as-cli)
 
 ```bash
-# One-time setup: install playwright/chromium for crawl4ai
-uvx --from torrent-search-mcp crawl4ai-setup
-
-# CLI search
 uvx torrent-search-mcp --mode cli "breaking bad"
 
 # MCP server over stdio (default)
@@ -37,8 +33,8 @@ uvx torrent-search-mcp --mode http
 # MCP server over SSE (port 8000, endpoint /sse, legacy)
 uvx torrent-search-mcp --mode sse
 
-# Standalone FastAPI server (port 8000)
-uvx torrent-search-mcp --mode fastapi
+# Standalone API server (port 8000)
+uvx torrent-search-mcp --mode api
 ```
 
 ## Table of Contents
@@ -56,7 +52,7 @@ uvx torrent-search-mcp --mode fastapi
   - [As CLI](#as-cli)
   - [As Python Wrapper](#as-python-wrapper)
   - [As MCP Server](#as-mcp-server)
-  - [As FastAPI Server](#as-fastapi-server)
+  - [As API Server](#as-api-server)
   - [Via MCP Clients](#via-mcp-clients)
     - [Example with Devin](#example-with-devin)
 - [Changelog](#changelog)
@@ -67,7 +63,7 @@ uvx torrent-search-mcp --mode fastapi
 
 - API wrapper for **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**.
 - MCP server interface for standardized communication (`stdio`, `sse`, `streamable-http`).
-- FastAPI server interface for alternative HTTP access (e.g., for direct API calls or testing).
+- API server interface for alternative HTTP access (e.g., for direct API calls or testing).
 - CLI mode for quick one-off searches directly from the terminal.
 - In-memory + `aiocache` result caching to reduce redundant scraping.
 - Configurable source filtering via environment variables.
@@ -79,18 +75,17 @@ uvx torrent-search-mcp --mode fastapi
 
 ## Supported Sources
 
-| Source              | Domain                 | Fetch method    |
-| ------------------- | ---------------------- | --------------- |
-| ThePirateBay        | `thepiratebay.org`     | HTML (crawl4ai) |
-| apibay (TPB mirror) | `apibay.org`           | HTTP API        |
-| 1337x               | `1337x.to`             | HTTP API        |
-| Nyaa                | `nyaa.si`              | HTTP API        |
-| YTS                 | `yts.mx`               | HTTP API        |
-| EZTV                | `eztvx.to`             | HTTP API        |
-| FitGirl             | `fitgirl-repacks.site` | HTTP API        |
-| SubsPlease          | `subsplease.org`       | HTTP API        |
-| BitTorrented        | `bittorrented.com`     | HTTP API        |
-| UIndex              | `uindex.org`           | HTTP top list   |
+| Source       | Domain                 | Fetch method  |
+| ------------ | ---------------------- | ------------- |
+| ThePirateBay | `apibay.org`           | HTTP API      |
+| 1337x        | `1337x.to`             | HTTP API      |
+| Nyaa         | `nyaa.si`              | HTTP API      |
+| YTS          | `yts.mx`               | HTTP API      |
+| EZTV         | `eztvx.to`             | HTTP API      |
+| FitGirl      | `fitgirl-repacks.site` | HTTP API      |
+| SubsPlease   | `subsplease.org`       | HTTP API      |
+| BitTorrented | `bittorrented.com`     | HTTP API      |
+| UIndex       | `uindex.org`           | HTTP top list |
 
 > **Note on UIndex:** the site exposes no programmatic search endpoint (its search path is protected by a browser challenge), so queries are matched client-side against its live top list - which conveniently carries magnet links inline.
 
@@ -108,13 +103,14 @@ Sources can be excluded individually via the [`EXCLUDE_SOURCES`](#configuration-
 
 The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
-| Variable                 | Default  | Description                                                                                                                                                     |
-| ------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INCLUDE_LINKS`          | `false`  | When `true`, include magnet links in the MCP `search_torrents` / `popular_torrents` results. Left off by default to greatly reduce token usage.                 |
-| `EXCLUDE_SOURCES`        | _(none)_ | Comma-separated list of sources to exclude from results (e.g. `nyaa.si,1337x.to`).                                                                              |
-| `CRAWLER_IDLE_TIMEOUT`   | `120`    | Seconds of inactivity before the headless browser (used for HTML sources like ThePirateBay) is shut down; the timer resets on every search. Set `0` to disable. |
-| `TORRENT_SEARCH_API_URL` | _(none)_ | MCP only: base URL of a running Torrent Search REST API - tools proxy it instead of scraping locally. Unset = standalone.                                       |
-| `TELEGRAM_BOT_HANDLE`    | _(none)_ | Telegram bot handle used by the Web UI torrent action. The Telegram button is hidden when unset.                                                                |
+| Variable                 | Default  | Description                                                                                                                                                                    |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `INCLUDE_LINKS`          | `false`  | When `true`, include magnet links in the MCP `search_torrents` / `popular_torrents` results. Left off by default to greatly reduce token usage.                                |
+| `EXCLUDE_SOURCES`        | _(none)_ | Comma-separated list of sources to exclude from results (e.g. `nyaa.si,1337x.to`).                                                                                             |
+| `TORRENT_SEARCH_API_URL` | _(none)_ | MCP only: base URL of a running Torrent Search REST API - tools proxy it instead of scraping locally. Unset = standalone.                                                      |
+| `TELEGRAM_BOT_HANDLE`    | _(none)_ | Telegram bot handle used by the Web UI torrent action. Unset = the web UI runs without the pairing gate and Telegram features stay hidden.                                     |
+| `TORRENT_SEARCH_API_KEY` | _(none)_ | Secret required to approve Web UI pairing codes (register endpoint + `authorize_webapp` MCP tool). Must match between API and MCP servers. Unset = pairing disabled (no gate). |
+| `WEBUI_URL`              | _(none)_ | MCP only: public URL of the web UI; enables the `torrent_webapp` tool that presents the app and its pairing flow.                                                              |
 
 ### Installation
 
@@ -128,8 +124,6 @@ This method is best for using the package as a library or running the server wit
 
 ```bash
 pip install torrent-search-mcp
-crawl4ai-setup # For crawl4ai/playwright
-playwright install --with-deps chromium # If previous command fails
 ```
 
 2.  Create a `.env` file in the directory where you'll run the application (optional).
@@ -156,7 +150,6 @@ cd torrent-search-mcp
 
 ```bash
 uv sync --frozen
-uvx playwright install --with-deps chromium
 ```
 
 3.  Create your configuration file by copying the example:
@@ -183,10 +176,10 @@ This method uses Docker Compose to run **two containers**: the REST API + web UI
 
 `compose.yaml` is configured to bypass DNS issues (using [quad9](https://quad9.net/) DNS).
 
-| Container            | Mode      | Host port | Endpoints                                                                                  |
-| -------------------- | --------- | --------- | ------------------------------------------------------------------------------------------ |
-| `torrent-search-api` | `fastapi` | `8000`    | `/` (web UI), `/torrent/*`, `/sources`, `/docs`                                            |
-| `torrent-search-mcp` | `http`    | `8001`    | `/mcp` (MCP over streamable HTTP, `TORRENT_SEARCH_API_URL=http://torrent-search-api:8000`) |
+| Container            | Mode   | Host port | Endpoints                                                                                  |
+| -------------------- | ------ | --------- | ------------------------------------------------------------------------------------------ |
+| `torrent-search-api` | `api`  | `8000`    | `/` (web UI), `/torrent/*`, `/sources`, `/docs`                                            |
+| `torrent-search-mcp` | `http` | `8001`    | `/mcp` (MCP over streamable HTTP, `TORRENT_SEARCH_API_URL=http://torrent-search-api:8000`) |
 
 1.  Clone the repository (if you haven't already):
 
@@ -225,11 +218,11 @@ The package exposes a single entry point, `torrent-search-mcp` (installed by `pi
 | `http`            | `/mcp`   | MCP server using streamable HTTP (fastmcp's canonical HTTP alias).                                                     |
 | `streamable-http` | `/mcp`   | Same as `http`; the modern, MCP-spec-recommended HTTP transport.                                                       |
 | `sse`             | `/sse`   | MCP server using Server-Sent Events. Legacy HTTP transport (deprecated by the MCP spec in favor of `streamable-http`). |
-| `fastapi`         | `/`      | Standalone FastAPI HTTP server (see [As FastAPI Server](#as-fastapi-server)).                                          |
+| `api`             | `/`      | Standalone API HTTP server (see [As API Server](#as-api-server)).                                                      |
 
 MCP modes (`stdio`, `http`, `streamable-http`, `sse`) run **standalone** by default (tools scrape locally). Set [`TORRENT_SEARCH_API_URL`](#configuration-optional) to switch to **API mode**: the tools proxy a running Torrent Search REST API instead.
 
-Common flags (for `http`, `streamable-http`, `sse` and `fastapi` modes): `--host` (default `0.0.0.0`), `--port` (default `8000`), `--reload`, `--workers` (FastAPI only).
+Common flags (for `http`, `streamable-http`, `sse` and `api` modes): `--host` (default `0.0.0.0`), `--port` (default `8000`), `--reload`, `--workers` (API only).
 
 ### As CLI
 
@@ -258,7 +251,7 @@ for torrent in results:
     )
 ```
 
-`search_torrents` is async and accepts an optional `max_items` (default `10`). `popular_torrents(per_source=10)` returns the current most popular torrents from sources with a top listing - up to `per_source` results per source, merged and ranked by seeders + leechers. Each `Torrent` exposes `id`, `filename`, `size`, `seeders`, `leechers`, `date`, `source`, and (when available) `magnet_link`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link.
+`search_torrents` is async and accepts an optional `max_items` (default `10`). `popular_torrents(per_source=20)` returns the current most popular torrents from sources with a top listing - up to `per_source` results per source (pass `per_source=None` for everything), merged and ranked by seeders + leechers. Each `Torrent` exposes `id`, `filename`, `size`, `seeders`, `leechers`, `date`, `source`, and (when available) `magnet_link`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link.
 
 ### As MCP Server
 
@@ -268,17 +261,17 @@ from torrent_search import torrent_search_mcp
 torrent_search_mcp.run(transport="sse")
 ```
 
-### As FastAPI Server
+### As API Server
 
-This project also includes a FastAPI server as an alternative way to interact with the library via a standard HTTP API. This can be useful for direct API calls, integration with other web services, or for testing purposes.
+This project also includes a API server as an alternative way to interact with the library via a standard HTTP API. This can be useful for direct API calls, integration with other web services, or for testing purposes.
 
-**Running the FastAPI Server:**
+**Running the API Server:**
 
 ```bash
 # With Python
-python -m torrent_search --mode fastapi
+python -m torrent_search --mode api
 # With uv
-uv run -m torrent_search --mode fastapi
+uv run -m torrent_search --mode api
 ```
 
 - `--host <host>`: Default: `0.0.0.0`.
@@ -286,15 +279,22 @@ uv run -m torrent_search --mode fastapi
 - `--reload`: Enables auto-reloading when code changes (useful for development).
 - `--workers <workers>`: Default: `1`.
 
-The FastAPI server will then be accessible at `http://<host>:<port>`.
+The API server will then be accessible at `http://<host>:<port>`.
 
 **Available Endpoints:**
-The FastAPI server exposes similar functionalities to the MCP server. Key endpoints include:
+The API server exposes similar functionalities to the MCP server. Key endpoints include:
 
-- `GET /`: Built-in dark-mode terminal-style web UI - search, popular listings, sortable results with magnet links.
+- `GET /`: Built-in web UI (dark/light) - search, per-site popular tiles, sortable results with magnet links. Telegram sending requires one-time pairing.
 - `POST /torrent/search`: Search for torrents. Query params: `query` (required) and `max_items` (optional, default `20`).
-- `GET /torrent/popular`: Get the most popular torrents. Query param: `per_source` (optional, default `10`).
+- `GET /sources`: List the available torrent source domains.
+- `GET /torrent/popular`: Get the most popular torrents. Query param: `per_source` (optional, default `20`).
 - `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as text.
+- `GET /telegram/session`: Web UI auth state (send the session token as `Authorization: Bearer`); reveals the bot handle only to authenticated sessions.
+- `POST /telegram/auth/challenge`: Create a one-time pairing code (rate-limited).
+- `GET /telegram/auth/poll?code=`: Poll a pairing code; on approval returns the one-time session token for the browser to store.
+- `DELETE /telegram/auth/challenge/{code}`: Cancel a pending pairing code.
+- `POST /telegram/auth/register`: Approve a pairing code bound to a Telegram `chat_id`. Requires `Authorization: Bearer $TORRENT_SEARCH_API_KEY`.
+- `POST /telegram/auth/logout`: Revoke the presented session token.
 - `/docs`: Interactive API documentation (Swagger UI).
 - `/redoc`: Alternative API documentation (ReDoc).
 
@@ -308,10 +308,12 @@ Usable with any MCP-compatible client. Available tools:
   - `user_intent`: A short description reflecting the user's overall intention (e.g. `"latest episode of Breaking Bad"`).
   - `query`: Optimized, lowercase, space-separated keywords (e.g. `"breaking bad s01e05"`). Generic/filler/technical terms should be stripped per the tool's docstring.
   - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
-- `popular_torrents(per_source=10)`: Get the most popular torrents right now from sources with an official top listing (apibay, uindex, 1337x, YTS, nyaa, EZTV) - up to `per_source` results each, merged and pre-ranked by seeders + leechers.
+- `popular_torrents(per_source=20)`: Get the most popular torrents right now from sources with an official top listing (apibay, uindex, 1337x, YTS, nyaa, EZTV) - up to `per_source` results each, grouped per source and pre-ranked by seeders + leechers.
   - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
 - `available_sources()`: Get the list of available torrent sources.
 - `get_torrent(torrent_id)`: Get the magnet link for a specific torrent by id (the `id` returned by `search_torrents` or `popular_torrents`).
+- `authorize_webapp(code, chat_id)`: Approve a Web UI pairing code bound to your Telegram chat id (the code shown in the browser pairing gate). Requires `TORRENT_SEARCH_API_KEY` and `TORRENT_SEARCH_API_URL`.
+- `torrent_webapp()`: Present the web UI URL (`WEBUI_URL`) and its pairing-based access system.
 
 #### Example with Devin
 

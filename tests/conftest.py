@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from torrent_search.wrapper import parser, scraper
+from torrent_search.wrapper import parser
 from torrent_search.wrapper.models import Torrent
 
 
@@ -15,10 +15,6 @@ def reset_parser_state() -> Iterator[None]:
     yield
     parser._trackers = list(parser.TRACKERS)
     parser._trackers_loaded = False
-    if scraper._crawler_idle_timer is not None:
-        scraper._crawler_idle_timer.cancel()
-        scraper._crawler_idle_timer = None
-    scraper._active_scrapes = 0
 
 
 @pytest.fixture(autouse=True)

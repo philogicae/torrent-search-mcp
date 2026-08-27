@@ -23,7 +23,11 @@ def _torrent(seeders: int, magnet: str, source: str = "nyaa.si") -> Torrent:
 
 def test_available_sources() -> None:
     api = ac.TorrentSearchApi()
-    assert api.available_sources() == ac.SOURCES
+    assert api.available_sources() == ac.displayed_sources(ac.SOURCES)
+    # Scraping keys are aliased to public domains, deduplicated in order.
+    assert "yts.vg" in api.available_sources()
+    assert "yts.mx" not in api.available_sources()
+    assert "apibay.org" not in api.available_sources()
     assert "nyaa.si" in ac.SOURCES
 
 
@@ -185,6 +189,36 @@ async def test_popular_torrents_sorts_truncates_and_caches(monkeypatch: Any) -> 
     assert len(results) == 3
     assert all(t.id.startswith(f"{Compress62.compress('')}-2-") for t in results)
     assert api.CACHE.get(results[0].id) is not None
+
+
+@pytest.mark.asyncio
+async def test_popular_torrents_default_per_source_is_20(monkeypatch: Any) -> None:
+    async def fake_popular(per_source: int | None = 20) -> list[Torrent]:
+        calls.append(per_source)
+        return []
+
+    calls: list[int | None] = []
+    monkeypatch.setattr(ac, "scrape_popular_torrents", fake_popular)
+    await ac.TorrentSearchApi().popular_torrents()
+    assert calls == [20]
+
+
+@pytest.mark.asyncio
+async def test_popular_torrents_keyword_per_source_cache_key(monkeypatch: Any) -> None:
+    """Different keyword per_source values must not collide in the cache."""
+
+    async def fake_popular(per_source: int | None = 20) -> list[Torrent]:
+        calls.append(per_source)
+        return []
+
+    calls: list[int | None] = []
+    # The aiocache backend is shared process-wide; start from a clean slate.
+    await ac.TorrentSearchApi.popular_torrents.cache.clear()
+    monkeypatch.setattr(ac, "scrape_popular_torrents", fake_popular)
+    api = ac.TorrentSearchApi()
+    await api.popular_torrents(per_source=2)
+    await api.popular_torrents(per_source=7)
+    assert calls == [2, 7]
 
 
 def test_key_builder_scopes_by_function() -> None:

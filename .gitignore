@@ -14,8 +14,8 @@ build
 .coverage*
 
 # Envs
+authorized_tokens.json
 .env
 .venv
 torrents
-.playwright-mcp/
-.playwright-cli/
+.playwright-*

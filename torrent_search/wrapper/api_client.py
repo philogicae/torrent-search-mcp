@@ -15,11 +15,32 @@ logger = logging.getLogger("Torrent Search")
 
 SOURCES: list[str] = list(WEBSITES.keys())
 EXCLUDE_SOURCES: list[str] = []
-
 _excluded_env = getenv("EXCLUDE_SOURCES")
 if _excluded_env:
     EXCLUDE_SOURCES = [s.strip() for s in _excluded_env.split(",") if s.strip()]
     SOURCES = [s for s in SOURCES if s not in set(EXCLUDE_SOURCES)]
+
+# Scraping keys -> domains shown to users. Data keeps flowing through the
+# original mirrors/APIs; only the displayed names are normalized.
+SOURCE_DISPLAY_NAMES: dict[str, str] = {
+    "apibay.org": "thepiratebay.org",
+    "yts.mx": "yts.vg",
+}
+
+
+def display_source(name: str) -> str:
+    """Public domain for a scraping key (unchanged when not aliased)."""
+    return SOURCE_DISPLAY_NAMES.get(name, name)
+
+
+def displayed_sources(names: list[str]) -> list[str]:
+    """Display names for scraping keys, deduplicated in order."""
+    seen: list[str] = []
+    for name in names:
+        shown = display_source(name)
+        if shown not in seen:
+            seen.append(shown)
+    return seen
 
 
 def key_builder(fn: Any, *args: Any, **kwargs: Any) -> str:
@@ -37,7 +58,14 @@ def key_builder(fn: Any, *args: Any, **kwargs: Any) -> str:
     limit = (
         call_args[1]
         if len(call_args) > 1
-        else kwargs.get("limit", kwargs.get("max_items", 10))
+        else next(
+            (
+                kwargs[name]
+                for name in ("limit", "max_items", "per_source")
+                if name in kwargs
+            ),
+            10,
+        )
     )
     return str({"fn": getattr(fn, "__qualname__", ""), "query": query, "limit": limit})
 
@@ -48,8 +76,8 @@ class TorrentSearchApi:
     CACHE: Cache = Cache()
 
     def available_sources(self) -> list[str]:
-        """Get the list of available torrent sources."""
-        return SOURCES
+        """Get the list of available torrent sources (display domains)."""
+        return displayed_sources(SOURCES)
 
     @cached(ttl=120, key_builder=key_builder)  # 2min
     async def search_torrents(
@@ -77,6 +105,7 @@ class TorrentSearchApi:
         )[:max_items]
 
         for torrent in found_torrents:
+            torrent.source = display_source(torrent.source or "")
             torrent.prepend_info(query, max_items)
 
         self.CACHE.clean()  # Clean cache routine
@@ -84,12 +113,13 @@ class TorrentSearchApi:
         return found_torrents
 
     @cached(ttl=120, key_builder=key_builder)  # 2min
-    async def popular_torrents(self, per_source: int = 10) -> list[Torrent]:
+    async def popular_torrents(self, per_source: int | None = 20) -> list[Torrent]:
         """
         Get the most popular torrents per source with a top listing.
 
         Args:
-            per_source: Maximum number of results kept per source (best first).
+            per_source: Optional maximum number of results kept per source
+                (best first). None keeps everything the source returned.
 
         Returns:
             A list of torrent results ranked by seeders + leechers.
@@ -97,8 +127,9 @@ class TorrentSearchApi:
         found_torrents = await scrape_popular_torrents(per_source=per_source)
 
         for torrent in found_torrents:
+            torrent.source = display_source(torrent.source or "")
             # Empty query marker: ids stay decodable but are not re-searchable
-            torrent.prepend_info("", per_source)
+            torrent.prepend_info("", per_source or 0)
 
         self.CACHE.clean()  # Clean cache routine
         self.CACHE.update(found_torrents)

@@ -1,6 +1,5 @@
 """Tests for __main__.py: entry points and CLI mode dispatch."""
 
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -9,47 +8,13 @@ from torrent_search import __main__ as main_mod
 
 
 @pytest.fixture(autouse=True)
-def _no_real_subprocess(monkeypatch: Any) -> None:
-    def fake_run(command: list[str], **kwargs: Any) -> SimpleNamespace:
-        return SimpleNamespace(returncode=0)
-
-    monkeypatch.setattr(main_mod.subprocess, "run", fake_run)
-    monkeypatch.setattr(main_mod, "geteuid", lambda: 1000)
-    monkeypatch.setattr(main_mod, "compute_driver_executable", lambda: ("node", "cli"))
-    monkeypatch.setattr(main_mod, "get_driver_env", dict)
+def _no_real_servers(monkeypatch: Any) -> None:
     monkeypatch.setattr(main_mod.mcp, "run", _noop)
     monkeypatch.setattr(main_mod.uvicorn, "run", _noop)
 
 
 def _noop(*_args: Any, **_kwargs: Any) -> None:
     return None
-
-
-def test_install_playwright_drivers_success(capsys: Any) -> None:
-    main_mod.install_playwright_drivers()
-    assert "Playwright drivers installed." in capsys.readouterr().err
-
-
-def test_install_playwright_drivers_failure(monkeypatch: Any, capsys: Any) -> None:
-    def boom(command: list[str], **kwargs: Any) -> SimpleNamespace:
-        raise RuntimeError("no network")
-
-    monkeypatch.setattr(main_mod.subprocess, "run", boom)
-    main_mod.install_playwright_drivers()
-    assert "Failed to install Playwright drivers." in capsys.readouterr().err
-
-
-def test_install_playwright_drivers_as_root(monkeypatch: Any, capsys: Any) -> None:
-    seen: dict[str, Any] = {}
-
-    def fake_run(command: list[str], **kwargs: Any) -> SimpleNamespace:
-        seen["command"] = command
-        return SimpleNamespace(returncode=0)
-
-    monkeypatch.setattr(main_mod, "geteuid", lambda: 0)
-    monkeypatch.setattr(main_mod.subprocess, "run", fake_run)
-    main_mod.install_playwright_drivers()
-    assert "--with-deps" in seen["command"]
 
 
 def test_cli_mode(monkeypatch: Any, capsys: Any) -> None:
@@ -74,7 +39,7 @@ def test_cli_mode_without_query(monkeypatch: Any, capsys: Any) -> None:
     assert "cli called with query=None" in capsys.readouterr().out
 
 
-def test_fastapi_mode(monkeypatch: Any) -> None:
+def test_api_mode(monkeypatch: Any) -> None:
     seen: dict[str, Any] = {}
 
     def fake_uvicorn(app: str, **kwargs: Any) -> None:
@@ -87,7 +52,7 @@ def test_fastapi_mode(monkeypatch: Any) -> None:
         [
             "prog",
             "--mode",
-            "fastapi",
+            "api",
             "--host",
             "0.0.0.0",
             "--port",
@@ -97,7 +62,7 @@ def test_fastapi_mode(monkeypatch: Any) -> None:
         ],
     )
     main_mod.main()
-    assert seen["app"] == "torrent_search.fastapi_server:app"
+    assert seen["app"] == "torrent_search.api_server:app"
     assert seen["port"] == 9000
     assert seen["workers"] == 2
 

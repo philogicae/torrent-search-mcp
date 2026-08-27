@@ -1,9 +1,9 @@
 """Torrent parsing: source parsers and the CSV text pipeline.
 
-Parsers fetch a source (over HTTP or, for crawled sources, from rendered
-HTML/markdown) and normalize everything into the same ';'-separated CSV text,
-so ``extract_torrents`` handles both kinds identically. Parsers are referenced
-from the ``WEBSITES`` registry in :mod:`scraper` via the ``parser`` key.
+Each parser fetches its source over HTTP and normalizes the results into the
+same ';'-separated CSV text, so ``extract_torrents`` handles every source
+identically. Parsers are referenced from the ``WEBSITES`` registry in
+:mod:`scraper`.
 """
 
 import asyncio
@@ -14,8 +14,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from re import DOTALL, MULTILINE, Pattern, sub
-from re import compile as re_compile
+from re import DOTALL, sub
 from time import time
 from typing import Any
 from urllib.parse import quote
@@ -56,146 +55,6 @@ TRACKERS_BEST_URL = (
 )
 
 CSV_HEADER = "filename;category;size;seeders;leechers;downloads;date;magnet_link"
-
-# Regex pipeline for crawled HTML/markdown sources.
-FILTERS: dict[str, Pattern[str]] = {
-    "full_links": re_compile(
-        r"(http|https|ftp):[/]{1,2}[a-zA-Z0-9.]+[a-zA-Z0-9./?=+~_\-@:%#&]*"
-    ),
-    "backslashes": re_compile(r"\\"),
-    "local_links": re_compile(
-        r"(a href=)*(<|\")\/[a-zA-Z0-9./?=+~()_\-@:%#&]*(>|\")* *"
-    ),
-    "some_texts": re_compile(r' *"[a-zA-Z ]+" *'),
-    "empty_angle_brackets": re_compile(r" *< *> *"),
-    "empty_curly_brackets": re_compile(r" *\{ *\} *"),
-    "empty_parenthesis": re_compile(r" *\( *\) *"),
-    "empty_brackets": re_compile(r" *\[ *\] *"),
-    "tags": re_compile(
-        r"<img[^>]*>|<a[^>]*>(?:alt|src)=|(?<=<a )(?:alt|src)=|(?<=<img )(?:alt|src)"
-    ),
-    "input_elements": re_compile(r"<input[^>]*>"),
-    "date": re_compile(r'<label title=("[a-zA-Z0-9()+: ]+"|>)'),
-    # ThePirateBay specific - remove HTML tags but preserve content
-    "html_tags": re_compile(r"<[^>]+>"),
-    # ThePirateBay - remove ol tag attributes and gt entity
-    "ol_attributes": re_compile(r' class="view-single"'),
-}
-REPLACERS: dict[str, tuple[Pattern[str], str | Callable[[Any], str]]] = {
-    # ThePirateBay specific fixes - must run BEFORE single_angle_bracket
-    # Step 1: Extract magnet links from anchor tags (these are special - we keep the URL)
-    "thepiratebay_extract_magnet": (
-        # Pattern matches: <a href="magnet:?xt=urn:btih:...">...</a>
-        # Replace with just the magnet URL wrapped in >...> so it survives tag removal
-        re_compile(
-            r'<a[^>]*href="(magnet:\?[^"]*)"[^>]*>[^<]*(?:<img[^>]*>)?(?:&nbsp;)*</a>'
-        ),
-        r">\1>",
-    ),
-    # Step 2: For non-magnet anchor tags, keep the text content and remove just the tags
-    # Pattern: <a href="...">Text</a> -> Text
-    "thepiratebay_extract_anchor_text": (
-        re_compile(r"<a[^>]*>([^<]*)</a>"),
-        r"\1",
-    ),
-    # Step 3: Add newlines between list items BEFORE removing closing tags
-    # This ensures each torrent entry is on its own line
-    "thepiratebay_add_newlines": (
-        re_compile(r"</li>\s*<li"),
-        "</li>\n<li",
-    ),
-    # Step 4: Replace the header row
-    "thepiratebay_header": (
-        # Replace the list-header li element with our header line
-        re_compile(r'<li class="list-header">.*?</li>', DOTALL),
-        '<li class="list-header">category>filename>date>magnet_link>size>seeders>leechers>uploader</li>',
-    ),
-    # Step 5: Remove img tags completely (they're just icons)
-    "thepiratebay_remove_img_tags": (
-        re_compile(r"<img[^>]*>"),
-        "",
-    ),
-    # Step 5: Convert closing tags to separators (but NOT </a> since we already removed them)
-    "thepiratebay_remove_html": (
-        re_compile(r"</(span|li|div|section|ol|label)[^>]*>"),
-        ";",
-    ),
-    # Step 6: Remove all remaining opening HTML tags
-    "thepiratebay_remove_open_tags": (
-        re_compile(r"<[^/][^>]*>"),
-        "",
-    ),
-    # Step 7: Convert remaining > to ; for CSV
-    "thepiratebay_to_csv": (
-        re_compile(r">"),
-        ";",
-    ),
-    # Step 8: Clean up multiple semicolons
-    "thepiratebay_normalize_separators": (
-        re_compile(r";{2,}"),
-        ";",
-    ),
-    # Step 9: Remove leading/trailing semicolons from lines
-    "thepiratebay_trim_separators": (
-        # Remove leading and trailing semicolons from each line (but NOT newlines)
-        re_compile(r"^;+|;+$", MULTILINE),
-        "",
-    ),
-    # Step 10: Fix category formatting (convert "Category; - ;Subcategory" to "Category - Subcategory")
-    "thepiratebay_fix_category": (
-        re_compile(r";\s*-\s*;"),
-        " - ",
-    ),
-    # Step 11: Clean whitespace around semicolons
-    "thepiratebay_clean_whitespace": (
-        re_compile(r"\s*;\s*"),
-        ";",
-    ),
-    # Step 12: Remove empty lines
-    "thepiratebay_remove_empty_lines": (
-        # Remove empty lines
-        re_compile(r"\n\s*\n+"),
-        "\n",
-    ),
-    "thepiratebay_fix_gt_entity": (
-        # Convert &gt; to - for category separator (after HTML is stripped)
-        re_compile(r"&gt;"),
-        "-",
-    ),
-    "thepiratebay_fix_amp_entity": (
-        # Convert &amp; to & in magnet links
-        re_compile(r"&amp;"),
-        "&",
-    ),
-    "thepiratebay_fix_category_spacing": (
-        # Fix category spacing at start of line: "Video-HD" or "Video -HD" -> "Video - HD"
-        # Only matches the first occurrence (in the category field)
-        # Group 1 captures everything before the dash (without trailing space), Group 2 is the capital letter
-        re_compile(r"^([^;]*?)\s*-\s*([A-Z])", MULTILINE),
-        r"\1 - \2",
-    ),
-    "thepiratebay_fix_double_semicolons": (
-        # Fix remaining double semicolons (especially after long magnet links)
-        re_compile(r";;"),
-        ";",
-    ),
-    # Basic text cleaning
-    "weird_spaces": (re_compile(r"\u00A0"), " "),
-    "spans": (re_compile(r"</?span>"), " | "),
-    "weird spaced bars": (re_compile(r" *\|[ \|]+"), " | "),
-    "double_quotes": (re_compile(r'"[" ]+'), ""),
-    "single_angle_bracket": (re_compile(r"<|>"), ""),
-    "gt": (re_compile("&gt;"), " -"),
-    "amp": (re_compile("&amp;"), "&"),
-    # Line formatting
-    "bad_starting_spaced_bars": (re_compile(r"\n[\| ]+"), "\n"),
-    "bad_ending_spaces": (re_compile(r" +\n"), "\n"),
-    "duplicated_spaces": (re_compile(r" {2,4}"), " "),
-    # Size formatting
-    "size": (re_compile(r"([\d.]+[\s ]?[KMGT])i?B"), r"\1B"),
-    # Final formatting
-    "to_csv": (re_compile(r" \| *"), ";"),
-}
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -325,19 +184,41 @@ async def _get_json(url: str, params: dict[str, str] | None = None) -> Any:
     return json.loads(await _get_text(url, params))
 
 
-async def _get_first(
+_last_good_host: dict[tuple[str, ...], str] = {}
+
+
+async def _first_host(
     hosts: list[str], path: str, params: dict[str, str] | None = None
-) -> str:
-    """Fetch a path through a mirror rotation, returning the first answer."""
+) -> tuple[str, str]:
+    """Fetch a path through a mirror rotation; returns the working (host, text).
+
+    The last host that answered is tried first next time: mirrors that 403 or
+    redirect cost several wasted round trips per fetch otherwise.
+    """
     last_error: httpx.HTTPError | None = None
-    for host in hosts:
+    preferred = _last_good_host.get(tuple(hosts))
+    ordered = (
+        [h for h in (preferred, *hosts) if h in hosts] if preferred else list(hosts)
+    )
+    for host in ordered:
         try:
-            return await _get_text(f"https://{host}{path}", params)
+            text = await _get_text(f"https://{host}{path}", params)
+            _last_good_host[tuple(hosts)] = host
+            return host, text
         except httpx.HTTPError as e:
             last_error = e
     if last_error:
         raise last_error
-    raise RuntimeError(f"no hosts to try for {path}")
+    raise RuntimeError(
+        f"no hosts to try for {path}"
+    )  # pragma: no cover - hosts are never empty
+
+
+async def _get_first(
+    hosts: list[str], path: str, params: dict[str, str] | None = None
+) -> str:
+    """Fetch a path through a mirror rotation, returning the first answer."""
+    return (await _first_host(hosts, path, params))[1]
 
 
 def _rss_field(item: str, name: str) -> str:
@@ -348,34 +229,6 @@ def _rss_field(item: str, name: str) -> str:
         re.DOTALL | re.IGNORECASE,
     )
     return match.group(1).strip() if match else ""
-
-
-def parse_result(
-    text: str,
-    exclude_patterns: list[str] | None = None,
-) -> str:
-    """
-    Parse the text result using filters and replacers.
-    """
-    if '<ol id="torrents"' in text:
-        text = text.split('<ol id="torrents"', 1)[-1]
-        text = text.split("</ol>", 1)[0] if "</ol>" in text else text
-    else:
-        text = text.split("<li>", 1)[-1].replace("<li>", "")
-
-    for name, pattern in FILTERS.items():
-        if exclude_patterns and name in exclude_patterns:
-            continue
-        text = pattern.sub("", text)
-
-    for name, replacer_config in REPLACERS.items():
-        if exclude_patterns and name in exclude_patterns:
-            continue
-        pattern, replacement_str = replacer_config
-        text = pattern.sub(replacement_str, text)
-
-    text = sub(r"\n{2,}", "\n", text)
-    return text.strip()
 
 
 def extract_torrents(texts: list[str]) -> list[Torrent]:
@@ -405,10 +258,10 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
                     if all(not v.strip() for v in values[len(headers) :]):
                         values = values[: len(headers)]
                     elif len(values) > 1:
-                        # Extra values in the middle - leftover raw ';' from
-                        # crawled HTML (e.g. thepiratebay.org): the extra fields
-                        # right after the filename are joined back into it and
-                        # the tail beyond the header length is dropped by zip
+                        # Extra values mid-row (e.g. a ';' inside a filename):
+                        # the extra fields right after the filename are joined
+                        # back into it; the tail beyond the header length is
+                        # dropped by zip
                         filename_parts = values[1 : 1 + extra_count]
                         values[1] = " - ".join(filename_parts)
                         del values[2 : 1 + extra_count]
@@ -427,7 +280,6 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
 # ---------------------------------------------------------------------------
 X1337_HOSTS = ["1337x.to", "1337x.st", "x1337x.ws", "1337xx.to"]
 X1337_STOP_WORDS = {"the", "a", "an", "of", "and", "or", "to"}
-X1337_MAX_DETAILS = 4
 X1337_MONTHS = {
     "jan": 1,
     "feb": 2,
@@ -495,28 +347,28 @@ def x1337_upload_date(html_text: str) -> str:
     return f"{2000 + int(match.group(3))}-{month:02d}-{int(match.group(2)):02d}"
 
 
+X1337_DETAIL_CONCURRENCY = 8
+_x1337_detail_slots = asyncio.Semaphore(X1337_DETAIL_CONCURRENCY)
+
+
 async def _x1337_fetch(path: str) -> tuple[str, str]:
     """Fetch a 1337x path through the mirror rotation; returns (base, html)."""
-    last_error: httpx.HTTPError | None = None
-    for host in X1337_HOSTS:
-        try:
-            base = f"https://{host}"
-            return base, await _get_text(f"{base}{path}")
-        except httpx.HTTPError as e:
-            last_error = e
-    if last_error:
-        raise last_error
-    raise RuntimeError(
-        f"no hosts to try for {path}"
-    )  # pragma: no cover - X1337_HOSTS is never empty
+    host, detail_html = await _first_host(X1337_HOSTS, path)
+    return f"https://{host}", detail_html
 
 
 async def _x1337_detail(base: str, path: str) -> tuple[str, str] | None:
-    """Fetch a torrent page and return (magnet, date); None on failure."""
-    try:
-        detail_html = await _get_text(f"{base}{path}")
-    except httpx.HTTPError:
-        return None
+    """Fetch a torrent page and return (magnet, date); None on failure.
+
+    Detail pages resolve through the mirror rotation (up to ~5 requests
+    each), so concurrency is bounded to keep the mirror hosts from
+    throttling the whole listing.
+    """
+    async with _x1337_detail_slots:
+        try:
+            detail_html = await _get_text(f"{base}{path}")
+        except httpx.HTTPError:
+            return None
     magnet_match = re.search(
         r"magnet:\?xt=urn:btih:[^\"'<>\s]+", detail_html, re.IGNORECASE
     )
@@ -552,7 +404,7 @@ async def x1337_parse(query: str) -> str:
         if tokens:
             rows = [r for r in rows if all(t in r[0].lower() for t in tokens)]
         rows.sort(key=lambda r: int(r[3]), reverse=True)
-        top = rows[:X1337_MAX_DETAILS]
+        top = rows
         details = await asyncio.gather(
             *(_x1337_detail(base, row[1]) for row in top), return_exceptions=True
         )

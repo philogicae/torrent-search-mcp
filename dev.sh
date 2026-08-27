@@ -30,5 +30,5 @@ npx --yes prettier --write --print-width 200 --log-level warn "${MISC_DIRS[*]/%/
 # Tests
 # ---------------------------------------------------------------------------
 
-echo "==> Running tests with coverage (parallel)"
-uv run pytest -n 2 --dist worksteal --cov=torrent_search --cov-report=term-missing
+echo "==> Running tests with coverage (parallel, 100% required)"
+uv run pytest -n 2 --dist worksteal --cov=torrent_search --cov-report=term-missing --cov-fail-under=100

@@ -1,3 +1,22 @@
+## [4.2.0] - 2026-08-27
+
+### 🚀 Features
+
+- Feat: v4.1.0 - drop playwright/crawl4ai for apibay API, telegram pairing auth, api-mode rename, web UI redesign
+  Covers: fastapi_server→api_server (--mode api), TPB switched from HTML scraping to apibay.org, new Telegram pairing flow (challenge/poll/register/logout endpoints, session tokens, telegram_auth.py, approve.sh), new MCP tools authorize_webapp/torrent_webapp, TORRENT_SEARCH_API_KEY/WEBUI_URL envs, revamped web UI (dark/light, per-source tiles), popular_torrents default 20 + per_source=None, source aliasing to public domains, 100% coverage gate in dev.sh.
+- Feat: QR pairing/forward popups with countdown, gated telegram magnet pruning, header/loader polish
+
+- pairing popup: deep-link QR, -OR-, single-row actions, centered MM:SS countdown auto-resetting at expiry (no bot name/plain code)
+- forward popup mirrors pairing layout w/ Copy Message; PRUNE_MAGNET_LINKS=true prunes every telegram path (popup draft + /forward_telegram), copy/magnet keep originals
+- auth draft message: "Authorize {code} for Torrent Search"; forward draft: "Download this torrent: <magnet>"
+- masthead buttons: lock green/red by auth state, constant sky-blue theme chip
+- loader: theme-aware orbit ring colors (visible in light mode); compact chips prevent row wraps
+- fix v4.1.0 Dockerfile crash-loop (missing ENV PATH)
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.0.1] - 2026-08-25
 
 ### 🐛 Bug Fixes

@@ -1,5 +1,7 @@
 """Telegram access auth: store, challenges, and the REST pairing flow."""
 
+import json
+import time
 from collections.abc import Iterator
 from typing import Any
 
@@ -41,12 +43,56 @@ def test_store_roundtrip_and_hash_only(tmp_path: Any) -> None:
     assert "12345" in raw  # chat ids are stored in the clear
 
 
-def test_store_reissue_replaces_chat_token(tmp_path: Any) -> None:
+def test_store_multiple_sessions_per_chat(tmp_path: Any) -> None:
     store = ta.TelegramAuthStore(tmp_path / "authorized_tokens.json")
     store.add_session("12345", "token-a")
-    store.add_session("12345", "token-b")
-    assert store.chat_id_for_token("token-a") is None  # replaced
+    store.add_session("12345", "token-b")  # second browser, same chat id
+    assert store.chat_id_for_token("token-a") == "12345"
     assert store.chat_id_for_token("token-b") == "12345"
+    assert store.remove_token("token-a")  # revoking one browser...
+    assert store.chat_id_for_token("token-a") is None
+    assert store.chat_id_for_token("token-b") == "12345"  # ...keeps the other
+
+
+def test_store_creates_missing_file(tmp_path: Any) -> None:
+    path = tmp_path / "authorized_tokens.json"
+    assert not path.exists()
+    ta.TelegramAuthStore(path)
+    assert path.exists()
+    assert ta.TelegramAuthStore(path).chat_id_for_token("anything") is None
+
+
+def test_store_init_fails_closed_when_unwritable(tmp_path: Any) -> None:
+    blocker = tmp_path / "blocker"
+    blocker.write_text("")  # a file, not a directory
+    store = ta.TelegramAuthStore(blocker / "tokens.json")
+    assert store.chat_id_for_token("anything") is None
+
+
+def test_store_purges_expired_sessions_at_startup(tmp_path: Any) -> None:
+    path = tmp_path / "authorized_tokens.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "sessions": [
+                    {
+                        "chat_id": "1",
+                        "token_hash": ta.hash_token("old"),
+                        "created": 0,
+                    },
+                    {
+                        "chat_id": "2",
+                        "token_hash": ta.hash_token("fresh"),
+                        "created": int(time.time()),
+                    },
+                ],
+            }
+        )
+    )
+    store = ta.TelegramAuthStore(path)
+    assert store.chat_id_for_token("old") is None  # purged at startup
+    assert store.chat_id_for_token("fresh") == "2"
 
 
 def test_store_remove_token_revokes(tmp_path: Any) -> None:

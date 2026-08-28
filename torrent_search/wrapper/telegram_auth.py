@@ -6,8 +6,10 @@ the agent calls the register endpoint (gated by
 ``TORRENT_SEARCH_API_KEY``) or the ``authorize_webapp`` tool.
 Once approved, the browser claims the challenge and receives a long-lived
 random session token, kept in localStorage and sent as a Bearer header.
-The server persists only SHA-256 hashes, mapped ``chat_id -> token``
-(``authorized_tokens.json``). Logout deletes the mapping (revocation).
+The server persists only SHA-256 token hashes (``authorized_tokens.json``,
+created on startup if missing). Each token maps to one chat id and multiple
+sessions per chat id (one per browser) coexist; logout revokes a single
+session.
 """
 
 import hashlib
@@ -21,7 +23,7 @@ from pathlib import Path
 
 logger = logging.getLogger("Torrent Search")
 
-SESSION_TTL_SECONDS = 365 * 24 * 3600  # "forever" within browser limits
+SESSION_TTL_SECONDS = 30 * 24 * 3600  # sessions older than this are purged
 DEFAULT_AUTH_FILE = "./authorized_tokens.json"
 DEFAULT_CHALLENGE_TTL = 300.0  # 5 minutes to get the code approved
 MAX_PENDING_CHALLENGES = 50
@@ -33,18 +35,40 @@ def hash_token(token: str) -> str:
 
 
 class TelegramAuthStore:
-    """Persistent ``chat_id -> token hash`` allow-list.
+    """Persistent session store: ``token hash -> chat id`` allow-list.
 
     The file is re-read whenever its mtime+size change, so a standalone MCP
     process and the REST API can share one ``authorized_tokens.json``.
-    A missing file means "no sessions"; a corrupt file fails closed.
+    The file is created empty if missing; a corrupt file fails closed.
     """
 
     def __init__(self, path: str | os.PathLike[str] | None = None) -> None:
         self.path = Path(path or os.getenv("TELEGRAM_AUTH_FILE") or DEFAULT_AUTH_FILE)
-        self._sessions: dict[str, dict[str, object]] = {}  # chat_id -> entry
+        self._sessions: dict[str, dict[str, float | str]] = {}  # token_hash -> entry
         self._fingerprint: tuple[int, int] | None = None
         self._loaded = False
+        if not self.path.exists():
+            try:
+                self.save()
+            except OSError:
+                logger.warning(
+                    "Cannot create %s; sessions will not persist.", self.path
+                )
+        self._purge_expired()
+
+    def _purge_expired(self) -> None:
+        """Startup-only sweep: drop sessions older than ``SESSION_TTL_SECONDS``."""
+        self._reload_if_changed()
+        cutoff = time.time() - SESSION_TTL_SECONDS
+        stale = [
+            token_hash
+            for token_hash, entry in self._sessions.items()
+            if float(entry.get("created", 0)) < cutoff
+        ]
+        for token_hash in stale:
+            del self._sessions[token_hash]
+        if stale:
+            self.save()
 
     def _reload_if_changed(self) -> None:
         try:
@@ -61,7 +85,10 @@ class TelegramAuthStore:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             sessions = data["sessions"] if isinstance(data, dict) else []
             self._sessions = {
-                entry["chat_id"]: entry
+                entry["token_hash"]: {
+                    "chat_id": entry["chat_id"],
+                    "created": entry.get("created", 0),
+                }
                 for entry in sessions
                 if isinstance(entry, dict)
                 and "chat_id" in entry
@@ -82,12 +109,12 @@ class TelegramAuthStore:
             "version": 1,
             "sessions": [
                 {
-                    "chat_id": chat_id,
-                    "token_hash": entry["token_hash"],
+                    "chat_id": entry["chat_id"],
+                    "token_hash": token_hash,
                     "created": entry["created"],
                 }
-                for chat_id, entry in sorted(
-                    self._sessions.items(), key=lambda item: str(item[0])
+                for token_hash, entry in sorted(
+                    self._sessions.items(), key=lambda item: str(item[1]["chat_id"])
                 )
             ],
         }
@@ -111,31 +138,25 @@ class TelegramAuthStore:
         self._loaded = True
 
     def add_session(self, chat_id: str, token: str) -> None:
-        """Map ``chat_id`` to a new session token (re-issuing replaces)."""
+        """Register one session token for ``chat_id``; several may coexist."""
         self._reload_if_changed()
-        self._sessions[str(chat_id)] = {
-            "token_hash": hash_token(token),
+        self._sessions[hash_token(token)] = {
+            "chat_id": str(chat_id),
             "created": int(time.time()),
         }
         self.save()
 
     def chat_id_for_token(self, token: str) -> str | None:
         self._reload_if_changed()
-        token_hash = hash_token(token)
-        for chat_id, entry in self._sessions.items():
-            if entry["token_hash"] == token_hash:
-                return str(chat_id)
-        return None
+        entry = self._sessions.get(hash_token(token))
+        return str(entry["chat_id"]) if entry else None
 
     def remove_token(self, token: str) -> bool:
         """Revoke the session matching ``token``; True when one was removed."""
         self._reload_if_changed()
-        token_hash = hash_token(token)
-        for chat_id, entry in list(self._sessions.items()):
-            if entry["token_hash"] == token_hash:
-                del self._sessions[chat_id]
-                self.save()
-                return True
+        if self._sessions.pop(hash_token(token), None):
+            self.save()
+            return True
         return False
 
     def __len__(self) -> int:

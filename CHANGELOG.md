@@ -1,3 +1,19 @@
+## [4.3.2] - 2026-08-28
+
+### 🐛 Bug Fixes
+
+- Fix: allow multiple sessions per chat id, purge expired sessions at startup
+
+- TelegramAuthStore: switch from chat_id->token_hash to token_hash->chat_id mapping, enabling multiple browsers per user
+- add_session: no longer replaces existing token for same chat id
+- remove_token: revokes only the specified session, leaving others intact
+- startup purge: drop sessions older than SESSION_TTL_SECONDS (30 days)
+- create authorized_tokens.json if missing (fail closed on write errors)
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.3.1] - 2026-08-27
 
 ### 🐛 Bug Fixes

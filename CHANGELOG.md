@@ -1,3 +1,17 @@
+## [4.3.3] - 2026-08-29
+
+### 🚀 Features
+
+- Feat: load dotenv in **init**, polish webapp UI/UX and tool docstrings
+
+- torrent_search/**init**.py: load_dotenv() at package level (moved from mcp_server.py)
+- mcp_server.py: drop load_dotenv import, remove pruned-magnet rewrite instructions from search_torrents/get_torrent docstrings, clarify authorize_webapp/torrent_webapp flows (user sends prompt to agent, not paste code; agent calls authorize_webapp; 5min expiry)
+- static/index.html: interactive gradient pairing gate (pointer-driven radial layers
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.3.2] - 2026-08-28
 
 ### 🐛 Bug Fixes

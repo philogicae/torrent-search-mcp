@@ -41,7 +41,7 @@ def test_webui_served_at_root(client: TestClient) -> None:
     assert "Torrent Search" in response.text
     assert "__TELEGRAM_BOT_HANDLE__" not in response.text
     # UI affordances shipped with the redesign.
-    for marker in ("loading-label", "- OR -", "Copy Login", "data-sort=name"):
+    for marker in ("loading-label", "- OR -", "Copy Prompt", "data-sort=name"):
         assert marker in response.text
 
 

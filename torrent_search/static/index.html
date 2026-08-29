@@ -46,55 +46,55 @@
       }
       body[data-theme="dark"] {
         color-scheme: dark;
-        --bg-deep: #0a0a0d;
+        --bg-deep: #030308;
         /* Parallax-stars sky: template hues (#1B2735/#090A0F), lifted. */
-        --sky-hi: #243349;
-        --sky-lo: #131722;
-        --surface: #202a3a;
-        --card: #263246;
-        --raised: #2f3d55;
-        --border: #3a4a63;
-        --border-faint: #2a3850;
-        --border-strong: #4d5f7d;
-        --text-muted: #9a9a9a;
-        --text-2: #a8a8a8;
-        --text-3: #d6d6d6;
-        --text: #f2f2f2;
+        --sky-hi: #0a1220;
+        --sky-lo: #03060a;
+        --surface: #0d131f;
+        --card: #111826;
+        --raised: #192033;
+        --border: #26334d;
+        --border-faint: #0d1220;
+        --border-strong: #3c4e70;
+        --text-muted: #60769b;
+        --text-2: #8ab4f0;
+        --text-3: #c2ddff;
+        --text: #e8f5ff;
         --heading: #ffffff;
         --accent: #c5ff4a;
-        --accent-dim: rgba(197, 255, 74, 0.1);
-        --accent-line: #597321;
-        --input-bg: #1d2635;
+        --accent-dim: rgba(197, 255, 74, 0.16);
+        --accent-line: #7edc1a;
+        --input-bg: #0a1018;
       }
       body[data-theme="light"] {
         color-scheme: light;
-        --bg-deep: #d6d6c8;
-        --sky-hi: #ececdf;
-        --sky-lo: #c9c9b8;
-        --surface: #fbfbf7;
+        --bg-deep: #f0f0ea;
+        --sky-hi: #fafaf7;
+        --sky-lo: #e2e2d8;
+        --surface: #ffffff;
         --card: #ffffff;
-        --raised: #efefe6;
-        --border: #d7d7cb;
-        --border-faint: #e5e5db;
-        --border-strong: #bcbcb0;
-        --text-muted: #5f6254;
-        --text-2: #45483f;
-        --text-3: #262922;
-        --text: #111310;
-        --heading: #101208;
-        --accent: #55731d;
-        --accent-dim: rgba(85, 115, 29, 0.1);
+        --raised: #f7f7f2;
+        --border: #c6c6bd;
+        --border-faint: #e0e0d8;
+        --border-strong: #8a8a7d;
+        --text-muted: #4a4d42;
+        --text-2: #2b2e27;
+        --text-3: #181a15;
+        --text: #050604;
+        --heading: #000000;
+        --accent: #3e6208;
+        --accent-dim: rgba(62, 98, 8, 0.16);
         --accent-line: #c5ff4a;
         --input-bg: #ffffff;
-        --src-fg-s: 55%;
-        --src-fg-l: 30%;
-        --src-bg-s: 40%;
-        --src-bg-l: 87%;
+        --src-fg-s: 60%;
+        --src-fg-l: 22%;
+        --src-bg-s: 45%;
+        --src-bg-l: 90%;
         /* Orbit spinner on paper: saturated ink rings stay visible. */
-        --orbit-blue: #1c6fbd;
-        --orbit-green: #148a52;
-        --orbit-red: #d9480f;
-        --orbit-white: #33362e;
+        --orbit-blue: #0a4d8a;
+        --orbit-green: #0b5f37;
+        --orbit-red: #a83205;
+        --orbit-white: #141611;
       }
       html,
       body {
@@ -134,14 +134,21 @@
         border-radius: 3px;
       }
       /* ------------------------------------------------------------------
-         Pairing gate: fullscreen black scene, shown
-         whenever the browser has no valid token.
+         Pairing gate: fullscreen interactive gradient, shown whenever the
+         browser has no valid token. Pointer position shifts the radial layers.
          ------------------------------------------------------------------ */
       #gate {
         position: fixed;
         inset: 0;
         z-index: 500;
-        background: #0d0d0d; /* 95% black */
+        --x: calc(var(--posX, 0) * 1px);
+        --y: calc(var(--posY, 0) * 1px);
+        background-image:
+          linear-gradient(115deg, rgb(211 255 215), rgb(0 0 0)), radial-gradient(90% 100% at calc(50% + var(--x)) calc(0% + var(--y)), rgb(200 200 200), rgb(022 000 045)),
+          radial-gradient(100% 100% at calc(80% - var(--x)) calc(0% - var(--y)), rgb(250 255 000), rgb(036 000 000)),
+          radial-gradient(150% 210% at calc(100% + var(--x)) calc(0% + var(--y)), rgb(020 175 125), rgb(000 010 255)),
+          radial-gradient(100% 100% at calc(100% - var(--x)) calc(30% - var(--y)), rgb(255 077 000), rgb(000 200 255)), linear-gradient(60deg, rgb(255 000 000), rgb(120 086 255));
+        background-blend-mode: overlay, overlay, difference, difference, difference, normal;
       }
       #gate[hidden] {
         display: none;
@@ -167,7 +174,7 @@
       /* Header: deep bar + single neon divider between major regions */
       #masthead {
         position: relative;
-        z-index: 600; /* above the pairing shield: visible + usable pre-auth */
+        z-index: 600; /* over the app's stacking context (sticky table head) */
         background: var(--bg-deep);
         border-bottom: 4px solid var(--accent-line);
       }
@@ -227,22 +234,162 @@
         border-color: var(--border-strong);
         color: var(--text);
       }
-      /* Theme flip: one sky-blue chip in both themes (reads as night or day
-         depending on the mode; never cyan). */
+      #auth-lock {
+        background: transparent;
+        border-radius: 50%;
+        border: 2px solid var(--heading);
+        color: var(--heading);
+      }
+      /* Theme switcher: sun/moon pill, no side labels. Every metric is in em,
+         so the wrapper font-size alone scales it: 3em tall == the 1.9rem of
+         .icon-btn next to it. Selectors are id-based and the input carries no
+         role="switch" on purpose - oat.css styles [type=checkbox][role=switch]
+         as its own switch widget (size, radius, ::before thumb) and would win
+         the cascade against plain classes. */
+      .theme__toggle-wrap {
+        position: relative;
+        display: inline-flex;
+        font-size: calc(1.9rem / 3);
+      }
       #theme-toggle {
-        background: #0e33ab;
-        border-color: #011040;
-        color: #f0f7ff;
+        display: block;
+        position: relative;
+        z-index: 1;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0.25em;
+        width: 6em;
+        height: 3em;
+        font-size: inherit; /* an input does not inherit it on its own */
+        background-color: hsl(48, 90%, 85%);
+        border: 0;
+        border-radius: 25% / 50%;
+        box-shadow: 0 0 0 0.125em transparent;
+        -webkit-appearance: none;
+        appearance: none;
+        -webkit-tap-highlight-color: transparent;
+        cursor: pointer;
+        transition:
+          background-color 0.3s ease-in-out,
+          box-shadow 0.15s ease-in-out;
       }
-      #auth-lock.authed {
-        background: #33a158;
-        border-color: #063817;
-        color: #06210f;
+      #theme-toggle::before {
+        content: "";
+        display: block;
+        width: 2.5em;
+        height: 2.5em;
+        background-color: hsl(48, 90%, 55%);
+        border-radius: 50%;
+        transition:
+          background-color 0.3s ease-in-out,
+          transform 0.3s ease-in-out;
       }
-      #auth-lock.locked {
-        background: #872b30;
-        border-color: #54080c;
-        color: #2b0608;
+      #theme-toggle::after {
+        content: none; /* oat.css puts a checkmark here */
+      }
+      #theme-toggle:focus-visible {
+        box-shadow: 0 0 0 0.125em var(--accent);
+        outline: transparent;
+      }
+      .theme__icon,
+      .theme__icon-part {
+        position: absolute;
+      }
+      .theme__icon {
+        display: block;
+        z-index: 1;
+        top: 0.75em;
+        left: 0.75em;
+        width: 1.5em;
+        height: 1.5em;
+        pointer-events: none; /* it covers the thumb: clicks stay on the input */
+        transition: transform 0.3s ease-in-out;
+      }
+      .theme__icon-part {
+        border-radius: 50%;
+        box-shadow: 0.4em -0.4em 0 0.5em hsl(0, 0%, 100%) inset;
+        top: calc(50% - 0.5em);
+        left: calc(50% - 0.5em);
+        width: 1em;
+        height: 1em;
+        transition:
+          box-shadow 0.3s ease-in-out,
+          opacity 0.3s ease-in-out,
+          transform 0.3s ease-in-out;
+        transform: scale(0.5);
+      }
+      .theme__icon-part ~ .theme__icon-part {
+        background-color: hsl(0, 0%, 100%);
+        border-radius: 0.05em;
+        box-shadow: none;
+        top: 50%;
+        left: calc(50% - 0.05em);
+        transform: rotate(0deg) translateY(0.5em);
+        transform-origin: 50% 0;
+        width: 0.1em;
+        height: 0.2em;
+      }
+      .theme__icon-part:nth-child(3) {
+        transform: rotate(45deg) translateY(0.5em);
+      }
+      .theme__icon-part:nth-child(4) {
+        transform: rotate(90deg) translateY(0.5em);
+      }
+      .theme__icon-part:nth-child(5) {
+        transform: rotate(135deg) translateY(0.5em);
+      }
+      .theme__icon-part:nth-child(6) {
+        transform: rotate(180deg) translateY(0.5em);
+      }
+      .theme__icon-part:nth-child(7) {
+        transform: rotate(225deg) translateY(0.5em);
+      }
+      .theme__icon-part:nth-child(8) {
+        transform: rotate(270deg) translateY(0.5em);
+      }
+      .theme__icon-part:nth-child(9) {
+        transform: rotate(315deg) translateY(0.5em);
+      }
+      #theme-toggle:checked {
+        background-color: hsl(198, 90%, 15%);
+      }
+      #theme-toggle:checked::before,
+      #theme-toggle:checked ~ .theme__icon {
+        transform: translateX(3em);
+      }
+      #theme-toggle:checked::before {
+        background-color: hsl(198, 90%, 55%);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(1) {
+        box-shadow: 0.2em -0.2em 0 0.2em hsl(0, 0%, 100%) inset;
+        transform: scale(1);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part ~ .theme__icon-part {
+        opacity: 0;
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(2) {
+        transform: rotate(45deg) translateY(0.8em);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(3) {
+        transform: rotate(90deg) translateY(0.8em);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(4) {
+        transform: rotate(135deg) translateY(0.8em);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(5) {
+        transform: rotate(180deg) translateY(0.8em);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(6) {
+        transform: rotate(225deg) translateY(0.8em);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(7) {
+        transform: rotate(270deg) translateY(0.8em);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(8) {
+        transform: rotate(315deg) translateY(0.8em);
+      }
+      #theme-toggle:checked ~ .theme__icon .theme__icon-part:nth-child(9) {
+        transform: rotate(360deg) translateY(0.8em);
       }
       main.container {
         flex: 1;
@@ -400,7 +547,7 @@
         width: 3.9rem;
       }
       col.c-actions {
-        width: 7.4rem;
+        width: 5.6rem;
       }
       td.num,
       th.c-num {
@@ -498,19 +645,19 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 1.6rem;
-        height: 1.6rem;
+        width: 2rem;
+        height: 2rem;
         padding: 0;
         text-decoration: none;
         vertical-align: middle;
         background: none;
         border: none;
         cursor: pointer;
-        font-size: 0.9rem;
+        font-size: 1.1rem;
       }
       td.actions-cell img {
-        width: 0.95rem;
-        height: 0.95rem;
+        width: 1.15rem;
+        height: 1.15rem;
       }
       td.actions-cell a:hover,
       td.actions-cell button:hover:not(:disabled) {
@@ -594,7 +741,7 @@
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        /* No overscroll-behavior: contain — when a list ends, the wheel
+        /* No overscroll-behavior: contain - when a list ends, the wheel
            must chain into the outer grid scroller instead of dying. */
       }
       .tile-row {
@@ -665,8 +812,8 @@
       }
       .tile-actions a,
       .tile-actions button {
-        width: 1.5rem;
-        height: 1.5rem;
+        width: 1.85rem;
+        height: 1.85rem;
         padding: 0;
         display: inline-flex;
         align-items: center;
@@ -674,12 +821,12 @@
         background: none;
         border: none;
         cursor: pointer;
-        font-size: 0.85rem;
+        font-size: 1.05rem;
         text-decoration: none;
       }
       .tile-actions img {
-        width: 0.9rem;
-        height: 0.9rem;
+        width: 1.1rem;
+        height: 1.1rem;
       }
       .tile-actions button:disabled {
         opacity: 0.3;
@@ -704,10 +851,14 @@
         letter-spacing: 0.22em;
         text-transform: uppercase;
         color: var(--text-muted);
+        padding-left: 0.22em; /* balances the trailing letter-space: true optical centering */
       }
+      /* The orbits are absolutely positioned, so they never size this box:
+         it is pinned to the outermost ring (165px) to keep the label right
+         under the animation. Centering places their static position. */
       .spinner-box {
-        width: 300px;
-        height: 300px;
+        width: 165px;
+        height: 165px;
         display: flex;
         justify-content: center;
         align-items: center;
@@ -762,7 +913,7 @@
       /* Footer */
       #page-footer {
         position: relative;
-        z-index: 600; /* above the pairing shield: visible + usable pre-auth */
+        z-index: 600; /* over the app's stacking context (sticky table head) */
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -929,6 +1080,13 @@
       dialog .dlg-actions button:hover:not(:disabled) {
         border-color: var(--accent);
         color: var(--heading);
+      }
+      /* Static how-to line under every modal title. */
+      dialog .dlg-desc {
+        margin: var(--space-2) 0 var(--space-3);
+        font-size: 0.7rem;
+        line-height: 1.45;
+        color: var(--text-2);
       }
       /* Shared centered status line under the pairing/forward actions. */
       .pair-status {
@@ -1141,8 +1299,21 @@
           <span class="word-accent">Search</span>
         </h1>
         <div class="head-actions">
-          <button id="auth-lock" class="icon-btn authed" aria-label="Telegram access: log out" title="Telegram access granted - click to log out">🔓</button>
-          <button id="theme-toggle" class="icon-btn" aria-label="Toggle light/dark theme" title="Toggle theme">🔆</button>
+          <button id="auth-lock" class="icon-btn" aria-label="Telegram access: log out" title="Telegram access granted - click to log out">🔓</button>
+          <span class="theme__toggle-wrap">
+            <input id="theme-toggle" type="checkbox" checked aria-label="Toggle light/dark theme" title="Toggle theme" />
+            <span class="theme__icon">
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+              <span class="theme__icon-part"></span>
+            </span>
+          </span>
         </div>
       </div>
     </header>
@@ -1161,18 +1332,15 @@
           <div id="loading">
             <div class="spinner-box">
               <div class="blue-orbit leo"></div>
-
               <div class="green-orbit leo"></div>
-
               <div class="red-orbit leo"></div>
-
               <div class="white-orbit w1 leo"></div>
               <div class="white-orbit w2 leo"></div>
               <div class="white-orbit w3 leo"></div>
             </div>
-            <div class="loading-label">&nbsp&nbsp&nbspLoading...</div>
+            <div class="loading-label">Loading...</div>
           </div>
-          <div id="empty-state" hidden><span class="empty-glyph">⌀</span><span id="empty-text">No torrents found</span></div>
+          <div id="empty-state" hidden><span class="empty-glyph">⌀</span><span>No torrents found</span></div>
           <div class="results-scroll" id="table-wrap" hidden>
             <table id="results">
               <colgroup>
@@ -1228,12 +1396,13 @@
         <h2 id="auth-title">
           <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Telegram Authentification
         </h2>
+        <p class="dlg-desc">Scan the QR code or tap buttons to forward/copy prompt to the Telegram agent, then send it! After agent approval, continue here.</p>
         <div class="qr-box center" id="auth-qr" aria-label="Pairing QR code"></div>
         <div class="or-sep"><span>- OR -</span></div>
         <div class="dlg-actions row">
           <button id="auth-open">Open in Telegram</button>
           <button id="auth-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
-          <button id="auth-copy-msg" title="Copy the login message to send to the bot">Copy Login</button>
+          <button id="auth-copy-msg" title="Copy the prompt message to send to the agent">Copy Prompt</button>
         </div>
         <p id="auth-status" class="pair-status waiting">Waiting for approval...</p>
       </div>
@@ -1246,15 +1415,17 @@
           <span class="tg-badge"><img src="/static/telegram.svg" alt="" /></span>Forward to Telegram
         </h2>
         <div id="tg-classic">
+          <p class="dlg-desc">Scan the QR code or tap buttons to forward/copy prompt to the Telegram agent. Then just send it!</p>
           <div class="qr-box center" id="tg-qr" aria-label="Forward QR code"></div>
           <div class="or-sep"><span>- OR -</span></div>
           <div class="dlg-actions row">
             <button id="tg-open">Open in Telegram</button>
             <button id="tg-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
-            <button id="tg-copy-msg" title="Copy the download message to send to the bot">Copy Prompt</button>
+            <button id="tg-copy-msg" title="Copy the download message to send to the agent">Copy Prompt</button>
           </div>
         </div>
         <div id="tg-agent" hidden>
+          <p class="dlg-desc">Auto-forwards the torrent to the Telegram agent, starting the download immediately!</p>
           <p class="agent-lead" id="tg-agent-lead"></p>
           <div class="agent-card" id="tg-agent-card"></div>
           <div class="dlg-actions row">
@@ -1298,14 +1469,15 @@
         try {
           localStorage.setItem("theme", theme);
         } catch {}
-        themeBtn.textContent = theme === "dark" ? "🔆" : "🌙";
+        themeBtn.checked = theme === "dark";
       }
       let savedTheme = null;
       try {
         savedTheme = localStorage.getItem("theme");
       } catch {}
-      if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
-      themeBtn.onclick = () => setTheme(document.body.dataset.theme === "dark" ? "light" : "dark");
+      if (savedTheme === "light") setTheme(savedTheme);
+      else themeBtn.checked = true; // default dark
+      themeBtn.addEventListener("change", () => setTheme(themeBtn.checked ? "dark" : "light"));
 
       // ---- State --------------------------------------------------------------
       let rows = [];
@@ -1381,10 +1553,9 @@
         $("table-wrap").hidden = true;
         $("tiles").hidden = true;
       }
-      function showEmpty(message) {
+      function showEmpty() {
         $("loading").hidden = true;
         $("empty-state").hidden = false;
-        $("empty-text").textContent = message || "No torrents found";
         $("table-wrap").hidden = true;
         $("tiles").hidden = true;
       }
@@ -1397,22 +1568,30 @@
         $("tiles").hidden = viewMode === "search" && !mobile;
       }
 
-      // ---- Table row (search view) --------------------------------------------
-      function tgButtons(r) {
-        if (!session.authenticated || !session.handle || !r.magnet_link) {
-          return `<span title="Telegram unavailable" aria-label="Telegram unavailable">🚫</span>`;
+      // ---- Row actions (search table + tiles + mobile cards) -------------------
+      // Telegram ON: telegram popup + copy magnet. Telegram OFF: magnet link +
+      // copy magnet. Always exactly two buttons.
+      function actionButtonsHtml(r) {
+        const magnet = r.magnet_link || "";
+        const copy = magnet
+          ? `<button data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
+          : `<button title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
+        const none = `<span title="No magnet link available" aria-label="No magnet link available">🚫</span>`;
+        if (!magnet) return `${none}${copy}`;
+        if (session.enabled && session.authenticated && session.handle) {
+          const attrs = [
+            `data-magnet="${escapeHtml(r.magnet_link)}"`,
+            `data-filename="${escapeHtml(r.filename)}"`,
+            `data-size="${escapeHtml(r.size)}"`,
+            `data-date="${escapeHtml(r.date)}"`,
+            `data-source="${escapeHtml(r.source)}"`,
+            `data-category="${escapeHtml(r.category)}"`,
+            `data-seeders="${escapeHtml(r.seeders)}"`,
+            `data-leechers="${escapeHtml(r.leechers)}"`,
+          ].join(" ");
+          return `<a href="#" data-tg ${attrs} title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>${copy}`;
         }
-        const attrs = [
-          `data-magnet="${escapeHtml(r.magnet_link)}"`,
-          `data-filename="${escapeHtml(r.filename)}"`,
-          `data-size="${escapeHtml(r.size)}"`,
-          `data-date="${escapeHtml(r.date)}"`,
-          `data-source="${escapeHtml(r.source)}"`,
-          `data-category="${escapeHtml(r.category)}"`,
-          `data-seeders="${escapeHtml(r.seeders)}"`,
-          `data-leechers="${escapeHtml(r.leechers)}"`,
-        ].join(" ");
-        return `<a href="#" data-tg ${attrs} title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>`;
+        return `<a href="${escapeHtml(magnet)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>${copy}`;
       }
 
       function infoButtonHtml(r) {
@@ -1432,14 +1611,6 @@
       }
 
       function rowHtml(r) {
-        const magnet = r.magnet_link || "";
-        const magnetBtn = magnet
-          ? `<a href="${escapeHtml(magnet)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>`
-          : `<span title="No magnet link available" aria-label="No magnet link available">🚫</span>`;
-        const copy = magnet
-          ? `<button data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
-          : `<button title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
-        const tg = tgButtons(r);
         const info = infoButtonHtml(r);
         const chips = sourceChipHtml(r) + categoryChipHtml(r);
         const detail = chips ? `<span class="torrent-detail">${chips}</span>` : "";
@@ -1449,7 +1620,7 @@
               <td class="num">${escapeHtml(r.size)}</td>
               <td class="num se">${r.seeders}</td>
               <td class="num le">${r.leechers}</td>
-              <td class="actions-cell">${tg}${magnetBtn}${copy}</td>
+              <td class="actions-cell">${actionButtonsHtml(r)}</td>
             </tr>`;
       }
 
@@ -1520,15 +1691,6 @@
         return sections.filter((section) => section.rows.length);
       }
 
-      function tileActionsHtml(r) {
-        const magnet = r.magnet_link || "";
-        const magnetBtn = magnet ? `<a href="${escapeHtml(magnet)}" title="Open magnet link" aria-label="Open magnet link">🧲</a>` : `<span title="No magnet link available">🚫</span>`;
-        const copy = magnet
-          ? `<button data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
-          : `<button title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
-        return `${tgButtons(r)}${magnetBtn}${copy}`;
-      }
-
       function tileRowHtml(r, chipsHtml) {
         return `<div class="tile-row">
                 <div class="tile-main">
@@ -1536,7 +1698,7 @@
                   ${chipsHtml || ""}
                   <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(r.date)}</span></span>
                 </div>
-                <div class="tile-actions">${tileActionsHtml(r)}</div>
+                <div class="tile-actions">${actionButtonsHtml(r)}</div>
               </div>`;
       }
 
@@ -1579,7 +1741,7 @@
       $("tiles").addEventListener("click", (e) => {
         const head = e.target.closest("[data-tile-head]");
         if (!head || e.target.closest("a")) return; // links navigate, never toggle
-        if (!window.matchMedia("(max-width: 640px)").matches) return;
+        if (!mobileQuery.matches) return;
         const tile = head.closest(".tile");
         const wasOpen = tile.classList.contains("open");
         document.querySelectorAll("#tiles .tile.open").forEach((t) => t.classList.remove("open"));
@@ -1630,8 +1792,7 @@
           const data = await fetchJson(url, options);
           if (seq !== requestSeq) return; // a newer request superseded this one
           rows = [...data].sort((a, b) => (b.seeders ?? 0) - (a.seeders ?? 0));
-          render();
-          if (!rows.length) showEmpty();
+          render(); // falls back to the empty state on its own
         } catch (err) {
           if (seq !== requestSeq) return;
           rows = [];
@@ -1683,10 +1844,11 @@
 
       function paintLock() {
         const lock = $("auth-lock");
-        lock.textContent = session.authenticated ? "🔓" : "🔒";
-        lock.classList.toggle("authed", session.authenticated);
-        lock.classList.toggle("locked", !session.authenticated);
-        lock.title = session.authenticated ? `Telegram access granted (@${session.handle}) - click to log out` : "Telegram access: not authenticated - click to pair";
+        lock.style.display = session.enabled ? "inline-flex" : "none";
+        if (session.enabled) {
+          lock.textContent = session.authenticated ? "🔓" : "🔒";
+          lock.title = session.authenticated ? `Telegram access granted (@${session.handle}) - click to log out` : "Telegram access: not authenticated - click to pair";
+        }
       }
 
       async function refreshSession() {
@@ -1736,7 +1898,6 @@
       // ---- Auth pairing dialog ------------------------------------------------
       const authDialog = $("auth-dialog");
       let authCode = null;
-      let authMessage = "";
       let authPollTimer = null; // 2s approval poll
       let authCountdownTimer = null; // 1s ttl ticker
       let authSecondsLeft = 0;
@@ -1795,13 +1956,13 @@
             method: "POST",
           });
           authCode = data.code;
-          // Exact message the bot expects from the user's chat.
-          authMessage = `Authorize ${data.code} for Torrent Search`;
+          // Exact message the agent expects from the user's chat.
+          const authMessage = `Authorize ${data.code} for Torrent Search`;
           // Copy affordance rides the shared data-copy dispatcher.
           const copyBtn = $("auth-copy-msg");
           copyBtn.dataset.copy = authMessage;
-          copyBtn.dataset.toastLabel = "Login message copied - paste it in your Telegram chat with the bot";
-          // Deep link into the bot with the authorization message prefilled -
+          copyBtn.dataset.toastLabel = "Prompt message copied - paste it in your Telegram agent chat";
+          // Deep link into the agent with the authorization message prefilled -
           // the user just has to send it. The QR encodes the same link.
           const links = {
             app: `tg://resolve?domain=${encodeURIComponent(session.handle)}&text=${encodeURIComponent(authMessage)}`,
@@ -1961,7 +2122,6 @@
       // copy/magnet buttons always keep the full original magnet.
       const tgDialog = $("tg-dialog");
       let tgTimer = null;
-      let tgMessage = "";
       let tgPayload = null;
       function prunedMagnet(magnet) {
         const m = String(magnet || "");
@@ -1987,16 +2147,15 @@
 
       function openTgDialog(ds) {
         const raw = ds.magnet || "";
-        const magnet = session.prune ? prunedMagnet(raw) : raw;
-        tgMessage = `Download this torrent: ${magnet}`;
         const agentMode = !!session.agent_name;
         $("tg-classic").hidden = agentMode;
         $("tg-agent").hidden = !agentMode;
-        $("tg-status").textContent = "";
+        // Placeholder question in the status line; replaced by action feedback.
+        $("tg-status").textContent = "Is this the best torrent?";
         if (agentMode) {
           // Agent relay: show the card, confirm posts /forward_telegram.
-          $("tg-agent-lead").textContent = `Forward this torrent to ${session.agent_name}`;
-          const rows = [
+          $("tg-agent-lead").textContent = `Agent in charge: ${session.agent_name}`;
+          const fields = [
             { label: "File", value: ds.filename || "", cls: "wrap" },
             { label: "Source", value: sourceChipHtml(ds), raw: true },
             { label: "Category", value: categoryChipHtml(ds), raw: true },
@@ -2004,10 +2163,8 @@
             { label: "Size", value: ds.size || "" },
             { label: "Seeders", value: ds.seeders ?? "", cls: "se" },
             { label: "Leechers", value: ds.leechers ?? "", cls: "le" },
-          ].filter((row) => String(row.value).trim() !== "");
-          $("tg-agent-card").innerHTML = `<dl>${rows
-            .map((row) => `<dt>${row.label}</dt><dd${row.cls ? ` class="${row.cls}"` : ""}>${row.raw ? row.value : escapeHtml(row.value)}</dd>`)
-            .join("")}</dl>`;
+          ].filter((f) => String(f.value).trim() !== "");
+          $("tg-agent-card").innerHTML = `<dl>${fields.map((f) => `<dt>${f.label}</dt><dd${f.cls ? ` class="${f.cls}"` : ""}>${f.raw ? f.value : escapeHtml(f.value)}</dd>`).join("")}</dl>`;
           tgPayload = {
             filename: ds.filename || "",
             magnet_link: raw,
@@ -2015,9 +2172,10 @@
             seeders: ds.seeders !== "" && ds.seeders !== undefined ? Number(ds.seeders) : null,
           };
         } else {
+          const tgMessage = `Download this torrent: ${session.prune ? prunedMagnet(raw) : raw}`;
           const copyBtn = $("tg-copy-msg");
           copyBtn.dataset.copy = tgMessage;
-          copyBtn.dataset.toastLabel = "Download message copied - paste it in your Telegram chat with the bot";
+          copyBtn.dataset.toastLabel = "Download message copied - paste it in your Telegram agent chat";
           const links = tgLinks(tgMessage);
           $("tg-open").dataset.app = links.app;
           $("tg-web-btn").dataset.web = links.web;
@@ -2126,6 +2284,14 @@
         requestAnimationFrame(orbitFrame);
       }
       requestAnimationFrame(orbitFrame);
+
+      // Interactive gate background reacts to pointer movement.
+      document.body.addEventListener("pointermove", (e) => {
+        const { currentTarget: el, clientX: x, clientY: y } = e;
+        const { top: t, left: l, width: w, height: h } = el.getBoundingClientRect();
+        el.style.setProperty("--posX", x - l - w / 2);
+        el.style.setProperty("--posY", y - t - h / 2);
+      });
     </script>
   </body>
 </html>

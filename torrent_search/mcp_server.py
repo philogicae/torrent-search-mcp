@@ -3,13 +3,11 @@ from os import getenv
 from typing import Annotated, Any
 
 import httpx
-from dotenv import load_dotenv
 from fastmcp import FastMCP
 from pydantic import Field
 
 from .wrapper import Torrent, TorrentSearchApi
 
-load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Torrent Search")
 
@@ -148,12 +146,6 @@ async def search_torrents(
     - Recommend the **top 3-5** results maximum.
     - For each recommendation, include: Filename, Size, Seeds/Leechs, Date, Source, and a 1-sentence "Why this?" reason.
     - If results are poor, irrelevant or too diverse, suggest specific keywords to improve the search.
-
-    # Pruned magnets (PRUNE_MAGNET_LINKS=true):
-    - Pruned magnets look like magnet:?xt=urn:btih:INFO_HASH&dn=URL_ENCODED_DISPLAY_NAME (trackers stripped).
-    - When reusing one, replace the dn value with a clean/readable/normalized re-encoded display name:
-      percent-decode it, tidy separators (dots/underscores/dashes -> spaces), strip release noise
-      (e.g. quality/tag suffixes) unless requested, then percent-encode the result for use in the URI.
     """
     _ = user_intent
     logger.info(f"Searching for torrents: {query}")
@@ -209,14 +201,7 @@ async def get_torrent(
         ),
     ],
 ) -> str:
-    """Get the magnet link for a specific torrent by id.
-
-    Note on pruned magnets (when PRUNE_MAGNET_LINKS=true): pruned magnets keep
-    only magnet:?xt=urn:btih:INFO_HASH&dn=URL_ENCODED_DISPLAY_NAME — every
-    &tr= tracker is stripped. When re-using one, replace the dn value with a
-    clean/readable/normalized re-encoded display name: percent-decode it,
-    tidy separators (dots/dashes -> spaces), then percent-encode the result.
-    """
+    """Get the magnet link for a specific torrent by id."""
     logger.info(f"Getting magnet link for torrent: {torrent_id}")
     if API_BASE_URL:
         try:
@@ -233,7 +218,7 @@ async def get_torrent(
 async def authorize_webapp(
     code: Annotated[
         str,
-        Field(description="Pairing code shown in the Web UI 'Telegram Access' gate."),
+        Field(description="Pairing code shown in the webapp 'Telegram Access' gate."),
     ],
     chat_id: Annotated[
         str,
@@ -244,13 +229,13 @@ async def authorize_webapp(
 ) -> str:
     """Authorize a browser on the Torrent Search webapp via its pairing code.
 
-    The code comes from the user's chat: they click "Open in Telegram", scan
-    the QR code, or copy the login message on the webapp gate, which sends
-    "Authorize <CODE> for Torrent Search" to the bot. Take the code from that
+    The code comes from an user interaction on the webapp:
+    they click "Open in Telegram", scan the QR code, or copy the prompt message,
+    which sends "Authorize <CODE> for Torrent Search" to you. Take the code from that
     message and call this tool with it and the user's Telegram chat id.
     Codes are single-use and expire after 5 minutes. After approval the user
-    MUST go back to the website tab: the browser polls and completes the
-    authentication there (it shows "Access granted" and unlocks the app).
+    MUST go back to the webapp: the browser polls and completes the
+    authentication there (it shows "Access granted" and unlocks the app permanently).
     """
     logger.info("Authorizing webapp access for chat %s", chat_id)
     secret = getenv("TORRENT_SEARCH_API_KEY")
@@ -262,7 +247,7 @@ async def authorize_webapp(
     if not API_BASE_URL:
         return (
             "authorize_webapp requires TORRENT_SEARCH_API_URL: pairing "
-            "state lives on the REST API server that serves the Web UI."
+            "state lives on the REST API server that serves the webapp."
         )
     response = await _api().post(
         "/telegram/auth/register",
@@ -284,31 +269,29 @@ async def authorize_webapp(
 
 @mcp.tool()
 async def torrent_webapp() -> str:
-    """Present the Torrent Search web UI and its Telegram pairing access system.
+    """Present the Torrent Search webapp and its Telegram pairing access system.
 
-    Returns the webapp URL (WEBUI_URL) plus how a browser gets authorized.
+    Returns the webapp URL and how to get authorized by you.
     Tell the user to open the URL: on first visit the site shows a pairing
-    dialog with a QR code and buttons ("Open in Telegram", "Copy Login").
+    dialog with a QR code and buttons ("Open in Telegram", "t.me" fallback, "Copy Prompt").
     Ask the user to scan the QR code, click "Open in Telegram", or copy the
-    login message and send it to the bot in their Telegram chat — do NOT ask
-    them to paste the pairing code here. That message ("Authorize <CODE> for
-    Torrent Search") carries the code; when it arrives, extract it and call
-    authorize_webapp with it and the user's Telegram chat id. Codes expire
-    after 5 minutes.
+    prompt message and send it to you in the Telegram chat.
+    That message ("Authorize <CODE> for Torrent Search") carries the code;
+    when it arrives, extract it and call authorize_webapp with it and the user's
+    Telegram chat id. Codes expire after 5 minutes.
     """
     url = getenv("WEBUI_URL", "").rstrip("/")
     if not url:
         return (
-            "Web UI URL not configured. Set WEBUI_URL (e.g. http://localhost:8000 "
+            "webapp URL not configured. Set WEBUI_URL (e.g. http://localhost:8000 "
             "or a public URL) to advertise the webapp."
         )
     return (
-        f"Torrent Search web UI: {url}\n"
-        "A dark/light terminal-broadsheet UI: multi-source torrent search, "
-        "per-site popular tiles, magnet links, and a Telegram relay for sending "
-        "torrents to the owner's chat.\n"
-        "Access is pairing-gated: on first visit the site shows a one-time "
-        "pairing code. Ask the user for that code, then call the "
-        "authorize_webapp tool with it (and your Telegram chat id) to grant "
-        "the browser permanent access. Codes expire after 5 minutes."
+        f"Torrent Search webapp: {url}\n"
+        "A multi-source torrent search interface with per-site popular tiles, "
+        "magnet links, and a Telegram relay for sending torrents to the owner's chat.\n"
+        "Access is pairing-gated: on first visit the site shows a one-time pairing code. "
+        "Ask the user for that code, then call the authorize_webapp tool with it "
+        "(and your Telegram chat id) to grant the browser permanent access. "
+        "Codes expire after 5 minutes."
     )

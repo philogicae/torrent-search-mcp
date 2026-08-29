@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from .api_server import app as torrent_search_app
 from .mcp_server import mcp as torrent_search_mcp
 from .mcp_server import torrent_search_api

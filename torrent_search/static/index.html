@@ -489,7 +489,7 @@
       }
       #results {
         width: 100%;
-        min-width: 36rem;
+        min-width: 42rem;
         table-layout: fixed;
         border-collapse: collapse;
       }
@@ -537,8 +537,11 @@
         font-size: 0.78rem;
         color: var(--text-3);
       }
+      col.c-link {
+        width: 2.2rem;
+      }
       col.c-date {
-        width: 5.75rem;
+        width: 10.5rem;
       }
       col.c-size {
         width: 5.5rem;
@@ -560,6 +563,27 @@
         font-family: var(--mono);
         font-size: 0.72rem;
         color: var(--text-2);
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      td.link-cell,
+      th.c-link {
+        text-align: center;
+      }
+      td.link-cell .source-link,
+      td.link-cell .no-link {
+        font-size: 0.85rem;
+        text-decoration: none;
+      }
+      td.link-cell .source-link {
+        color: var(--accent);
+      }
+      td.link-cell .source-link:hover {
+        text-decoration: underline;
+      }
+      td.link-cell .no-link {
+        color: var(--text-3);
+        opacity: 0.4;
       }
       /* Seed/leech colors must out-rank `#results td` (id specificity). */
       #results td.se {
@@ -693,6 +717,10 @@
         border: 1px solid var(--border);
         border-radius: 4px;
         overflow: hidden;
+        /* Skip rendering off-screen tiles during scroll; the fixed height keeps
+           the scrollbar stable. */
+        content-visibility: auto;
+        contain-intrinsic-size: auto 16rem;
       }
       /* Top tile always spans the full row; its list flows into the same
          3 columns, scrolling as one. Same height as every other tile. */
@@ -811,7 +839,8 @@
         opacity: 0.75;
       }
       .tile-actions a,
-      .tile-actions button {
+      .tile-actions button,
+      .tile-actions .no-link {
         width: 1.85rem;
         height: 1.85rem;
         padding: 0;
@@ -823,6 +852,17 @@
         cursor: pointer;
         font-size: 1.05rem;
         text-decoration: none;
+      }
+      .tile-actions a.source-link {
+        color: var(--accent);
+      }
+      .tile-actions a.source-link:hover {
+        text-decoration: underline;
+      }
+      .tile-actions .no-link {
+        color: var(--text-3);
+        opacity: 0.25;
+        cursor: default;
       }
       .tile-actions img {
         width: 1.1rem;
@@ -1345,6 +1385,7 @@
             <table id="results">
               <colgroup>
                 <col />
+                <col class="c-link" />
                 <col class="c-date" />
                 <col class="c-size" />
                 <col class="c-num" />
@@ -1354,6 +1395,7 @@
               <thead>
                 <tr>
                   <th data-sort="name">File</th>
+                  <th>Src</th>
                   <th data-sort="date">Date</th>
                   <th data-sort="size">Size</th>
                   <th class="c-num" data-sort="se">SE</th>
@@ -1588,6 +1630,7 @@
             `data-category="${escapeHtml(r.category)}"`,
             `data-seeders="${escapeHtml(r.seeders)}"`,
             `data-leechers="${escapeHtml(r.leechers)}"`,
+            `data-page-url="${escapeHtml(r.page_url || "")}"`,
           ].join(" ");
           return `<a href="#" data-tg ${attrs} title="Forward to Telegram" aria-label="Forward to Telegram"><img src="/static/telegram.svg" alt="" /></a>${copy}`;
         }
@@ -1596,6 +1639,22 @@
 
       function infoButtonHtml(r) {
         return `<button class="info-btn" data-info data-filename="${escapeHtml(r.filename)}" aria-label="Show full filename" aria-expanded="false">ⓘ</button>`;
+      }
+
+      function torrentPageLinkHtml(r) {
+        const url = r.page_url || "";
+        if (!url) return `<span class="no-link" title="No source page available" aria-label="No source page available">—</span>`;
+        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="Open source page" aria-label="Open source page">↗</a>`;
+      }
+
+      function formatDate(value) {
+        if (!value || value === "N/A") return value || "N/A";
+        // Date-only values (no time component) are shown as-is.
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return value;
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
       }
 
       // Deterministic-hue chips, identical to the result list rendering.
@@ -1616,7 +1675,8 @@
         const detail = chips ? `<span class="torrent-detail">${chips}</span>` : "";
         return `<tr>
               <td class="name-cell">${info}<span class="filename-details"><span class="filename">${escapeHtml(r.filename)}</span>${detail}</span></td>
-              <td class="date-cell">${escapeHtml(r.date)}</td>
+              <td class="link-cell">${torrentPageLinkHtml(r)}</td>
+              <td class="date-cell">${escapeHtml(formatDate(r.date))}</td>
               <td class="num">${escapeHtml(r.size)}</td>
               <td class="num se">${r.seeders}</td>
               <td class="num le">${r.leechers}</td>
@@ -1696,9 +1756,9 @@
                 <div class="tile-main">
                   <span class="tile-name-row">${infoButtonHtml(r)}<span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(r.filename)}</span></span>
                   ${chipsHtml || ""}
-                  <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(r.date)}</span></span>
+                  <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(formatDate(r.date))}</span></span>
                 </div>
-                <div class="tile-actions">${actionButtonsHtml(r)}</div>
+                <div class="tile-actions">${torrentPageLinkHtml(r)}${actionButtonsHtml(r)}</div>
               </div>`;
       }
 
@@ -2159,10 +2219,19 @@
             { label: "File", value: ds.filename || "", cls: "wrap" },
             { label: "Source", value: sourceChipHtml(ds), raw: true },
             { label: "Category", value: categoryChipHtml(ds), raw: true },
-            { label: "Date", value: ds.date || "" },
+            { label: "Date", value: formatDate(ds.date) || "" },
             { label: "Size", value: ds.size || "" },
             { label: "Seeders", value: ds.seeders ?? "", cls: "se" },
             { label: "Leechers", value: ds.leechers ?? "", cls: "le" },
+            ...(ds.pageUrl
+              ? [
+                  {
+                    label: "Page",
+                    value: torrentPageLinkHtml({ page_url: ds.pageUrl }),
+                    raw: true,
+                  },
+                ]
+              : []),
           ].filter((f) => String(f.value).trim() !== "");
           $("tg-agent-card").innerHTML = `<dl>${fields.map((f) => `<dt>${f.label}</dt><dd${f.cls ? ` class="${f.cls}"` : ""}>${f.raw ? f.value : escapeHtml(f.value)}</dd>`).join("")}</dl>`;
           tgPayload = {
@@ -2276,10 +2345,12 @@
         delay,
       }));
       function orbitFrame(now) {
-        const t = now / 1000;
-        for (const o of orbitConfigs) {
-          const p = (Math.max(t - o.delay, 0) / o.dur) % 1;
-          o.el.style.transform = `rotate3d(${o.x},${o.y},${o.z},${(o.sweep < 0 ? -o.sweep : 0) + o.sweep * p}deg)`;
+        if (!$("loading").hidden) {
+          const t = now / 1000;
+          for (const o of orbitConfigs) {
+            const p = (Math.max(t - o.delay, 0) / o.dur) % 1;
+            o.el.style.transform = `rotate3d(${o.x},${o.y},${o.z},${(o.sweep < 0 ? -o.sweep : 0) + o.sweep * p}deg)`;
+          }
         }
         requestAnimationFrame(orbitFrame);
       }
@@ -2287,10 +2358,9 @@
 
       // Interactive gate background reacts to pointer movement.
       document.body.addEventListener("pointermove", (e) => {
-        const { currentTarget: el, clientX: x, clientY: y } = e;
-        const { top: t, left: l, width: w, height: h } = el.getBoundingClientRect();
-        el.style.setProperty("--posX", x - l - w / 2);
-        el.style.setProperty("--posY", y - t - h / 2);
+        if ($("gate").hidden) return;
+        document.body.style.setProperty("--posX", e.clientX - window.innerWidth / 2);
+        document.body.style.setProperty("--posY", e.clientY - window.innerHeight / 2);
       });
     </script>
   </body>

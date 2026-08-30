@@ -94,7 +94,7 @@ async def test_popular_torrents_per_source(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         scraper,
         "POPULAR_SOURCES",
-        {"nyaa.si": lambda: fake_popular_listing()},
+        {"nyaa.si": lambda _: fake_popular_listing()},
     )
 
     torrents = await scraper.popular_torrents(per_source=3)
@@ -115,7 +115,7 @@ async def test_popular_torrents_default_keeps_everything(monkeypatch: Any) -> No
     monkeypatch.setattr(
         scraper,
         "POPULAR_SOURCES",
-        {"nyaa.si": lambda: fake_popular_listing()},
+        {"nyaa.si": lambda _: fake_popular_listing()},
     )
 
     torrents = await scraper.popular_torrents()
@@ -124,10 +124,10 @@ async def test_popular_torrents_default_keeps_everything(monkeypatch: Any) -> No
 
 @pytest.mark.asyncio
 async def test_popular_torrents_skips_failing_source(monkeypatch: Any) -> None:
-    def broken() -> Any:
+    def broken(_: int | None) -> Any:
         raise RuntimeError("boom")
 
-    async def ok() -> str:
+    async def ok(_: int | None) -> str:
         return f"{CSV_HEADER}\nGood;Anime;1 GB;7;2;10;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
 
     monkeypatch.setattr(scraper, "ensure_trackers", _fake_parser(""))
@@ -137,10 +137,10 @@ async def test_popular_torrents_skips_failing_source(monkeypatch: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_popular_torrents_skips_unparsable_listing(monkeypatch: Any) -> None:
-    async def garbage() -> str:
+    async def garbage(_: int | None) -> str:
         return ""  # no header line -> extraction raises for this source
 
-    async def ok() -> str:
+    async def ok(_: int | None) -> str:
         return f"{CSV_HEADER}\nGood;Anime;1 GB;7;2;10;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
 
     monkeypatch.setattr(scraper, "ensure_trackers", _fake_parser(""))

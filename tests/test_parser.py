@@ -115,9 +115,16 @@ def test_fmt_date() -> None:
     assert parser.fmt_date(None) == "N/A"
     assert parser.fmt_date(0) == "N/A"
     assert parser.fmt_date(True) == "N/A"
-    assert parser.fmt_date(1614202551) == "2021-02-24"
-    assert parser.fmt_date("2026-03-02T10:06:49.527547+00:00") == "2026-03-02"
-    assert parser.fmt_date("Sat, 08 Aug 2026 18:16:12 +0000") == "2026-08-08"
+    assert parser.fmt_date(1614202551) == "2021-02-24T21:35:51+00:00"
+    assert (
+        parser.fmt_date("2026-03-02T10:06:49.527547+00:00")
+        == "2026-03-02T10:06:49.527547+00:00"
+    )
+    assert (
+        parser.fmt_date("Sat, 08 Aug 2026 18:16:12 +0000")
+        == "2026-08-08T18:16:12+00:00"
+    )
+    assert parser.fmt_date("2026-01-01") == "2026-01-01"
     assert parser.fmt_date("garbage") == "N/A"
 
 
@@ -135,6 +142,7 @@ def test_row_sanitizes_semicolons() -> None:
     assert row[6] == "N/A"
     assert row[3] == "1"
     assert row[4] == "2"
+    assert row[8] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -192,8 +200,8 @@ def test_extract_torrents_from_csv_text() -> None:
         "SOURCE -> apibay.org\n"
         + parser.CSV_HEADER
         + "\n"
-        + "Breaking Bad S01 1080p;Video - Movies;1.2 GB;10;5;100;2026-01-01;magnet:?xt=urn:btih:abcdef&dn=x\n"
-        + "Better Call Saul S01 720p;Video - TV shows;800 MB;3;1;50;2025-06-01;magnet:?xt=urn:btih:fedcba&dn=y"
+        + "Breaking Bad S01 1080p;Video - Movies;1.2 GB;10;5;100;2026-01-01;magnet:?xt=urn:btih:abcdef&dn=x;\n"
+        + "Better Call Saul S01 720p;Video - TV shows;800 MB;3;1;50;2025-06-01;magnet:?xt=urn:btih:fedcba&dn=y;"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 2
@@ -218,7 +226,7 @@ def test_extract_torrents_trims_trailing_empty_values() -> None:
     text = (
         "SOURCE -> nyaa.si\n"
         f"{parser.CSV_HEADER}\n"
-        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x;;;"
+        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x;;"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 1
@@ -243,7 +251,7 @@ def test_extract_torrents_merges_filename_overflow() -> None:
     text = (
         "SOURCE -> nyaa.si\n"
         f"{parser.CSV_HEADER}\n"
-        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x;extra"
+        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x;;extra"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 1
@@ -296,8 +304,9 @@ def test_yts_rows() -> None:
     assert len(rows) == 2
     assert rows[0][0] == "Breaking Bad (2008) [1080p webrip]"
     assert rows[0][1] == "Video - Movies"
-    assert rows[0][6] == "2021-02-24"
+    assert rows[0][6] == "2021-02-24T21:35:51+00:00"
     assert rows[0][7].startswith(f"magnet:?xt=urn:btih:{'b' * 40}")
+    assert rows[0][8] == ""
 
 
 @pytest.mark.asyncio
@@ -396,7 +405,26 @@ def test_apibay_rows() -> None:
     assert len(rows) == 2
     assert rows[0][1] == "Video - TV shows"
     assert rows[0][3] == "100"
+    assert rows[0][8] == "https://thepiratebay.org/description.php?id=1"
     assert rows[1][1] == "Video"
+
+
+def test_apibay_rows_omits_page_url_without_id() -> None:
+    rows = parser.apibay_rows(
+        [
+            {
+                "info_hash": "a" * 40,
+                "name": "missing id",
+                "category": "200",
+                "size": "1000",
+                "seeders": "1",
+                "leechers": "0",
+                "added": "0",
+            }
+        ]
+    )
+    assert len(rows) == 1
+    assert rows[0][8] == ""
 
 
 @pytest.mark.asyncio
@@ -593,7 +621,8 @@ def test_fitgirl_rows() -> None:
     assert rows[0][1] == "Games"
     assert "&dn=game" in rows[0][7]
     assert "&amp;" not in rows[0][7]
-    assert rows[0][6] == "2026-08-08"
+    assert rows[0][6] == "2026-08-08T18:16:12+00:00"
+    assert rows[0][8] == ""
 
 
 @pytest.mark.asyncio
@@ -622,6 +651,7 @@ def test_subsplease_rows() -> None:
         "Show - 1173": {
             "show": "Show",
             "episode": "1173",
+            "page": "show",
             "release_date": "Sun, 09 Aug 2026 16:03:43 +0000",
             "downloads": [
                 {
@@ -640,7 +670,8 @@ def test_subsplease_rows() -> None:
     assert len(rows) == 1
     assert rows[0][0] == "Show - 1173 [1080p]"
     assert rows[0][2] == "1.4 GiB"
-    assert rows[0][6] == "2026-08-09"
+    assert rows[0][6] == "2026-08-09T16:03:43+00:00"
+    assert rows[0][8] == "https://subsplease.org/shows/show/"
 
 
 def test_pick_download_falls_back() -> None:
@@ -700,7 +731,8 @@ def test_bittorrented_rows() -> None:
     rows = parser.bittorrented_rows(data)
     assert len(rows) == 1
     assert rows[0][0] == "Show S01 1080p"
-    assert rows[0][6] == "2026-03-02"
+    assert rows[0][6] == "2026-03-02T10:06:49+00:00"
+    assert rows[0][8] == ""
 
 
 @pytest.mark.asyncio
@@ -735,6 +767,7 @@ def test_nyaa_rss_rows() -> None:
     xml = f"""<rss><channel><item>
         <title>One.Piece.E1173.1080p.WEBRip.x265</title>
         <link>https://nyaa.si/download/2144394.torrent</link>
+        <guid isPermaLink="true">https://nyaa.si/view/2144394</guid>
         <pubDate>Mon, 10 Aug 2026 08:09:35 -0000</pubDate>
         <nyaa:infoHash>{"c" * 40}</nyaa:infoHash>
         <nyaa:category>Anime - English-translated</nyaa:category>
@@ -751,6 +784,7 @@ def test_nyaa_rss_rows() -> None:
     assert rows[0][3] == "75"
     assert rows[0][5] == "153"
     assert rows[0][7].startswith(f"magnet:?xt=urn:btih:{'c' * 40}")
+    assert rows[0][8] == "https://nyaa.si/view/2144394"
 
 
 @pytest.mark.asyncio
@@ -803,7 +837,8 @@ async def test_nyaa_popular_parses_html_table(monkeypatch: Any) -> None:
     assert torrents[0].seeders == 3442
     assert torrents[0].leechers == 91
     assert torrents[0].downloads == "12954"
-    assert torrents[0].date == "2026-08-23"
+    assert torrents[0].date == "2026-08-23T15:01:26+00:00"
+    assert torrents[0].page_url == "https://nyaa.si/view/123"
     assert torrents[0].magnet_link
     assert seen["url"] == parser.NYAA_POPULAR_URL
     assert seen["params"] == parser.NYAA_POPULAR_PARAMS
@@ -912,6 +947,24 @@ async def test_x1337_parse_browse(monkeypatch: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_x1337_parse_limits_detail_fetches(monkeypatch: Any) -> None:
+    calls: list[str] = []
+
+    async def fake_fetch(path: str) -> tuple[str, str]:
+        return "https://1337xx.to", X1337_HTML
+
+    async def fake_detail(base: str, path: str) -> tuple[str, str] | None:
+        calls.append(path)
+        return f"magnet:?xt=urn:btih:{'d' * 40}&dn=x", "2026-06-26"
+
+    monkeypatch.setattr(parser, "_x1337_fetch", fake_fetch)
+    monkeypatch.setattr(parser, "_x1337_detail", fake_detail)
+    torrents = _extract("1337x.to", await parser.x1337_parse("", max_items=1))
+    assert len(torrents) == 1
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_x1337_parse_query(monkeypatch: Any) -> None:
     async def fake_fetch(path: str) -> tuple[str, str]:
         html = X1337_HTML if "Movies" in path else "<p>no results</p>"
@@ -927,6 +980,7 @@ async def test_x1337_parse_query(monkeypatch: Any) -> None:
     assert len(torrents) == 2
     assert torrents[0].seeders == 1234
     assert torrents[0].date == "2026-06-26"
+    assert torrents[0].page_url == "https://1337xx.to/torrent/111/1/"
 
 
 @pytest.mark.asyncio

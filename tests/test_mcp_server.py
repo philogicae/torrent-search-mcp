@@ -10,7 +10,10 @@ from torrent_search import mcp_server
 from torrent_search.wrapper.models import Torrent
 
 
-def _torrent(magnet: str = f"magnet:?xt=urn:btih:{'a' * 40}&dn=x") -> Torrent:
+def _torrent(
+    magnet: str = f"magnet:?xt=urn:btih:{'a' * 40}&dn=x",
+    page_url: str | None = "https://nyaa.si/view/123",
+) -> Torrent:
     return Torrent.format(
         filename="Show S01E01 1080p",
         category="Video",
@@ -20,6 +23,7 @@ def _torrent(magnet: str = f"magnet:?xt=urn:btih:{'a' * 40}&dn=x") -> Torrent:
         downloads="100",
         date="2026-01-01",
         magnet_link=magnet,
+        page_url=page_url,
         source="nyaa.si",
     )
 
@@ -68,6 +72,7 @@ async def test_search_torrents_with_links(
     text = result.content[0].text
     assert "Show S01E01 1080p" in text
     assert "magnet:?xt=urn:btih" in text  # links included
+    assert "https://nyaa.si/view/123" in text  # page URL included
 
 
 @pytest.mark.asyncio
@@ -88,6 +93,7 @@ async def test_search_torrents_strips_links(
     text = result.content[0].text
     assert "Show S01E01 1080p" in text
     assert "magnet:" not in text  # links stripped to save tokens
+    assert "nyaa.si/view" in text  # source page URL is still useful
 
 
 @pytest.mark.asyncio

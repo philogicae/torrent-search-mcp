@@ -77,9 +77,11 @@ async def scrape_torrents(query: str, sources: list[str] | None = None) -> list[
     return [r for r in results if r is not None]
 
 
-async def _popular_source(name: str, fn: Callable[[], Awaitable[str]]) -> str | None:
+async def _popular_source(
+    name: str, fn: Callable[[int | None], Awaitable[str]], per_source: int | None
+) -> str | None:
     try:
-        return f"SOURCE -> {name}\n{await wait_for(fn(), timeout=SOURCE_TIMEOUT)}"
+        return f"SOURCE -> {name}\n{await wait_for(fn(per_source), timeout=SOURCE_TIMEOUT)}"
     except Exception as e:  # noqa: BLE001 - keep the source out of the listing
         logger.warning("Error fetching popular listing from %s: %s", name, e)
         return None
@@ -108,7 +110,9 @@ async def popular_torrents(
         for name, fn in POPULAR_SOURCES.items()
         if sources is None or name in sources
     ]
-    results = await gather(*(_popular_source(name, fn) for name, fn in enabled))
+    results = await gather(
+        *(_popular_source(name, fn, per_source) for name, fn in enabled)
+    )
     torrents: list[Torrent] = []
     for text in results:
         if text is None:

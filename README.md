@@ -65,7 +65,9 @@ uvx torrent-search-mcp --mode api
 - MCP server interface for standardized communication (`stdio`, `sse`, `streamable-http`).
 - API server interface for alternative HTTP access (e.g., for direct API calls or testing).
 - CLI mode for quick one-off searches directly from the terminal.
-- In-memory + `aiocache` result caching to reduce redundant scraping (identical concurrent requests share a single fetch).
+- `popular_torrents` cached for 2 minutes for Web UI delivery; searches are never cached (only identical concurrent requests are coalesced) so new results appear immediately.
+- In-memory 1-hour, 5000-entry torrent cache used only to resolve magnet links via `get_torrent` without re-scraping.
+- Magnet links are always stored internally; MCP hides them unless `INCLUDE_LINKS=true`.
 - Configurable source filtering via environment variables.
 - Telegram-gated web UI: one-time QR/deep-link pairing, forward-to-Telegram popup and (optional) server-side forwarding.
 - Tools:
@@ -76,17 +78,19 @@ uvx torrent-search-mcp --mode api
 
 ## Supported Sources
 
-| Source       | Domain                 | Fetch method  |
-| ------------ | ---------------------- | ------------- |
-| ThePirateBay | `apibay.org`           | HTTP API      |
-| 1337x        | `1337x.to`             | HTTP API      |
-| Nyaa         | `nyaa.si`              | HTTP API      |
-| YTS          | `yts.mx`               | HTTP API      |
-| EZTV         | `eztvx.to`             | HTTP API      |
-| FitGirl      | `fitgirl-repacks.site` | HTTP API      |
-| SubsPlease   | `subsplease.org`       | HTTP API      |
-| BitTorrented | `bittorrented.com`     | HTTP API      |
-| UIndex       | `uindex.org`           | HTTP top list |
+| Source       | Scraping domain        | Fetch method          |
+| ------------ | ---------------------- | --------------------- |
+| ThePirateBay | `apibay.org`           | JSON API              |
+| 1337x        | `1337x.to` + mirrors   | HTML search/top pages |
+| Nyaa         | `nyaa.si`              | RSS + HTML top page   |
+| YTS          | `yts.mx` + mirrors     | JSON API              |
+| EZTV         | `eztvx.to`             | JSON API              |
+| FitGirl      | `fitgirl-repacks.site` | RSS                   |
+| SubsPlease   | `subsplease.org`       | JSON API              |
+| BitTorrented | `bittorrented.com`     | JSON API              |
+| UIndex       | `uindex.org`           | HTML top list         |
+
+The API exposes public display domains where applicable: `apibay.org` is shown as `thepiratebay.org`, and `yts.mx` as `yts.vg`. Results may include a validated HTTP(S) `page_url` linking back to their source page.
 
 > **Note on UIndex:** the site exposes no programmatic search endpoint (its search path is protected by a browser challenge), so queries are matched client-side against its live top list - which conveniently carries magnet links inline.
 
@@ -259,7 +263,7 @@ for torrent in results:
     )
 ```
 
-`search_torrents` is async and accepts an optional `max_items` (default `10`). `popular_torrents(per_source=20)` returns the current most popular torrents from sources with a top listing - up to `per_source` results per source (pass `per_source=None` for everything), merged and ranked by seeders + leechers. Each `Torrent` exposes `id`, `filename`, `size`, `seeders`, `leechers`, `date`, `source`, and (when available) `magnet_link`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link.
+`search_torrents` is async and accepts an optional `max_items` (default `20`). `popular_torrents(per_source=20)` returns the current most popular torrents from sources with a top listing - up to `per_source` results per source (pass `per_source=None` for everything), merged and ranked by seeders + leechers. Each `Torrent` exposes `id`, `filename`, `category`, `size`, `seeders`, `leechers`, `downloads`, `date`, `source`, `uploader`, and, when available, `magnet_link` and a validated HTTP(S) `page_url`. Pass a torrent's `id` to `get_torrent()` to retrieve its magnet link.
 
 ### As MCP Server
 
@@ -292,13 +296,13 @@ The API server will then be accessible at `http://<host>:<port>`.
 **Available Endpoints:**
 The API server exposes similar functionalities to the MCP server. Key endpoints include:
 
-- `GET /`: Built-in web UI (dark/light) - search, per-site popular tiles, sortable results with magnet links. Telegram sending requires one-time QR pairing.
+- `GET /`: Built-in web UI (dark/light) - search, per-site popular tiles, sortable results, source-page links and magnet actions. Telegram sending requires one-time QR pairing when configured.
 - `POST /torrent/search`: Search for torrents. Query params: `query` (required) and `max_items` (optional, default `20`).
 - `GET /sources`: List the available torrent source domains.
 - `GET /torrent/popular`: Get the most popular torrents. Query param: `per_source` (optional, default `20`).
-- `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as text.
+- `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as a JSON string.
 - `GET /telegram/session`: Web UI auth state (`enabled`, `authenticated`, public bot `handle`, `prune_magnet_links`). Send the session token as `Authorization: Bearer`.
-- `POST /telegram/auth/challenge`: Create a one-time pairing code (rate-limited). Codes expire after ~5 minutes and are shown as a QR + deep link in the pairing popup.
+- `POST /telegram/auth/challenge`: Create a one-time 16-character alphanumeric pairing code (rate-limited). Codes expire after ~5 minutes and are shown as a QR + deep link in the pairing popup.
 - `GET /telegram/auth/poll?code=`: Poll a pairing code; on approval returns the one-time session token for the browser to store.
 - `DELETE /telegram/auth/challenge/{code}`: Cancel a pending pairing code.
 - `POST /telegram/auth/register`: Approve a pairing code bound to a Telegram `chat_id`. Requires `Authorization: Bearer $TORRENT_SEARCH_API_KEY`.

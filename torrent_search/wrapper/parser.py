@@ -54,7 +54,9 @@ TRACKERS_BEST_URL = (
     "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt"
 )
 
-CSV_HEADER = "filename;category;size;seeders;leechers;downloads;date;magnet_link"
+CSV_HEADER = (
+    "filename;category;size;seeders;leechers;downloads;date;magnet_link;page_url"
+)
 
 # ---------------------------------------------------------------------------
 # Utilities
@@ -109,24 +111,35 @@ def human_size(num_bytes: Any) -> str:
 
 
 def fmt_date(value: Any) -> str:
-    """Format a unix timestamp, ISO-8601 or RFC-822 date as YYYY-MM-DD."""
+    """Format a unix timestamp, ISO-8601 or RFC-822 date.
+
+    Returns the full UTC datetime when the source includes time information,
+    otherwise preserves the YYYY-MM-DD date string for date-only sources.
+    """
     if isinstance(value, bool):
         return "N/A"
     if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
         ts = int(value)
-        return (
-            datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
-            if ts
-            else "N/A"
-        )
+        if not ts:
+            return "N/A"
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
     if isinstance(value, str) and value:
+        # Date-only strings come from sources that do not provide a time of day
+        # (e.g. 1337x detail pages). Keep them as-is so the UI does not invent one.
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            return value
         try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(
-                "%Y-%m-%d"
-            )
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            # fromisoformat accepts bare dates, but those are handled above.
+            return parsed.isoformat()
         except ValueError:
             try:
-                return parsedate_to_datetime(value).strftime("%Y-%m-%d")
+                parsed = parsedate_to_datetime(value)
+                # email.utils may return a naive datetime for -0000 offsets;
+                # treat those as UTC since they came from RSS feeds that use it.
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return parsed.isoformat()
             except (TypeError, ValueError, IndexError):
                 return "N/A"
     return "N/A"
@@ -141,6 +154,7 @@ def _row(
     downloads: Any,
     date: Any,
     magnet_link: str,
+    page_url: str | None = None,
 ) -> list[str]:
     return [
         filename.replace(";", ",").strip(),
@@ -151,6 +165,7 @@ def _row(
         str(downloads) if downloads else "N/A",
         fmt_date(date),
         magnet_link,
+        page_url or "",
     ]
 
 
@@ -222,9 +237,9 @@ async def _get_first(
 
 
 def _rss_field(item: str, name: str) -> str:
-    """Extract a tag's text from a raw RSS item (handles CDATA)."""
+    """Extract a tag's text from a raw RSS item (handles CDATA and attributes)."""
     match = re.search(
-        rf"<{re.escape(name)}>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</{re.escape(name)}>",
+        rf"<{re.escape(name)}(?:\s+[^>]*)?>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</{re.escape(name)}>",
         item,
         re.DOTALL | re.IGNORECASE,
     )
@@ -278,7 +293,13 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
 # ---------------------------------------------------------------------------
 # 1337x.to - HTML scrape with mirror rotation
 # ---------------------------------------------------------------------------
-X1337_HOSTS = ["1337x.to", "1337x.st", "x1337x.ws", "1337xx.to"]
+X1337_HOSTS = [
+    "1337x.to",
+    "1337x.st",
+    "x1337x.ws",
+    "www.1337xx.to",
+    "1337xx.to",
+]
 X1337_STOP_WORDS = {"the", "a", "an", "of", "and", "or", "to"}
 X1337_MONTHS = {
     "jan": 1,
@@ -377,7 +398,7 @@ async def _x1337_detail(base: str, path: str) -> tuple[str, str] | None:
     return html.unescape(magnet_match.group(0)), x1337_upload_date(detail_html)
 
 
-async def x1337_parse(query: str) -> str:
+async def x1337_parse(query: str, max_items: int | None = None) -> str:
     q = query.strip()
     if q:
         encoded = quote(q, safe="").replace("%20", "+")
@@ -392,30 +413,46 @@ async def x1337_parse(query: str) -> str:
         ]
 
     tokens = [t for t in q.lower().split() if t not in X1337_STOP_WORDS] if q else []
-    results: list[list[str]] = []
+    candidates: list[tuple[str, str, list[str]]] = []
     pages = await asyncio.gather(
         *(_x1337_fetch(path) for path, _ in paths), return_exceptions=True
     )
-    for (path, category), page in zip(paths, pages):
+    for (_, category), page in zip(paths, pages):
         if isinstance(page, BaseException):
             continue
         base, list_html = page
-        rows = x1337_rows(list_html)
+        source_rows = x1337_rows(list_html)
         if tokens:
-            rows = [r for r in rows if all(t in r[0].lower() for t in tokens)]
-        rows.sort(key=lambda r: int(r[3]), reverse=True)
-        top = rows
-        details = await asyncio.gather(
-            *(_x1337_detail(base, row[1]) for row in top), return_exceptions=True
-        )
-        for row, detail in zip(top, details):
-            if isinstance(detail, BaseException) or detail is None:
-                continue
-            name, _path, size, seeds, leeches = row
-            magnet, date = detail
-            results.append(
-                _row(name, category, size, seeds, leeches, None, date, magnet)
+            source_rows = [
+                row for row in source_rows if all(t in row[0].lower() for t in tokens)
+            ]
+        candidates.extend((base, category, row) for row in source_rows)
+    candidates.sort(key=lambda candidate: int(candidate[2][3]), reverse=True)
+    if max_items is not None:
+        candidates = candidates[:max_items]
+    details = await asyncio.gather(
+        *(_x1337_detail(base, row[1]) for base, _, row in candidates),
+        return_exceptions=True,
+    )
+    results: list[list[str]] = []
+    for (base, category, row), detail in zip(candidates, details):
+        if isinstance(detail, BaseException) or detail is None:
+            continue
+        name, _path, size, seeds, leeches = row
+        magnet, date = detail
+        results.append(
+            _row(
+                name,
+                category,
+                size,
+                seeds,
+                leeches,
+                None,
+                date,
+                magnet,
+                page_url=f"{base}{_path}",
             )
+        )
     return _format(results)
 
 
@@ -457,6 +494,11 @@ def apibay_rows(items: list[dict[str, Any]]) -> list[list[str]]:
                 None,
                 item.get("added"),
                 build_magnet(info_hash, name),
+                page_url=(
+                    f"https://thepiratebay.org/description.php?id={item['id']}"
+                    if item.get("id")
+                    else None
+                ),
             )
         )
     return rows
@@ -573,8 +615,19 @@ def fitgirl_rows(xml: str) -> list[list[str]]:
             continue
         magnet = html.unescape(magnet_match.group(1))
         name = html.unescape(_rss_field(item, "title")) or "Unknown"
+        page_url = _rss_field(item, "link") or None
         rows.append(
-            _row(name, "Games", "N/A", 0, 0, None, _rss_field(item, "pubDate"), magnet)
+            _row(
+                name,
+                "Games",
+                "N/A",
+                0,
+                0,
+                None,
+                _rss_field(item, "pubDate"),
+                magnet,
+                page_url=page_url,
+            )
         )
     return rows
 
@@ -608,6 +661,7 @@ def nyaa_rss_rows(xml: str) -> list[list[str]]:
                 _rss_field(item, "nyaa:downloads"),
                 _rss_field(item, "pubDate"),
                 build_magnet(info_hash, name),
+                page_url=_rss_field(item, "guid") or None,
             )
         )
     return rows
@@ -628,7 +682,7 @@ def nyaa_html_rows(html_text: str) -> list[list[str]]:
     """Parse the HTML browse table (the RSS feed ignores sort params)."""
     rows: list[list[str]] = []
     for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", html_text, DOTALL):
-        name_match = re.search(r'<a href="/view/\d+" title="([^"]+)"', tr)
+        name_match = re.search(r'<a href="(/view/\d+)" title="([^"]+)"', tr)
         magnet_match = re.search(r'href="(magnet:\?xt=urn:btih:[^"]+)"', tr)
         if not name_match or not magnet_match:
             continue
@@ -642,7 +696,7 @@ def nyaa_html_rows(html_text: str) -> list[list[str]]:
         downloads = re.search(r"([\d,]+)", cells[5])
         rows.append(
             _row(
-                html.unescape(name_match.group(1)),
+                html.unescape(name_match.group(2)),
                 "Anime",
                 (cells[1].strip() or "N/A"),
                 (seeds.group(1).replace(",", "") if seeds else 0),
@@ -650,6 +704,7 @@ def nyaa_html_rows(html_text: str) -> list[list[str]]:
                 (downloads.group(1).replace(",", "") if downloads else None),
                 (int(ts_match.group(1)) if ts_match else None),
                 html.unescape(magnet_match.group(1)),
+                page_url=f"https://nyaa.si{name_match.group(1)}",
             )
         )
     return rows
@@ -687,6 +742,8 @@ def subsplease_rows(data: dict[str, Any]) -> list[list[str]]:
         name = f"{show}{episode} [{download.get('res') or '?'}p]"
         size_match = re.search(r"[?&]xl=(\d+)", magnet)
         size = human_size(int(size_match.group(1))) if size_match else "N/A"
+        page = entry.get("page")
+        page_url = f"https://subsplease.org/shows/{page}/" if page else None
         rows.append(
             _row(
                 name,
@@ -697,6 +754,7 @@ def subsplease_rows(data: dict[str, Any]) -> list[list[str]]:
                 None,
                 entry.get("release_date"),
                 magnet,
+                page_url=page_url,
             )
         )
     return rows
@@ -749,7 +807,11 @@ def uindex_rows(html_text: str) -> list[list[str]]:
     rows: list[list[str]] = []
     for tr in re.findall(r"<tr><td class=\"top-col-rank\">.*?</tr>", html_text, DOTALL):
         magnet_match = re.search(r'href="(magnet:\?xt=urn:btih:[^"]+)"', tr)
-        name_match = re.search(r'class="sr-torrent-link"[^>]*>(.*?)</a>', tr, DOTALL)
+        name_match = re.search(
+            r'href="(/details\.php\?id=\d+)"[^>]*class="sr-torrent-link"[^>]*>(.*?)</a>',
+            tr,
+            DOTALL,
+        )
         if not magnet_match or not name_match:
             continue
         cat_match = re.search(r"sr-cat-badge[^>]*>(?:<svg.*?</svg>)?\s*([^<]+)</a>", tr)
@@ -763,7 +825,7 @@ def uindex_rows(html_text: str) -> list[list[str]]:
                     sub(
                         r"<[^>]+>",
                         " ",
-                        sub(r"<span[^>]*>.*?</span>", "", name_match.group(1)),
+                        sub(r"<span[^>]*>.*?</span>", "", name_match.group(2)),
                     )
                 ).strip(),
                 (cat_match.group(1).strip() if cat_match else "N/A"),
@@ -773,6 +835,7 @@ def uindex_rows(html_text: str) -> list[list[str]]:
                 None,
                 (_uindex_date(date_match.group(1)) if date_match else "N/A"),
                 html.unescape(magnet_match.group(1)),
+                page_url=f"https://uindex.org{name_match.group(1)}",
             )
         )
     return rows
@@ -836,13 +899,15 @@ async def yts_parse(query: str, *, sort_by: str = "") -> str:
 # ---------------------------------------------------------------------------
 # Popular listings
 # ---------------------------------------------------------------------------
-# Sources exposing a top/popular listing. Each entry takes no query and
-# returns the same CSV text contract as the search parsers.
-POPULAR_SOURCES: dict[str, Callable[[], Awaitable[str]]] = {
-    "apibay.org": lambda: apibay_parse(""),  # official TPB top100 (movies + HD)
-    "uindex.org": lambda: uindex_parse(""),  # site-wide top list, magnets inline
-    "1337x.to": lambda: x1337_parse(""),  # popular movies + TV pages
-    "yts.mx": lambda: yts_parse("", sort_by="seeds"),  # most seeded uploads
-    "nyaa.si": lambda: nyaa_popular(),  # HTML page honors seed sorting, RSS does not
-    "eztvx.to": lambda: eztv_parse(""),  # latest releases as candidate pool
+# Sources exposing a top/popular listing. Each entry accepts the requested
+# per-source limit and returns the same CSV text contract as the search parsers.
+POPULAR_SOURCES: dict[str, Callable[[int | None], Awaitable[str]]] = {
+    "apibay.org": lambda _: apibay_parse(""),  # official TPB top100 (movies + HD)
+    "uindex.org": lambda _: uindex_parse(""),  # site-wide top list, magnets inline
+    "1337x.to": lambda limit: x1337_parse(
+        "", max_items=limit
+    ),  # popular movies + TV pages
+    "yts.mx": lambda _: yts_parse("", sort_by="seeds"),  # most seeded uploads
+    "nyaa.si": lambda _: nyaa_popular(),  # HTML page honors seed sorting, RSS does not
+    "eztvx.to": lambda _: eztv_parse(""),  # latest releases as candidate pool
 }

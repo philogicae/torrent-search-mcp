@@ -91,7 +91,9 @@ async def available_sources() -> list[str]:
 
 
 def _torrent_line(torrent: Torrent) -> str:
-    if not INCLUDE_LINKS:  # Greatly reduce token usage
+    # Magnet links are always stored in the backend cache; INCLUDE_LINKS only
+    # controls whether they are exposed to MCP clients.
+    if not INCLUDE_LINKS:
         torrent = torrent.model_copy(update={"magnet_link": None})
     return str(torrent)
 

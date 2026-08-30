@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import secrets
+import string
 import tempfile
 import time
 from pathlib import Path
@@ -27,6 +28,8 @@ SESSION_TTL_SECONDS = 30 * 24 * 3600  # sessions older than this are purged
 DEFAULT_AUTH_FILE = "./authorized_tokens.json"
 DEFAULT_CHALLENGE_TTL = 300.0  # 5 minutes to get the code approved
 MAX_PENDING_CHALLENGES = 50
+_CODE_ALPHABET = string.ascii_letters + string.digits
+_CODE_LENGTH = 16
 
 
 def hash_token(token: str) -> str:
@@ -204,13 +207,18 @@ class ChallengeManager:
         return chat_id
 
     def create(self) -> tuple[str, float]:
-        """Return a fresh ``(code, ttl_seconds)``."""
+        """Return a fresh ``(code, ttl_seconds)``.
+
+        Codes are restricted to ASCII letters and digits so they survive
+        manual typing, QR-code scanning, and Telegram deep-link text
+        parameters without any URL-encoding ambiguity.
+        """
         self._sweep()
         while len(self._pending) >= self.max_pending:
             oldest = min(self._pending.items(), key=lambda item: item[1])[0]
             del self._pending[oldest]
             logger.info("Challenge capacity reached; evicted oldest pending code.")
-        code = secrets.token_urlsafe(32)
+        code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_LENGTH))
         self._pending[code] = time.monotonic() + self.ttl
         return code, self.ttl
 

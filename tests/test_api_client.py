@@ -50,10 +50,15 @@ def test_extract_info_tolerates_dashes_in_ref_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_search_sorts_truncates_and_caches(monkeypatch: Any) -> None:
+async def test_search_sorts_truncates_and_stores_in_id_cache(
+    monkeypatch: Any,
+) -> None:
+    calls: list[str] = []
+
     async def fake_search(
         query: str, sources: list[str] | None = None
     ) -> list[Torrent]:
+        calls.append(query)
         return [
             _torrent(1, f"magnet:?xt=urn:btih:{'a' * 40}&dn=1"),
             _torrent(99, f"magnet:?xt=urn:btih:{'b' * 40}&dn=2"),
@@ -67,6 +72,29 @@ async def test_search_sorts_truncates_and_caches(monkeypatch: Any) -> None:
     assert [t.seeders for t in results] == [99, 50]  # sorted desc
     assert results[0].id.startswith(f"{Compress62.compress('unique query 42')}-2-")
     assert api.CACHE.get(results[0].id) is not None
+
+    # Search results are never cached; a second call re-scrapes.
+    await api.search_torrents("unique query 42", max_items=2)
+    assert calls == ["unique query 42", "unique query 42"]
+
+
+@pytest.mark.asyncio
+async def test_search_is_not_cached(monkeypatch: Any) -> None:
+    """Search results must not be served from any persistent cache."""
+    calls: list[str] = []
+
+    async def fake_search(
+        query: str, sources: list[str] | None = None
+    ) -> list[Torrent]:
+        calls.append(query)
+        return [_torrent(5, f"magnet:?xt=urn:btih:{'a' * 40}&dn=1")]
+
+    monkeypatch.setattr(ac, "search_torrents", fake_search)
+    api = ac.TorrentSearchApi()
+    await api.search_torrents("uncached query")
+    await api.search_torrents("uncached query")
+    await api.search_torrents("uncached query")
+    assert len(calls) == 3
 
 
 @pytest.mark.asyncio
@@ -247,12 +275,14 @@ async def test_concurrent_cold_misses_coalesce(monkeypatch: Any) -> None:
         return [_torrent(9, f"magnet:?xt=urn:btih:{'d' * 40}&dn=x")]
 
     monkeypatch.setattr(ac, "search_torrents", fake_search)
-    await ac.TorrentSearchApi.search_torrents.cache.clear()
     api = ac.TorrentSearchApi()
     results = await asyncio.gather(
         api.search_torrents("flight query"),
-        api.search_torrents("Flight QUERY"),  # key_builder lowercases
+        api.search_torrents("Flight QUERY"),  # single-flight key lowercases
     )
-    assert len(calls) == 1  # one underlying scrape for both callers
+    assert len(calls) == 1  # one underlying scrape for both concurrent callers
     assert results[0] == results[1]
-    await ac.TorrentSearchApi.search_torrents.cache.clear()
+
+    # Sequential identical searches are not cached and scrape again.
+    await api.search_torrents("flight query")
+    assert len(calls) == 2

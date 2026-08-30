@@ -129,6 +129,8 @@ def test_challenge_lifecycle_binds_chat_id() -> None:
     challenges = ta.ChallengeManager(ttl=900)
     code, ttl = challenges.create()
     assert ttl == 900
+    assert code.isalnum()
+    assert len(code) == ta._CODE_LENGTH
     assert challenges.poll(code) == "pending"
     assert challenges.approve(code, "12345")
     assert challenges.poll(code) == "approved"

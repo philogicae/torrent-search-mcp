@@ -45,7 +45,7 @@ def displayed_sources(names: list[str]) -> list[str]:
 
 
 def key_builder(fn: Any, *args: Any, **kwargs: Any) -> str:
-    """Build the aiocache key.
+    """Build the aiocache key for ``popular_torrents``.
 
     aiocache calls ``key_builder(fn, *call_args)``; for the decorated bound
     method ``args[0]`` is ``self``, so real arguments start at ``args[1]``.
@@ -95,7 +95,6 @@ class TorrentSearchApi:
         """Get the list of available torrent sources (display domains)."""
         return displayed_sources(SOURCES)
 
-    @cached(ttl=120, key_builder=key_builder)  # 2min
     async def search_torrents(
         self,
         query: str,
@@ -103,6 +102,10 @@ class TorrentSearchApi:
     ) -> list[Torrent]:
         """
         Search for torrents on available sources.
+
+        Searches are not cached: new torrents can appear at any time. The
+        results are still stored in the 1-hour torrent cache so that
+        ``get_torrent`` can resolve magnet links without re-scraping.
 
         Args:
             query: Search query.

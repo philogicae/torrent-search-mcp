@@ -1,3 +1,33 @@
+## [4.4.0] - 2026-08-30
+
+### 🚀 Features
+
+- Feat: enrich torrent metadata and optimize result freshness
+
+- Add validated source-page URLs for Pirate Bay, 1337x, Nyaa, FitGirl,
+  SubsPlease, and UIndex results
+- Preserve full ISO timestamps when sources provide time information while
+  retaining date-only values where appropriate
+- Display source-page links and localized timestamps across search results,
+  popular tiles, and Telegram forwarding details
+- Keep searches uncached so newly published torrents appear immediately while
+  continuing to coalesce identical concurrent requests
+- Bound the one-hour magnet lookup cache to 5,000 entries and evict the oldest
+  records when capacity is exceeded
+- Limit 1337x detail-page requests before fetching popular-result metadata to
+  reduce unnecessary network work
+- Keep magnet links available internally for lookups while honoring
+  INCLUDE_LINKS for MCP response exposure
+- Replace URL-safe Telegram pairing tokens with shorter 16-character
+  alphanumeric codes for easier manual entry and deep-link handling
+- Reduce off-screen Web UI rendering and pause hidden loading animations
+- Update tests, source documentation, API behavior notes, and package metadata
+  for the 4.4.0 release
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.3.3] - 2026-08-29
 
 ### 🚀 Features

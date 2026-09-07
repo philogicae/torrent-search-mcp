@@ -40,4 +40,5 @@ asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
     "ignore::authlib.deprecate.AuthlibDeprecationWarning",
     "ignore::starlette.exceptions.StarletteDeprecationWarning",
+    "ignore:.*BlockingPortal alias is deprecated.*:DeprecationWarning",
 ]

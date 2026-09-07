@@ -19,8 +19,8 @@ Torrent search MCP server — a Python-based torrent search service with MCP (Mo
 
 - 100% coverage gate enforced via `--cov-fail-under=100`.
 - Test suite is hermetic against ambient env: autouse fixture pins `_PRUNE_MAGNET_LINKS=False` (uv auto-loads `.env`, which flipped module constants and broke assertions when a QA toggle lingered). (2026-08-27)
-- `playwright-cli` verification standard: DOM snapshot + screenshot + console (+requests when network-relevant) recorded in TRACKING verification log with `.playwright-cli/` artifact paths (gitignored, local-only). (2026-08-27, R1-R4 logs populated)
-- `approve.sh` — helper to approve a Web UI pairing code via `POST /telegram/auth/register` (see TRACKING.md).
+- `playwright-cli` verification standard: DOM snapshot + screenshot + console (+requests when network-relevant) recorded in the verification log with `.playwright-cli/` artifact paths (gitignored, local-only). (2026-08-27, R1-R4 logs populated)
+- `approve.sh` — helper to approve a Web UI pairing code via `POST /telegram/auth/register`.
 
 ## Security considerations
 

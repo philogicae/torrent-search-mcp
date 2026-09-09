@@ -1,3 +1,24 @@
+## [4.4.1] - 2026-09-09
+
+### 🚀 Features
+
+- Feat: add AGENTS.md with project overview, setup, testing, and architecture notes
+
+- Document project structure, setup commands, and deployment workflow for AI agents
+- Capture testing standards: 100% coverage gate, hermetic env fixture, playwright-cli verification protocol
+- List security considerations: 30-day session purge, Bearer-gated /forward_telegram, source-page URL validation
+- Track architecture decisions and backlog items across backend, frontend, MCP/API, infra, performance, and config domains
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+- Chore: bump deps, silence BlockingPortal deprecation, drop TRACKING.md refs
+
+- uv.lock: routine bumps — anyio 4.14.2→4.15.1, caio 0.12.2→0.12.4, cachetools 7.1.7→7.1.8, cyclopts 4.23.3→4.25.0, griffelib 2.2.0→2.3.0 (plus transitive wheel updates)
+- pyproject.toml: ignore `BlockingPortal alias is deprecated` DeprecationWarning in pytest (anyio 4.15 fallout)
+- AGENTS.md: remove stale TRACKING.md references from verification and approve.sh notes
+- Chore: update deps and cleanup
+
 ## [4.4.0] - 2026-08-30
 
 ### 🚀 Features

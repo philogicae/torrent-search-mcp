@@ -4,14 +4,14 @@
 
 ## Project overview
 
-Torrent search MCP server — a Python-based torrent search service with MCP (Model Context Protocol) API, a static HTML frontend, and Telegram integration. 100% test coverage gate.
+Torrent search MCP server - a Python-based torrent search service with MCP (Model Context Protocol) API, a static HTML frontend, and Telegram integration. 100% test coverage gate.
 
 ## Setup commands
 
 - Lint/format: `uv run ruff format && uv run ruff check --fix`
 - Typecheck: `uv run ty check`
 - Tests (100% coverage gate): `uv run pytest -n 2 --dist worksteal --cov=torrent_search --cov-fail-under=100`
-- Full local pipeline: `./dev.sh` (lock+sync, ruff, ty, prettier on md/html, tests with prettier before pytest — static HTML formatting matters because the served page is minified from it)
+- Full local pipeline: `./dev.sh` (lock+sync, ruff, ty, prettier on md/html, tests with prettier before pytest - static HTML formatting matters because the served page is minified from it)
 - Never run destructive docker commands against volumes (`torrent-search-data` holds auth tokens)
 - Deploy: `docker compose up -d --build torrent-search-api torrent-search-mcp` (rebuild required for static changes; plain `restart` reuses the old image)
 
@@ -20,7 +20,7 @@ Torrent search MCP server — a Python-based torrent search service with MCP (Mo
 - 100% coverage gate enforced via `--cov-fail-under=100`.
 - Test suite is hermetic against ambient env: autouse fixture pins `_PRUNE_MAGNET_LINKS=False` (uv auto-loads `.env`, which flipped module constants and broke assertions when a QA toggle lingered). (2026-08-27)
 - `playwright-cli` verification standard: DOM snapshot + screenshot + console (+requests when network-relevant) recorded in the verification log with `.playwright-cli/` artifact paths (gitignored, local-only). (2026-08-27, R1-R4 logs populated)
-- `approve.sh` — helper to approve a Web UI pairing code via `POST /telegram/auth/register`.
+- `approve.sh` - helper to approve a Web UI pairing code via `POST /telegram/auth/register`.
 
 ## Security considerations
 
@@ -47,12 +47,12 @@ Torrent search MCP server — a Python-based torrent search service with MCP (Mo
 
 ### MCP / API
 
-- [ ] `_format_torrents` drops torrent ids when `INCLUDE_LINKS` unset? No — keeps ids; but magnet-less lines make `get_torrent` round trips required. Document this flow in README agent tips.
+- [ ] `_format_torrents` drops torrent ids when `INCLUDE_LINKS` unset? No - keeps ids; but magnet-less lines make `get_torrent` round trips required. Document this flow in README agent tips.
 
 ### Infra
 
 - [x] Dockerfile lost `ENV PATH="/app/.venv/bin:$PATH"` in v4.1.0 refactor → container crash-looped (`exec torrent-search-mcp failed`). Restored. (2026-08-27)
-- `Dockerfile.publish` — separate publish Dockerfile for PyPI-based images (`pip install torrent-search-mcp==$VERSION`).
+- `Dockerfile.publish` - separate publish Dockerfile for PyPI-based images (`pip install torrent-search-mcp==$VERSION`).
 
 ### Performance
 

@@ -1,3 +1,26 @@
+## [4.5.0] - 2026-09-16
+
+### 🚀 Features
+
+- Feat: FastMCP 4 / MCP 2026-07-28 migration, per_source search spread, per-source popular TTL caches, MCP forward_torrent; fix: remote get_torrent JSON magnet; chore: drop paywalled bittorrented source, sanitize examples
+
+- pyproject.toml: unpin fastmcp (`>=3,<4` → unversioned), add direct `httpx2` dependency.
+- uv.lock: fastmcp 3.4.7→4.0.4, httpx→httpx2 2.13.0 (+httpcore2), mcp/mcp-types 2.2.0, assorted bumps.
+- torrent_search/mcp_server.py: httpx→httpx2, add `forward_torrent` tool (API-key path), remote `get_torrent` now decodes the JSON string body, drop unused `_api_get_text`, synthetic tool example.
+- torrent_search/api_server.py: httpx→httpx2, `/torrent/search` gains `per_source` (spread, no implicit global cap; `max_items` default 20 kept), `/forward_telegram` accepts server-to-server callers via API key + explicit `chat_id` (400 when missing).
+- torrent_search/wrapper/api_client.py: `search_torrents(per_source=…)` keeps the healthiest N per source before ranking, global cap optional.
+- torrent_search/wrapper/scraper.py: per-source popular TTL cache (5 min, coverage-aware, stale-while-refresh, no coverage downgrade); drop bittorrented wiring.
+- torrent_search/wrapper/models.py: URL-safe torrent ids (base64url for unsafe source/ref parts).
+- torrent_search/wrapper/parser.py: httpx→httpx2, remove paywalled bittorrented parser/rows.
+- torrent_search/static/index.html: clickable brand title → `/` with focus ring, 429 warning toast, sort persistence via `localStorage.ts_sort`, mobile breakpoint toggles accordion classes without re-render.
+- tests: httpx2 rename, new regressions (per_source spread, lowercase enforcement, unsafe-id round-trip, per-source cache, forward auth, JSON magnet, sessionless/legacy eras), conftest popular-cache reset + refresh-task cancel, removed bittorrented tests, synthetic placeholders.
+- README.md / AGENTS.md: document `2026-07-28` + legacy negotiation, `forward_torrent`, magnet round-trip flow, `per_source`, workers cache note; backlog → conventions (tracking moved to Kaneo).
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+- Chore: update cover image
+
 ## [4.4.1] - 2026-09-09
 
 ### 🚀 Features

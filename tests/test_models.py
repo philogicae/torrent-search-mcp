@@ -54,12 +54,27 @@ def test_format_non_numeric_seeders_default_to_zero() -> None:
     assert t.leechers == 0
 
 
+def test_unsafe_source_still_builds_url_safe_ids() -> None:
+    t = _format(source="weird source/ünïcode")
+    assert "/" not in t.id
+    assert " " not in t.id
+    t.prepend_info("héllo wörld", 10)
+    query, max_items, _, _ = Torrent.extract_info(t.id)
+    assert query == "héllo wörld"
+    assert max_items == 10
+    assert "/" not in t.id and " " not in t.id
+
+
+def test_safe_id_components_stay_readable() -> None:
+    assert _format().id.startswith("nyaa.si-")
+
+
 def test_prepend_and_extract_info() -> None:
     t = _format()
-    t.prepend_info("breaking bad", 10)
+    t.prepend_info("sample show", 10)
     query, max_items, source, ref_id = Torrent.extract_info(t.id)
     assert (query, max_items, source, ref_id) == (
-        "breaking bad",
+        "sample show",
         10,
         "nyaa.si",
         sha256(MAGNET.encode()).hexdigest()[:10],

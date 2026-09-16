@@ -32,17 +32,17 @@ def test_available_sources() -> None:
 
 
 def test_key_builder_normalizes_case_and_kwargs() -> None:
-    positional = ac.key_builder("fn", object(), "Breaking Bad", 10)
-    assert positional == ac.key_builder("fn", object(), "breaking bad", 10)
-    by_kwargs = ac.key_builder("fn", object(), query="Breaking Bad", max_items=10)
+    positional = ac.key_builder("fn", object(), "Sample Show", 10)
+    assert positional == ac.key_builder("fn", object(), "sample show", 10)
+    by_kwargs = ac.key_builder("fn", object(), query="Sample Show", max_items=10)
     assert by_kwargs == positional
 
 
 def test_extract_info_tolerates_dashes_in_ref_id() -> None:
-    torrent_id = f"{Compress62.compress('breaking bad')}-10-nyaa.si-abc-def"
+    torrent_id = f"{Compress62.compress('sample show')}-10-nyaa.si-abc-def"
     query, max_items, source, ref_id = Torrent.extract_info(torrent_id)
     assert (query, max_items, source, ref_id) == (
-        "breaking bad",
+        "sample show",
         10,
         "nyaa.si",
         "abc-def",
@@ -95,6 +95,71 @@ async def test_search_is_not_cached(monkeypatch: Any) -> None:
     await api.search_torrents("uncached query")
     await api.search_torrents("uncached query")
     assert len(calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_search_lowercases_query_before_scraping(monkeypatch: Any) -> None:
+    """Mixed-case queries must reach sources lowercased (some sites need it)."""
+    seen: list[str] = []
+
+    async def fake_search(
+        query: str, sources: list[str] | None = None
+    ) -> list[Torrent]:
+        seen.append(query)
+        return [_torrent(5, f"magnet:?xt=urn:btih:{'a' * 40}&dn=1")]
+
+    monkeypatch.setattr(ac, "search_torrents", fake_search)
+    api = ac.TorrentSearchApi()
+    torrents = await api.search_torrents("MiXeD CaSe")
+    assert seen == ["mixed case"]
+    # Ids embed the normalized query, so get_torrent re-searches stay lowercase.
+    query, _, _, _ = Torrent.extract_info(torrents[0].id)
+    assert query == "mixed case"
+
+
+@pytest.mark.asyncio
+async def test_unsafe_source_id_round_trips(monkeypatch: Any) -> None:
+    async def fake_search(
+        query: str, sources: list[str] | None = None
+    ) -> list[Torrent]:
+        return [
+            _torrent(
+                5,
+                f"magnet:?xt=urn:btih:{'a' * 40}&dn=1",
+                source="unsafe source/béta",
+            )
+        ]
+
+    monkeypatch.setattr(ac, "search_torrents", fake_search)
+    api = ac.TorrentSearchApi()
+    torrents = await api.search_torrents("roundtrip", max_items=5)
+    torrent_id = torrents[0].id
+    assert "/" not in torrent_id and " " not in torrent_id
+    assert await api.get_torrent(torrent_id) == torrents[0].magnet_link
+
+
+@pytest.mark.asyncio
+async def test_search_per_source_spreads_across_sources(monkeypatch: Any) -> None:
+    async def fake_search(
+        query: str, sources: list[str] | None = None
+    ) -> list[Torrent]:
+        return [
+            _torrent(90, f"magnet:?xt=urn:btih:{'a' * 40}&dn=1", source="nyaa.si"),
+            _torrent(30, f"magnet:?xt=urn:btih:{'b' * 40}&dn=2", source="nyaa.si"),
+            _torrent(20, f"magnet:?xt=urn:btih:{'c' * 40}&dn=3", source="yts.vg"),
+        ]
+
+    monkeypatch.setattr(ac, "search_torrents", fake_search)
+    api = ac.TorrentSearchApi()
+
+    # per_source=1 keeps the healthiest result of each source, no global cap.
+    spread = await api.search_torrents("spread query", max_items=None, per_source=1)
+    assert [t.source for t in spread] == ["nyaa.si", "yts.vg"]
+    assert [t.seeders for t in spread] == [90, 20]
+
+    # per_source respects the global cap when max_items is also provided.
+    picked = await api.search_torrents("spread query", per_source=2)
+    assert [t.seeders for t in picked] == [90, 30, 20]
 
 
 @pytest.mark.asyncio
@@ -172,7 +237,7 @@ async def test_cli_with_query(monkeypatch: Any, capsys: Any) -> None:
     monkeypatch.setattr(ac, "search_torrents", fake_search)
     api = ac.TorrentSearchApi()
     monkeypatch.setattr(api, "get_torrent", fake_get)
-    await api.cli("breaking bad")
+    await api.cli("sample show")
     out = capsys.readouterr().out
     assert "Found Sources" in out
     assert "Result:" in out

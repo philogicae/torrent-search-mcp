@@ -23,9 +23,9 @@ def test_cli_mode(monkeypatch: Any, capsys: Any) -> None:
             print(f"cli called with query={query}")
 
     monkeypatch.setattr("torrent_search.wrapper.TorrentSearchApi", FakeApi)
-    monkeypatch.setattr("sys.argv", ["prog", "--mode", "cli", "breaking bad"])
+    monkeypatch.setattr("sys.argv", ["prog", "--mode", "cli", "sample show"])
     main_mod.main()
-    assert "cli called with query=breaking bad" in capsys.readouterr().out
+    assert "cli called with query=sample show" in capsys.readouterr().out
 
 
 def test_cli_mode_without_query(monkeypatch: Any, capsys: Any) -> None:

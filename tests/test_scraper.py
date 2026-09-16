@@ -17,7 +17,6 @@ def test_websites_registry_complete() -> None:
         "eztvx.to",
         "fitgirl-repacks.site",
         "subsplease.org",
-        "bittorrented.com",
         "uindex.org",
         "1337x.to",
     ]
@@ -146,6 +145,98 @@ async def test_popular_torrents_skips_unparsable_listing(monkeypatch: Any) -> No
     monkeypatch.setattr(scraper, "ensure_trackers", _fake_parser(""))
     monkeypatch.setattr(scraper, "POPULAR_SOURCES", {"bad.example": garbage, "ok": ok})
     assert [t.filename for t in await scraper.popular_torrents()] == ["Good"]
+
+
+@pytest.mark.asyncio
+async def test_popular_source_cache_hit_avoids_refetch() -> None:
+    calls: list[int | None] = []
+
+    async def fetch(per: int | None) -> str:
+        calls.append(per)
+        return f"{CSV_HEADER}\nA;Anime;1 GB;9;0;0;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    first = await scraper._popular_source("s.example", fetch, 5)
+    second = await scraper._popular_source("s.example", fetch, 5)
+    assert first == second
+    assert calls == [5]
+
+
+@pytest.mark.asyncio
+async def test_popular_source_larger_request_bypasses_smaller_cache() -> None:
+    calls: list[int | None] = []
+
+    async def fetch(per: int | None) -> str:
+        calls.append(per)
+        return f"{CSV_HEADER}\nA;Anime;1 GB;9;0;0;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    await scraper._popular_source("s.example", fetch, 5)
+    await scraper._popular_source("s.example", fetch, None)
+    assert calls == [5, None]
+
+
+@pytest.mark.asyncio
+async def test_popular_source_full_cache_serves_smaller_requests() -> None:
+    calls: list[int | None] = []
+
+    async def fetch(per: int | None) -> str:
+        calls.append(per)
+        return f"{CSV_HEADER}\nA;Anime;1 GB;9;0;0;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    first = await scraper._popular_source("s.example", fetch, None)
+    second = await scraper._popular_source("s.example", fetch, 3)
+    assert first == second
+    assert calls == [None]
+
+
+@pytest.mark.asyncio
+async def test_popular_source_serves_stale_and_refreshes_in_background() -> None:
+    async def first_fetch(per: int | None) -> str:
+        return "old listing"
+
+    await scraper._popular_source("s.example", first_fetch, 5)
+    scraper._popular_cache["s.example"] = (0.0, 5, "SOURCE -> s.example\nstale")
+
+    refreshed: list[int | None] = []
+
+    async def fresh_fetch(per: int | None) -> str:
+        refreshed.append(per)
+        return "fresh listing"
+
+    out = await scraper._popular_source("s.example", fresh_fetch, 5)
+    assert out is not None and "stale" in out
+    await scraper._popular_refreshing["s.example"]
+    assert refreshed == [5]
+    assert "fresh listing" in scraper._popular_cache["s.example"][2]
+
+
+@pytest.mark.asyncio
+async def test_popular_refresh_keeps_better_coverage() -> None:
+    scraper._popular_cache["s.example"] = (0.0, None, "full listing")
+
+    async def fetch(per: int | None) -> str:
+        return "small listing"
+
+    await scraper._refresh_popular("s.example", fetch, 5)
+    assert scraper._popular_cache["s.example"][2] == "full listing"
+
+
+@pytest.mark.asyncio
+async def test_popular_torrents_reuses_fresh_sources(monkeypatch: Any) -> None:
+    calls: list[int | None] = []
+
+    async def listing(per: int | None) -> str:
+        calls.append(per)
+        return f"{CSV_HEADER}\nGood;Anime;1 GB;7;2;10;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    monkeypatch.setattr(scraper, "ensure_trackers", _fake_parser(""))
+    monkeypatch.setattr(scraper, "POPULAR_SOURCES", {"ok": listing})
+    assert [t.filename for t in await scraper.popular_torrents(per_source=5)] == [
+        "Good"
+    ]
+    assert [t.filename for t in await scraper.popular_torrents(per_source=5)] == [
+        "Good"
+    ]
+    assert calls == [5]  # second call served from the per-source cache
 
 
 @pytest.mark.asyncio

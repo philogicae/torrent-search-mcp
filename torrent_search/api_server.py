@@ -3,7 +3,7 @@ import secrets
 from os import getenv
 from pathlib import Path as PathLib
 
-import httpx
+import httpx2
 from fastapi import FastAPI, HTTPException, Path, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -53,23 +53,25 @@ _CHALLENGE_LIMITER = RateLimiter(max_events=60, per_seconds=60)
 _REGISTER_LIMITER = RateLimiter(max_events=30, per_seconds=60)
 _POLL_LIMITER = RateLimiter(max_events=300, per_seconds=60)
 _FORWARD_LIMITER = RateLimiter(max_events=20, per_seconds=60)
-_bot_client: httpx.AsyncClient | None = None
+_bot_client: httpx2.AsyncClient | None = None
 
 
-def _bot() -> httpx.AsyncClient:
+def _bot() -> httpx2.AsyncClient:
     global _bot_client
     if _bot_client is None:
-        _bot_client = httpx.AsyncClient(base_url="https://api.telegram.org", timeout=15)
+        _bot_client = httpx2.AsyncClient(
+            base_url="https://api.telegram.org", timeout=15
+        )
     return _bot_client
 
 
-_relay_client: httpx.AsyncClient | None = None
+_relay_client: httpx2.AsyncClient | None = None
 
 
-def _relay() -> httpx.AsyncClient:
+def _relay() -> httpx2.AsyncClient:
     global _relay_client
     if _relay_client is None:
-        _relay_client = httpx.AsyncClient(timeout=15)
+        _relay_client = httpx2.AsyncClient(timeout=15)
     return _relay_client
 
 
@@ -134,10 +136,17 @@ async def popular_torrents(response: Response, per_source: int = 20) -> list[Tor
 async def search_torrents(
     response: Response,
     query: str,
-    max_items: int = 20,
+    max_items: int | None = None,
+    per_source: int | None = None,
 ) -> list[Torrent]:
     """
     Search for torrents across all enabled sources.
+
+    `max_items` caps the total number of results (defaults to 20 when
+    `per_source` is unset). When `per_source` is given, up to that many
+    results are kept per source (ranked by swarm health) so providers are
+    spread instead of a global cap only; the total is then uncapped unless
+    `max_items` is passed too.
     Corresponds to `TorrentSearchApi.search_torrents()`.
     """
     response.headers.update(
@@ -147,7 +156,12 @@ async def search_torrents(
             "Expires": "0",
         }
     )
-    torrents: list[Torrent] = await api_client.search_torrents(query, max_items)
+    effective_max = max_items
+    if effective_max is None and per_source is None:
+        effective_max = 20
+    torrents: list[Torrent] = await api_client.search_torrents(
+        query, effective_max, per_source
+    )
     return torrents
 
 
@@ -332,22 +346,37 @@ class ForwardPayload(BaseModel):
 )
 async def forward_telegram(request: Request, payload: ForwardPayload) -> dict[str, str]:
     """
-    Send a torrent to the Telegram chat bound to the browser's session token.
-    When ``PRUNE_MAGNET_LINKS`` is enabled the forwarded magnet is pruned to
-    ``magnet:?xt=urn:btih:HASH&dn=<filename>``; otherwise the original magnet
-    (trackers included) is sent as-is. In agent mode (``AGENT_RELAY_URL`` plus
-    ``AGENT_RELAY_TOKEN``) the torrent is POSTed to the agent's HTTP relay
-    instead of the Telegram Bot API (bots never receive bot-authored
-    Telegram messages); ``TELEGRAM_AGENT_NAME`` and ``TELEGRAM_MSG_FORWARD``
-    provide the relay sender and notice.
+    Send a torrent to a Telegram chat.
+
+    Browser clients authenticate with their session token and send to the
+    chat bound to it. Server-to-server callers (the MCP server) authenticate
+    with ``TORRENT_SEARCH_API_KEY`` and must pass the target ``chat_id``
+    query param. When ``PRUNE_MAGNET_LINKS`` is enabled the forwarded magnet
+    is pruned to ``magnet:?xt=urn:btih:HASH&dn=<filename>``; otherwise the
+    original magnet (trackers included) is sent as-is. In agent mode
+    (``AGENT_RELAY_URL`` plus ``AGENT_RELAY_TOKEN``) the torrent is POSTed to
+    the agent's HTTP relay instead of the Telegram Bot API (bots never
+    receive bot-authored Telegram messages); ``TELEGRAM_AGENT_NAME`` and
+    ``TELEGRAM_MSG_FORWARD`` provide the relay sender and notice.
     """
-    chat_id = _AUTH_STORE.chat_id_for_token(_bearer_token(request))
+    token = _bearer_token(request)
+    server_forward = bool(_REGISTER_SECRET) and secrets.compare_digest(
+        token, _REGISTER_SECRET
+    )
+    chat_id = _AUTH_STORE.chat_id_for_token(token)
+    if server_forward:
+        chat_id = request.query_params.get("chat_id", "").strip() or None
     if not _TELEGRAM_BOT_TOKEN and not _AGENT_MODE:
         raise HTTPException(
             status_code=503,
             detail="Telegram forwarding disabled: TELEGRAM_BOT_TOKEN not configured.",
         )
     if not chat_id:
+        if server_forward:
+            raise HTTPException(
+                status_code=400,
+                detail="chat_id query param is required for server-to-server forwards.",
+            )
         raise HTTPException(status_code=401, detail="Valid session required.")
     if not _FORWARD_LIMITER.allow(chat_id):
         raise HTTPException(status_code=429, detail="Too many forwards.")

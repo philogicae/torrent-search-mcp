@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/philogicae/torrent-search-mcp)
 
-This repository provides a Python API/WebUI and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**. It allows for easy integration into other applications or services.
+This repository provides a Python API/WebUI and an MCP (Model Context Protocol) server to find torrents programmatically on **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease** and **UIndex**. It allows for easy integration into other applications or services.
 
 <div align="center" style="margin: 20px 0;">
   <img src=".github/assets/cover.png" alt="Torrent Search web UI - popular torrents view" width="720" />
@@ -22,7 +22,7 @@ This repository provides a Python API/WebUI and an MCP (Model Context Protocol) 
 > [Search directly from the command line](#as-cli)
 
 ```bash
-uvx torrent-search-mcp --mode cli "breaking bad"
+uvx torrent-search-mcp --mode cli "sample show"
 
 # MCP server over stdio (default)
 uvx torrent-search-mcp --mode stdio
@@ -61,8 +61,8 @@ uvx torrent-search-mcp --mode api
 
 ## Features
 
-- API wrapper for **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease**, **BitTorrented** and **UIndex**.
-- MCP server interface for standardized communication (`stdio`, `sse`, `streamable-http`).
+- API wrapper for **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease** and **UIndex**.
+- MCP server interface (FastMCP 4) serving the `2026-07-28` protocol revision over `stdio` or streamable HTTP (`http`), with automatic negotiation of older handshake revisions and legacy transport aliases (`streamable-http`, `sse`).
 - API server interface for alternative HTTP access (e.g., for direct API calls or testing).
 - CLI mode for quick one-off searches directly from the terminal.
 - `popular_torrents` cached for 2 minutes for Web UI delivery; searches are never cached (only identical concurrent requests are coalesced) so new results appear immediately.
@@ -75,6 +75,7 @@ uvx torrent-search-mcp --mode api
   - Get the most popular torrents per source (apibay, uindex, 1337x, YTS, nyaa, EZTV).
   - Get the magnet link for a specific torrent by id.
   - List available sources.
+  - Present the web UI and its Telegram pairing access, approve pairing codes, and forward torrents to Telegram chats.
 
 ## Supported Sources
 
@@ -87,7 +88,6 @@ uvx torrent-search-mcp --mode api
 | EZTV         | `eztvx.to`             | JSON API              |
 | FitGirl      | `fitgirl-repacks.site` | RSS                   |
 | SubsPlease   | `subsplease.org`       | JSON API              |
-| BitTorrented | `bittorrented.com`     | JSON API              |
 | UIndex       | `uindex.org`           | HTML top list         |
 
 The API exposes public display domains where applicable: `apibay.org` is shown as `thepiratebay.org`, and `yts.mx` as `yts.vg`. Results may include a validated HTTP(S) `page_url` linking back to their source page.
@@ -223,14 +223,16 @@ docker logs torrent-search-mcp -f
 
 The package exposes a single entry point, `torrent-search-mcp` (installed by `pip`/`uvx`), equivalent to `python -m torrent_search`. It supports the following `--mode` values:
 
-| Mode              | Endpoint | Description                                                                                                            |
-| ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `cli`             | -        | Run a single search query and print results to stdout.                                                                 |
-| `stdio`           | -        | MCP server over stdio (default).                                                                                       |
-| `http`            | `/mcp`   | MCP server using streamable HTTP (fastmcp's canonical HTTP alias).                                                     |
-| `streamable-http` | `/mcp`   | Same as `http`; the modern, MCP-spec-recommended HTTP transport.                                                       |
-| `sse`             | `/sse`   | MCP server using Server-Sent Events. Legacy HTTP transport (deprecated by the MCP spec in favor of `streamable-http`). |
-| `api`             | `/`      | Standalone API HTTP server (see [As API Server](#as-api-server)).                                                      |
+| Mode              | Endpoint | Description                                                                                                                                  |
+| ----------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli`             | -        | Run a single search query and print results to stdout.                                                                                       |
+| `stdio`           | -        | MCP server over stdio (default).                                                                                                             |
+| `http`            | `/mcp`   | MCP server using streamable HTTP. Serves MCP protocol revision `2026-07-28` (sessionless) and negotiates older revisions for legacy clients. |
+| `streamable-http` | `/mcp`   | Alias of `http` (legacy fastmcp transport name).                                                                                             |
+| `sse`             | `/sse`   | MCP server using Server-Sent Events. Legacy HTTP transport (deprecated by the MCP spec in favor of `http`).                                  |
+| `api`             | `/`      | Standalone API HTTP server (see [As API Server](#as-api-server)).                                                                            |
+
+The server is built on FastMCP 4 (MCP SDK v2). Clients supporting the `2026-07-28` revision negotiate it automatically (stateless requests, `server/discover`, no session IDs); older clients fall back to the previous handshake era against the same deployment.
 
 MCP modes (`stdio`, `http`, `streamable-http`, `sse`) run **standalone** by default (tools scrape locally). Set [`TORRENT_SEARCH_API_URL`](#configuration-optional) to switch to **API mode**: the tools proxy a running Torrent Search REST API instead.
 
@@ -242,13 +244,13 @@ Run a one-off search directly from the terminal. Prints each result as `id (seed
 
 ```bash
 # Using the installed entry point
-torrent-search-mcp --mode cli "breaking bad"
+torrent-search-mcp --mode cli "sample show"
 
 # Or via uvx without installing
-uvx torrent-search-mcp --mode cli "breaking bad"
+uvx torrent-search-mcp --mode cli "sample show"
 
 # Or from source
-uv run -m torrent_search --mode cli "breaking bad"
+uv run -m torrent_search --mode cli "sample show"
 ```
 
 ### As Python Wrapper
@@ -256,7 +258,7 @@ uv run -m torrent_search --mode cli "breaking bad"
 ```python
 from torrent_search import torrent_search_api
 
-results = await torrent_search_api.search_torrents("breaking bad")
+results = await torrent_search_api.search_torrents("sample show")
 for torrent in results:
     print(
         f"{torrent.filename} | {torrent.size} | {torrent.seeders} SE | {torrent.leechers} LE | {torrent.date} | {torrent.source}"
@@ -270,7 +272,7 @@ for torrent in results:
 ```python
 from torrent_search import torrent_search_mcp
 
-torrent_search_mcp.run(transport="sse")
+torrent_search_mcp.run(transport="http")
 ```
 
 ### As API Server
@@ -289,7 +291,7 @@ uv run -m torrent_search --mode api
 - `--host <host>`: Default: `0.0.0.0`.
 - `--port <port>`: Default: `8000`.
 - `--reload`: Enables auto-reloading when code changes (useful for development).
-- `--workers <workers>`: Default: `1`.
+- `--workers <workers>`: Default: `1`. Caching and request coalescing are in-process, so each worker keeps its own cache; use the default single worker unless per-worker caches are acceptable (a shared backend such as Redis would be needed to scale out).
 
 The API server will then be accessible at `http://<host>:<port>`.
 
@@ -297,7 +299,7 @@ The API server will then be accessible at `http://<host>:<port>`.
 The API server exposes similar functionalities to the MCP server. Key endpoints include:
 
 - `GET /`: Built-in web UI (dark/light) - search, per-site popular tiles, sortable results, source-page links and magnet actions. Telegram sending requires one-time QR pairing when configured.
-- `POST /torrent/search`: Search for torrents. Query params: `query` (required) and `max_items` (optional, default `20`).
+- `POST /torrent/search`: Search for torrents. Query params: `query` (required), `max_items` (optional, default `20`; uncapped when `per_source` is set) and `per_source` (optional, keep up to N results per source, ranked by swarm health).
 - `GET /sources`: List the available torrent source domains.
 - `GET /torrent/popular`: Get the most popular torrents. Query param: `per_source` (optional, default `20`).
 - `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as a JSON string.
@@ -307,7 +309,7 @@ The API server exposes similar functionalities to the MCP server. Key endpoints 
 - `DELETE /telegram/auth/challenge/{code}`: Cancel a pending pairing code.
 - `POST /telegram/auth/register`: Approve a pairing code bound to a Telegram `chat_id`. Requires `Authorization: Bearer $TORRENT_SEARCH_API_KEY`.
 - `POST /telegram/auth/logout`: Revoke the presented session token.
-- `POST /forward_telegram`: Send torrent info to the Telegram chat bound to the presented session token. JSON body: `filename` (required), `magnet_link` (required), optional `size`, `seeders`. When `PRUNE_MAGNET_LINKS=true` the forwarded magnet is pruned; requires `TELEGRAM_BOT_TOKEN`, otherwise 503.
+- `POST /forward_telegram`: Send torrent info to the Telegram chat bound to the presented session token; server-to-server callers may instead use `Authorization: Bearer $TORRENT_SEARCH_API_KEY` with the target `chat_id` query param. JSON body: `filename` (required), `magnet_link` (required), optional `size`, `seeders`. When `PRUNE_MAGNET_LINKS=true` the forwarded magnet is pruned; requires `TELEGRAM_BOT_TOKEN`, otherwise 503.
 - `/docs`: Interactive API documentation (Swagger UI).
 - `/redoc`: Alternative API documentation (ReDoc).
 
@@ -318,14 +320,16 @@ Environment variables are configured the same way as for the MCP server (via an 
 Usable with any MCP-compatible client. Available tools:
 
 - `search_torrents(user_intent, query)`: Search for torrents across all available sources.
-  - `user_intent`: A short description reflecting the user's overall intention (e.g. `"latest episode of Breaking Bad"`).
-  - `query`: Optimized, lowercase, space-separated keywords (e.g. `"breaking bad s01e05"`). Generic/filler/technical terms should be stripped per the tool's docstring.
+  - `user_intent`: A short description reflecting the user's overall intention (e.g. `"latest episode of Sample Show"`).
+  - `query`: Optimized, lowercase, space-separated keywords (e.g. `"sample show s01e05"`). Generic/filler/technical terms should be stripped per the tool's docstring.
   - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
+  - **Magnet round trips:** with `INCLUDE_LINKS` unset, results keep their `id` but no magnet. After picking the 2-5 torrents worth recommending, call `get_torrent(id)` once per pick: the server resolves it from its 1-hour torrent cache, or re-runs the search if the entry expired. Do not fetch magnets for every result.
 - `popular_torrents(per_source=20)`: Get the most popular torrents right now from sources with an official top listing (apibay, uindex, 1337x, YTS, nyaa, EZTV) - up to `per_source` results each, grouped per source and pre-ranked by seeders + leechers.
   - By default magnet links are stripped from the response to save tokens; set `INCLUDE_LINKS=true` to include them.
 - `available_sources()`: Get the list of available torrent sources.
 - `get_torrent(torrent_id)`: Get the magnet link for a specific torrent by id (the `id` returned by `search_torrents` or `popular_torrents`).
 - `authorize_webapp(code, chat_id)`: Approve a Web UI pairing code bound to your Telegram chat id (the code shown in the browser pairing gate). Requires `TORRENT_SEARCH_API_KEY` and `TORRENT_SEARCH_API_URL`.
+- `forward_torrent(filename, magnet_link, chat_id, size=None, seeders=None)`: Forward a torrent (filename + magnet) to your Telegram chat through the REST API (magnet pruned when `PRUNE_MAGNET_LINKS=true`). Requires `TORRENT_SEARCH_API_KEY` and `TORRENT_SEARCH_API_URL`; rate-limited per chat (20/min).
 - `torrent_webapp()`: Present the web UI URL (`WEBUI_URL`) and its pairing-based access system.
 
 #### Example with Devin

@@ -1,3 +1,5 @@
+import re
+from base64 import urlsafe_b64encode
 from hashlib import sha256
 from time import time
 from typing import Any
@@ -6,6 +8,21 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, field_validator
 
 from .utils import Compress62
+
+_URLSAFE_ID_PART = re.compile(r"[A-Za-z0-9._~-]+\Z")
+
+
+def _id_part(value: Any) -> str:
+    """Encode one torrent id component as a single URL path segment.
+
+    Hex hashes and scraping keys pass through unchanged; values with spaces,
+    slashes or non-ASCII characters are base64url-encoded, so an id can never
+    break out of ``/torrent/{id}`` routing with a raw ``/``.
+    """
+    text = str(value)
+    if _URLSAFE_ID_PART.fullmatch(text):
+        return text
+    return urlsafe_b64encode(text.encode()).decode().rstrip("=")
 
 
 class Torrent(BaseModel):
@@ -32,18 +49,12 @@ class Torrent(BaseModel):
 
     @classmethod
     def format(cls, **data: Any) -> "Torrent":
-        data["id"] = (
-            data["source"]
-            + "-"
-            + str(
-                data.get("id")
-                or (
-                    sha256(data["magnet_link"].encode()).hexdigest()[:10]
-                    if data.get("magnet_link")
-                    else "none"
-                )
-            )
+        ref = data.get("id") or (
+            sha256(data["magnet_link"].encode()).hexdigest()[:10]
+            if data.get("magnet_link")
+            else "none"
         )
+        data["id"] = f"{_id_part(data['source'])}-{_id_part(ref)}"
         data["filename"] = data["filename"].strip()
         data["seeders"] = int(data["seeders"]) if data.get("seeders") else 0
         data["leechers"] = int(data["leechers"]) if data.get("leechers") else 0

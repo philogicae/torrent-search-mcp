@@ -203,6 +203,22 @@
         white-space: nowrap;
         overflow: hidden;
       }
+      h1 .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
+        min-width: 0;
+        color: inherit;
+        text-decoration: none;
+        border-radius: 0.25rem;
+      }
+      h1 .brand:hover {
+        opacity: 0.85;
+      }
+      h1 .brand:focus-visible {
+        box-shadow: 0 0 0 0.125em var(--accent);
+        outline: transparent;
+      }
       h1 .wave {
         font-size: 1.1rem;
         transform: translateY(-0.2rem);
@@ -1334,9 +1350,11 @@
     <header id="masthead">
       <div id="masthead-inner">
         <h1>
-          <span class="wave">🌊</span>
-          <span>Torrent</span>
-          <span class="word-accent">Search</span>
+          <a class="brand" href="/" aria-label="Torrent Search">
+            <span class="wave">🌊</span>
+            <span>Torrent</span>
+            <span class="word-accent">Search</span>
+          </a>
         </h1>
         <div class="head-actions">
           <button id="auth-lock" class="icon-btn" aria-label="Telegram access: log out" title="Telegram access granted - click to log out">🔓</button>
@@ -1686,6 +1704,27 @@
 
       // ---- Column sorting (search table) --------------------------------------
       let sortState = null; // { key, dir: 1 asc | -1 desc }
+      const SORT_STORAGE_KEY = "ts_sort";
+      const SORT_KEYS = ["name", "size", "se", "le", "date"];
+      function saveSortState() {
+        try {
+          if (sortState) localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(sortState));
+          else localStorage.removeItem(SORT_STORAGE_KEY);
+        } catch (e) {
+          /* storage unavailable: the choice still applies to this session */
+        }
+      }
+      function loadSortState() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(SORT_STORAGE_KEY) || "null");
+          if (saved && SORT_KEYS.includes(saved.key) && (saved.dir === 1 || saved.dir === -1)) {
+            sortState = { key: saved.key, dir: saved.dir };
+          }
+        } catch (e) {
+          /* corrupted entry: ignore */
+        }
+        paintSortIndicators();
+      }
       function parseSize(s) {
         const m = String(s || "").match(/([\d.]+)\s*([KMGT]?)i?B/i);
         if (!m) return -1;
@@ -1731,6 +1770,7 @@
         // First click: text columns ascend, metrics descend (most seeds / biggest first).
         const nextDir = sortState && sortState.key === key ? -sortState.dir : key === "name" ? 1 : -1;
         sortState = { key, dir: nextDir };
+        saveSortState();
         renderTable();
       });
 
@@ -1807,7 +1847,20 @@
         document.querySelectorAll("#tiles .tile.open").forEach((t) => t.classList.remove("open"));
         if (!wasOpen) tile.classList.add("open");
       });
+      function applyTileMode() {
+        // Tile markup is identical on both layouts; only the mobile accordion
+        // open state differs, so toggle classes instead of rebuilding tiles.
+        document.querySelectorAll("#tiles .tile.open").forEach((t) => t.classList.remove("open"));
+        if (mobileQuery.matches) {
+          const top = document.querySelector("#tiles .tile-top");
+          if (top) top.classList.add("open");
+        }
+      }
       mobileQuery.addEventListener("change", () => {
+        if (rows.length && viewMode === "sections") {
+          applyTileMode(); // keep tiles and scroll state across the breakpoint
+          return;
+        }
         render();
       });
 
@@ -1835,7 +1888,11 @@
           ...options,
           headers: { ...authHeaders(), ...(options && options.headers) },
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const err = new Error(`HTTP ${res.status}`);
+          err.status = res.status;
+          throw err;
+        }
         return res.json();
       }
 
@@ -1857,9 +1914,8 @@
           if (seq !== requestSeq) return;
           rows = [];
           showEmpty();
-          toast(`Request failed: ${err.message}. Is the server running?`, "Torrent Search", {
-            variant: "danger",
-          });
+          const slow = err && err.status === 429;
+          toast(slow ? "Slow down: too many requests. Try again in a minute." : `Request failed: ${err.message}. Is the server running?`, "Torrent Search", { variant: slow ? "warning" : "danger" });
         } finally {
           if (seq === requestSeq) {
             if (icon && originalIcon !== null) icon.textContent = originalIcon;
@@ -2304,6 +2360,7 @@
       $("tg-close").addEventListener("click", () => tgDialog.close());
 
       // ---- Boot ----------------------------------------------------------------
+      loadSortState();
       (async () => {
         const state = await refreshSession();
         if (!state.enabled) {

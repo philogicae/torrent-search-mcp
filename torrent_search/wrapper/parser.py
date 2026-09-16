@@ -19,7 +19,7 @@ from time import time
 from typing import Any
 from urllib.parse import quote
 
-import httpx
+import httpx2
 
 from .models import Torrent
 
@@ -33,7 +33,7 @@ UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
-TIMEOUT = httpx.Timeout(20)
+TIMEOUT = httpx2.Timeout(20)
 
 # Public trackers appended to magnets built from a bare info hash.
 TRACKERS = [
@@ -176,14 +176,14 @@ def _format(rows: list[list[str]]) -> str:
     return "\n".join([CSV_HEADER, *[";".join(row) for row in rows]])
 
 
-_client: httpx.AsyncClient | None = None
+_client: httpx2.AsyncClient | None = None
 
 
-def _get_client() -> httpx.AsyncClient:
+def _get_client() -> httpx2.AsyncClient:
     """Shared client reused across requests (connection pooling)."""
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(
+        _client = httpx2.AsyncClient(
             timeout=TIMEOUT, headers={"User-Agent": UA}, follow_redirects=True
         )
     return _client
@@ -210,7 +210,7 @@ async def _first_host(
     The last host that answered is tried first next time: mirrors that 403 or
     redirect cost several wasted round trips per fetch otherwise.
     """
-    last_error: httpx.HTTPError | None = None
+    last_error: httpx2.HTTPError | None = None
     preferred = _last_good_host.get(tuple(hosts))
     ordered = (
         [h for h in (preferred, *hosts) if h in hosts] if preferred else list(hosts)
@@ -220,7 +220,7 @@ async def _first_host(
             text = await _get_text(f"https://{host}{path}", params)
             _last_good_host[tuple(hosts)] = host
             return host, text
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             last_error = e
     if last_error:
         raise last_error
@@ -388,7 +388,7 @@ async def _x1337_detail(base: str, path: str) -> tuple[str, str] | None:
     async with _x1337_detail_slots:
         try:
             detail_html = await _get_text(f"{base}{path}")
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             return None
     magnet_match = re.search(
         r"magnet:\?xt=urn:btih:[^\"'<>\s]+", detail_html, re.IGNORECASE
@@ -519,49 +519,6 @@ async def apibay_parse(query: str) -> str:
             item for page in (movies, tv) if isinstance(page, list) for item in page
         ]
     return _format(apibay_rows(items))
-
-
-# ---------------------------------------------------------------------------
-# bittorrented.com - JSON API
-# ---------------------------------------------------------------------------
-def bittorrented_rows(data: dict[str, Any]) -> list[list[str]]:
-    rows: list[list[str]] = []
-    for item in data.get("results") or []:
-        info_hash = (item.get("torrent_infohash") or "").lower()
-        if not re.fullmatch(r"[a-f0-9]{40}", info_hash):
-            continue
-        name = item.get("torrent_name") or info_hash
-        rows.append(
-            _row(
-                name,
-                "Video",
-                human_size(item.get("torrent_total_size")),
-                item.get("torrent_seeders"),
-                item.get("torrent_leechers"),
-                None,
-                item.get("torrent_created_at"),
-                build_magnet(info_hash, name),
-            )
-        )
-    return rows
-
-
-async def bittorrented_parse(query: str) -> str:
-    q = query.strip()
-    # ponytail: the API rejects queries shorter than 3 characters
-    if len(q) < 3:
-        return "No results"
-    data = await _get_json(
-        "https://bittorrented.com/api/search/torrents",
-        {
-            "q": q,
-            "type": "video",
-            "limit": "50",
-            "sortBy": "seeders",
-            "sortOrder": "desc",
-        },
-    )
-    return _format(bittorrented_rows(data if isinstance(data, dict) else {}))
 
 
 # ---------------------------------------------------------------------------

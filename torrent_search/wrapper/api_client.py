@@ -98,7 +98,8 @@ class TorrentSearchApi:
     async def search_torrents(
         self,
         query: str,
-        max_items: int = 20,
+        max_items: int | None = 20,
+        per_source: int | None = None,
     ) -> list[Torrent]:
         """
         Search for torrents on available sources.
@@ -109,7 +110,10 @@ class TorrentSearchApi:
 
         Args:
             query: Search query.
-            max_items: Maximum number of items to return.
+            max_items: Maximum number of items to return (None = no global cap).
+            per_source: Optional maximum number of results kept per source,
+                ranked by swarm health. Spreads results across providers
+                instead of applying a global cap only. None disables the spread.
 
         Returns:
             A list of torrent results.
@@ -120,15 +124,31 @@ class TorrentSearchApi:
             lambda: search_torrents(query, SOURCES),
         )
 
+        if per_source is not None:
+            grouped: dict[str, list[Torrent]] = {}
+            for torrent in found_torrents:
+                grouped.setdefault(torrent.source or "", []).append(torrent)
+            spread: list[Torrent] = []
+            for group in grouped.values():
+                group.sort(
+                    key=lambda torrent: torrent.seeders + torrent.leechers,
+                    reverse=True,
+                )
+                spread.extend(group[:per_source])
+            found_torrents = spread
+
         found_torrents = sorted(
             found_torrents,
             key=lambda torrent: torrent.seeders + torrent.leechers,
             reverse=True,
-        )[:max_items]
+        )
+        if max_items is not None:
+            found_torrents = found_torrents[:max_items]
 
         for torrent in found_torrents:
             torrent.source = display_source(torrent.source or "")
-            torrent.prepend_info(query, max_items)
+            # Re-search hint: None (uncapped spread) still embeds the default.
+            torrent.prepend_info(query, max_items if max_items is not None else 20)
 
         self.CACHE.clean()  # Clean cache routine
         self.CACHE.update(found_torrents)

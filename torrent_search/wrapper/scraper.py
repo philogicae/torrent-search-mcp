@@ -1,5 +1,5 @@
 import logging
-from asyncio import gather, wait_for
+from asyncio import Task, create_task, gather, wait_for
 from collections.abc import Awaitable, Callable
 from time import time
 
@@ -8,7 +8,6 @@ from .parser import (
     POPULAR_SOURCES,
     SourceParser,
     apibay_parse,
-    bittorrented_parse,
     ensure_trackers,
     extract_torrents,
     eztv_parse,
@@ -32,7 +31,6 @@ WEBSITES: dict[str, SourceParser] = {
     "eztvx.to": eztv_parse,
     "fitgirl-repacks.site": fitgirl_parse,
     "subsplease.org": subsplease_parse,
-    "bittorrented.com": bittorrented_parse,
     "uindex.org": uindex_parse,
     "1337x.to": x1337_parse,
 }
@@ -45,6 +43,14 @@ logger = logging.getLogger("Torrent Search")
 SOURCE_TIMEOUT: float = (
     30.0  # hard cap per source per request (yts mirror alone can take ~20s)
 )
+
+# Per-source fresh window for popular listings: within it a source is served
+# from its own cache, so a popular call only refetches genuinely stale sources.
+POPULAR_TTL: float = 300.0
+# source -> (fetched_at, per_source used for the fetch, listing text)
+_popular_cache: dict[str, tuple[float, int | None, str]] = {}
+# source -> in-flight background refresh while a stale entry is served
+_popular_refreshing: dict[str, Task[None]] = {}
 
 
 async def _scrape_source(source: str, parser: SourceParser, query: str) -> str | None:
@@ -77,7 +83,7 @@ async def scrape_torrents(query: str, sources: list[str] | None = None) -> list[
     return [r for r in results if r is not None]
 
 
-async def _popular_source(
+async def _fetch_popular_text(
     name: str, fn: Callable[[int | None], Awaitable[str]], per_source: int | None
 ) -> str | None:
     try:
@@ -85,6 +91,51 @@ async def _popular_source(
     except Exception as e:  # noqa: BLE001 - keep the source out of the listing
         logger.warning("Error fetching popular listing from %s: %s", name, e)
         return None
+
+
+def _popular_covers(used: int | None, requested: int | None) -> bool:
+    """True when a listing fetched with ``used`` satisfies ``requested``.
+
+    ``None`` means the full listing; any integer is a best-N truncation, so a
+    fuller fetch can serve a smaller request but never the other way around.
+    """
+    if used is None:
+        return True
+    return requested is not None and used >= requested
+
+
+async def _refresh_popular(
+    name: str, fn: Callable[[int | None], Awaitable[str]], per_source: int | None
+) -> None:
+    """Background refresh of a stale popular listing (keeps the best coverage)."""
+    try:
+        text = await _fetch_popular_text(name, fn, per_source)
+        if text is not None:
+            existing = _popular_cache.get(name)
+            if existing is None or _popular_covers(per_source, existing[1]):
+                _popular_cache[name] = (time(), per_source, text)
+    finally:
+        _popular_refreshing.pop(name, None)
+
+
+async def _popular_source(
+    name: str, fn: Callable[[int | None], Awaitable[str]], per_source: int | None
+) -> str | None:
+    entry = _popular_cache.get(name)
+    if entry is not None and _popular_covers(entry[1], per_source):
+        if time() - entry[0] < POPULAR_TTL:
+            return entry[2]
+        # Stale but usable: answer now and refresh in the background, so a
+        # slow source never holds back the aggregate listing.
+        if name not in _popular_refreshing:
+            _popular_refreshing[name] = create_task(
+                _refresh_popular(name, fn, per_source)
+            )
+        return entry[2]
+    text = await _fetch_popular_text(name, fn, per_source)
+    if text is not None:
+        _popular_cache[name] = (time(), per_source, text)
+    return text
 
 
 async def popular_torrents(

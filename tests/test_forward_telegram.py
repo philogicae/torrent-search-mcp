@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -84,6 +84,49 @@ def test_forward_requires_valid_session(paired: str, client: TestClient) -> None
         ).status_code
         == 401
     )
+
+
+def test_forward_server_to_server_with_api_key(
+    paired: str, client: TestClient, monkeypatch: Any
+) -> None:
+    """The MCP server authenticates with the API key and names the chat."""
+    monkeypatch.setattr(api_server, "_REGISTER_SECRET", "api-secret")
+    fake_bot = _FakeBotClient()
+    monkeypatch.setattr(api_server, "_bot", lambda: fake_bot)
+    response = client.post(
+        "/forward_telegram",
+        params={"chat_id": "777"},
+        json={"filename": FILENAME, "magnet_link": MAGNET},
+        headers={"Authorization": "Bearer api-secret"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "sent"}
+    assert fake_bot.sent[0]["chat_id"] == "777"
+
+
+def test_forward_server_to_server_requires_chat_id(
+    paired: str, client: TestClient, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(api_server, "_REGISTER_SECRET", "api-secret")
+    response = client.post(
+        "/forward_telegram",
+        json={"filename": FILENAME, "magnet_link": MAGNET},
+        headers={"Authorization": "Bearer api-secret"},
+    )
+    assert response.status_code == 400
+    assert "chat_id" in response.json()["detail"]
+
+
+def test_forward_near_miss_api_key_still_requires_session(
+    paired: str, client: TestClient, monkeypatch: Any
+) -> None:
+    monkeypatch.setattr(api_server, "_REGISTER_SECRET", "api-secret")
+    response = client.post(
+        "/forward_telegram",
+        json={"filename": FILENAME, "magnet_link": MAGNET},
+        headers={"Authorization": "Bearer api-secret-ish"},
+    )
+    assert response.status_code == 401
 
 
 def test_forward_sends_pruned_magnet_when_enabled(
@@ -224,4 +267,4 @@ def test_agent_mode_relay_failure_maps_to_502(
 def test_relay_client_is_configured() -> None:
     """The shared relay client has no Bot API base (absolute URLs)."""
     relay = api_server._relay()
-    assert relay.base_url == httpx.URL()
+    assert relay.base_url == httpx2.URL()

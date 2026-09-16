@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 
 from torrent_search.wrapper import parser
@@ -73,7 +73,7 @@ def test_get_client_reuses_instance() -> None:
     first = parser._get_client()
     second = parser._get_client()
     assert first is second
-    assert isinstance(first, httpx.AsyncClient)
+    assert isinstance(first, httpx2.AsyncClient)
     parser._client = None
 
 
@@ -166,7 +166,7 @@ async def test_get_first_rotation(monkeypatch: Any) -> None:
     async def flaky(url: str, params: dict[str, str] | None = None) -> str:
         calls.append(url)
         if "bad1" in url:
-            raise httpx.ConnectError("down")
+            raise httpx2.ConnectError("down")
         return "ok"
 
     monkeypatch.setattr(parser, "_get_text", flaky)
@@ -177,10 +177,10 @@ async def test_get_first_rotation(monkeypatch: Any) -> None:
 @pytest.mark.asyncio
 async def test_get_first_all_hosts_fail(monkeypatch: Any) -> None:
     async def flaky(url: str, params: dict[str, str] | None = None) -> str:
-        raise httpx.ConnectError("down")
+        raise httpx2.ConnectError("down")
 
     monkeypatch.setattr(parser, "_get_text", flaky)
-    with pytest.raises(httpx.HTTPError):
+    with pytest.raises(httpx2.HTTPError):
         await parser._get_first(["a.example", "b.example"], "/path")
 
 
@@ -200,12 +200,12 @@ def test_extract_torrents_from_csv_text() -> None:
         "SOURCE -> apibay.org\n"
         + parser.CSV_HEADER
         + "\n"
-        + "Breaking Bad S01 1080p;Video - Movies;1.2 GB;10;5;100;2026-01-01;magnet:?xt=urn:btih:abcdef&dn=x;\n"
-        + "Better Call Saul S01 720p;Video - TV shows;800 MB;3;1;50;2025-06-01;magnet:?xt=urn:btih:fedcba&dn=y;"
+        + "Sample Show S01 1080p;Video - Movies;1.2 GB;10;5;100;2026-01-01;magnet:?xt=urn:btih:abcdef&dn=x;\n"
+        + "Sample Series S01 720p;Video - TV shows;800 MB;3;1;50;2025-06-01;magnet:?xt=urn:btih:fedcba&dn=y;"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 2
-    assert torrents[0].filename == "Breaking Bad S01 1080p"
+    assert torrents[0].filename == "Sample Show S01 1080p"
     assert torrents[0].source == "apibay.org"
     assert torrents[0].seeders == 10
     assert torrents[0].date == "2026-01-01"
@@ -269,7 +269,7 @@ def test_yts_rows() -> None:
         "data": {
             "movies": [
                 {
-                    "title_long": "Breaking Bad (2008)",
+                    "title_long": "Sample Show (2008)",
                     "date_uploaded_unix": 1614202551,
                     "torrents": [
                         {
@@ -302,7 +302,7 @@ def test_yts_rows() -> None:
     }
     rows = parser.yts_rows(data)
     assert len(rows) == 2
-    assert rows[0][0] == "Breaking Bad (2008) [1080p webrip]"
+    assert rows[0][0] == "Sample Show (2008) [1080p webrip]"
     assert rows[0][1] == "Video - Movies"
     assert rows[0][6] == "2021-02-24T21:35:51+00:00"
     assert rows[0][7].startswith(f"magnet:?xt=urn:btih:{'b' * 40}")
@@ -444,7 +444,7 @@ async def test_apibay_parse_search(monkeypatch: Any) -> None:
         ]
     )
     monkeypatch.setattr(parser, "_get_json", _fake(json.loads(payload)))
-    out = await parser.apibay_parse("breaking bad")
+    out = await parser.apibay_parse("sample show")
     assert _extract("apibay.org", out)[0].category == "Video - Movies"
 
 
@@ -540,7 +540,7 @@ async def test_eztv_parse_filters_client_side(monkeypatch: Any) -> None:
     assert len(torrents) == 1
     assert torrents[0].filename == "Other Show 720p"
 
-    assert await parser.eztv_parse("breaking bad") == "No results"
+    assert await parser.eztv_parse("sample show") == "No results"
 
 
 # ---------------------------------------------------------------------------
@@ -589,19 +589,19 @@ def test_uindex_date_converts_relative_ages(monkeypatch: Any) -> None:
 @pytest.mark.asyncio
 async def test_uindex_parse_filters_client_side(monkeypatch: Any) -> None:
     body = UINDEX_ROW.format(
-        hash="a" * 40, name="Ubuntu 24.04 LTS Desktop"
+        hash="a" * 40, name="Sample OS 24.04 LTS Desktop"
     ) + UINDEX_ROW.format(hash="b" * 40, name="Other Distro")
     monkeypatch.setattr(parser, "_get_text", _fake(body))
 
     out = await parser.uindex_parse("")
     assert len(_extract("uindex.org", out)) == 2
 
-    out = await parser.uindex_parse("ubuntu lts")
+    out = await parser.uindex_parse("sample os lts")
     torrents = _extract("uindex.org", out)
     assert len(torrents) == 1
-    assert torrents[0].filename == "Ubuntu 24.04 LTS Desktop"
+    assert torrents[0].filename == "Sample OS 24.04 LTS Desktop"
 
-    assert await parser.uindex_parse("breaking bad") == "No results"
+    assert await parser.uindex_parse("sample show") == "No results"
 
 
 # ---------------------------------------------------------------------------
@@ -698,64 +698,10 @@ async def test_subsplease_parse_search_and_latest(monkeypatch: Any) -> None:
         }
     )
     monkeypatch.setattr(parser, "_get_json", _fake(json.loads(payload)))
-    out = await parser.subsplease_parse("one piece")
+    out = await parser.subsplease_parse("sample show")
     assert _extract("subsplease.org", out)[0].filename == "Show - 1 [720p]"
     out = await parser.subsplease_parse("")
     assert _extract("subsplease.org", out)[0].filename == "Show - 1 [720p]"
-
-
-# ---------------------------------------------------------------------------
-# BitTorrented
-# ---------------------------------------------------------------------------
-
-
-def test_bittorrented_rows() -> None:
-    data = {
-        "results": [
-            {
-                "torrent_infohash": "aa" * 20,
-                "torrent_name": "Show S01 1080p",
-                "torrent_total_size": 5_600_000_000,
-                "torrent_seeders": 106,
-                "torrent_leechers": 66,
-                "torrent_created_at": "2026-03-02T10:06:49+00:00",
-            },
-            {
-                "torrent_infohash": "short",
-                "torrent_name": "bad hash",
-                "torrent_seeders": 1,
-                "torrent_leechers": 0,
-            },
-        ]
-    }
-    rows = parser.bittorrented_rows(data)
-    assert len(rows) == 1
-    assert rows[0][0] == "Show S01 1080p"
-    assert rows[0][6] == "2026-03-02T10:06:49+00:00"
-    assert rows[0][8] == ""
-
-
-@pytest.mark.asyncio
-async def test_bittorrented_parse_min_query_and_results(monkeypatch: Any) -> None:
-    assert await parser.bittorrented_parse("ab") == "No results"
-
-    payload = json.dumps(
-        {
-            "results": [
-                {
-                    "torrent_infohash": "aa" * 20,
-                    "torrent_name": "Show",
-                    "torrent_total_size": 1000,
-                    "torrent_seeders": 1,
-                    "torrent_leechers": 0,
-                    "torrent_created_at": None,
-                }
-            ]
-        }
-    )
-    monkeypatch.setattr(parser, "_get_json", _fake(json.loads(payload)))
-    out = await parser.bittorrented_parse("breaking bad")
-    assert _extract("bittorrented.com", out)[0].filename == "Show"
 
 
 # ---------------------------------------------------------------------------
@@ -765,9 +711,9 @@ async def test_bittorrented_parse_min_query_and_results(monkeypatch: Any) -> Non
 
 def test_nyaa_rss_rows() -> None:
     xml = f"""<rss><channel><item>
-        <title>One.Piece.E1173.1080p.WEBRip.x265</title>
-        <link>https://nyaa.si/download/2144394.torrent</link>
-        <guid isPermaLink="true">https://nyaa.si/view/2144394</guid>
+        <title>Sample.Show.E1173.1080p.WEBRip.x265</title>
+        <link>https://nyaa.si/download/123456.torrent</link>
+        <guid isPermaLink="true">https://nyaa.si/view/123456</guid>
         <pubDate>Mon, 10 Aug 2026 08:09:35 -0000</pubDate>
         <nyaa:infoHash>{"c" * 40}</nyaa:infoHash>
         <nyaa:category>Anime - English-translated</nyaa:category>
@@ -778,20 +724,20 @@ def test_nyaa_rss_rows() -> None:
     </item></channel></rss>"""
     rows = parser.nyaa_rss_rows(xml)
     assert len(rows) == 1
-    assert rows[0][0] == "One.Piece.E1173.1080p.WEBRip.x265"
+    assert rows[0][0] == "Sample.Show.E1173.1080p.WEBRip.x265"
     assert rows[0][1] == "Anime - English-translated"
     assert rows[0][2] == "487.9 MiB"
     assert rows[0][3] == "75"
     assert rows[0][5] == "153"
     assert rows[0][7].startswith(f"magnet:?xt=urn:btih:{'c' * 40}")
-    assert rows[0][8] == "https://nyaa.si/view/2144394"
+    assert rows[0][8] == "https://nyaa.si/view/123456"
 
 
 @pytest.mark.asyncio
 async def test_nyaa_parse(monkeypatch: Any) -> None:
     xml = f"<rss><item><title>T</title><nyaa:infoHash>{'c' * 40}</nyaa:infoHash></item></rss>"
     monkeypatch.setattr(parser, "_get_text", _fake(xml))
-    out = await parser.nyaa_parse("one piece")
+    out = await parser.nyaa_parse("sample show")
     assert _extract("nyaa.si", out)[0].filename == "T"
 
 
@@ -913,7 +859,7 @@ async def test_x1337_fetch_and_detail(monkeypatch: Any) -> None:
             return f'<a href="magnet:?xt=urn:btih:{MAGNET_40[21:]}" />'
         if "nomagnet" in url:
             return "<html><p>no magnet here</p></html>"
-        raise httpx.ConnectError("down")
+        raise httpx2.ConnectError("down")
 
     monkeypatch.setattr(parser, "_get_text", flaky)
 
@@ -921,7 +867,7 @@ async def test_x1337_fetch_and_detail(monkeypatch: Any) -> None:
     assert base == "https://1337x.to"
     assert "magnet:" in html_text
 
-    with pytest.raises(httpx.HTTPError):
+    with pytest.raises(httpx2.HTTPError):
         await parser._x1337_fetch("/bad")
 
     assert await parser._x1337_detail(base, "/good") is not None

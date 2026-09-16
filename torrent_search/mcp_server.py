@@ -2,7 +2,7 @@ import logging
 from os import getenv
 from typing import Annotated, Any
 
-import httpx
+import httpx2
 from fastmcp import FastMCP
 from pydantic import Field
 
@@ -33,7 +33,6 @@ SOURCE_ORDER = [
     "nyaa.si",
     "fitgirl-repacks.site",
     "subsplease.org",
-    "bittorrented.com",
 ]
 
 
@@ -44,14 +43,14 @@ def _source_rank(source: str) -> int:
         return len(SOURCE_ORDER)
 
 
-_api_client: httpx.AsyncClient | None = None
+_api_client: httpx2.AsyncClient | None = None
 
 
-def _api() -> httpx.AsyncClient:
+def _api() -> httpx2.AsyncClient:
     """Shared HTTP client for remote-API mode."""
     global _api_client
     if _api_client is None:
-        _api_client = httpx.AsyncClient(base_url=API_BASE_URL, timeout=20)
+        _api_client = httpx2.AsyncClient(base_url=API_BASE_URL, timeout=20)
     return _api_client
 
 
@@ -59,12 +58,6 @@ async def _api_get_json(path: str, params: dict[str, str] | None = None) -> Any:
     response = await _api().get(path, params=params)
     response.raise_for_status()
     return response.json()
-
-
-async def _api_get_text(path: str) -> str:
-    response = await _api().get(path)
-    response.raise_for_status()
-    return response.text
 
 
 async def _api_post_json(path: str, params: dict[str, str] | None = None) -> Any:
@@ -119,7 +112,7 @@ async def search_torrents(
     user_intent: Annotated[
         str,
         Field(
-            description="User's overall intention (e.g. 'latest episode of Breaking Bad')."
+            description="User's overall intention (e.g. 'latest episode of Sample Show')."
         ),
     ],
     query: Annotated[
@@ -207,8 +200,10 @@ async def get_torrent(
     logger.info(f"Getting magnet link for torrent: {torrent_id}")
     if API_BASE_URL:
         try:
-            return await _api_get_text(f"/torrent/{torrent_id}")
-        except httpx.HTTPStatusError as e:
+            # The REST endpoint answers application/json with a JSON string,
+            # so decode it instead of returning the quoted body.
+            return await _api_get_json(f"/torrent/{torrent_id}")
+        except httpx2.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return "Torrent not found"
             raise
@@ -267,6 +262,80 @@ async def authorize_webapp(
         "remember it. Until they return to the site, authentication is not "
         "complete."
     )
+
+
+@mcp.tool()
+async def forward_torrent(
+    filename: Annotated[
+        str,
+        Field(description="Exact torrent filename shown in the search results."),
+    ],
+    magnet_link: Annotated[
+        str,
+        Field(
+            description=(
+                "Magnet link of the torrent (from get_torrent, or from a search"
+                " run with INCLUDE_LINKS=true)."
+            )
+        ),
+    ],
+    chat_id: Annotated[
+        str,
+        Field(description="The owner's Telegram chat id the torrent is sent to."),
+    ],
+    size: Annotated[
+        str | None,
+        Field(description="Optional human-readable size (e.g. '1.2 GiB')."),
+    ] = None,
+    seeders: Annotated[
+        int | None,
+        Field(description="Optional seeder count."),
+    ] = None,
+) -> str:
+    """Send a torrent (filename + magnet) to the user's Telegram chat.
+
+    The forward goes through the Torrent Search REST API, which owns the
+    Telegram bot token; when PRUNE_MAGNET_LINKS is enabled the magnet is
+    pruned to 'magnet:?xt=urn:btih:HASH&dn=<filename>' before sending.
+    Requires TORRENT_SEARCH_API_KEY (same value as the API server) and
+    TORRENT_SEARCH_API_URL. Forwards are rate-limited per chat (20/min).
+    """
+    logger.info("Forwarding torrent to Telegram chat %s", chat_id)
+    secret = getenv("TORRENT_SEARCH_API_KEY")
+    if not secret:
+        return (
+            "Telegram forwarding is disabled: set TORRENT_SEARCH_API_KEY "
+            "(same value on the REST API server) to enable forwards."
+        )
+    if not API_BASE_URL:
+        return (
+            "forward_torrent requires TORRENT_SEARCH_API_URL: forwarding "
+            "uses the REST API server that owns the Telegram bot."
+        )
+    response = await _api().post(
+        "/forward_telegram",
+        params={"chat_id": chat_id},
+        json={
+            "filename": filename,
+            "magnet_link": magnet_link,
+            "size": size,
+            "seeders": seeders,
+        },
+        headers={"Authorization": f"Bearer {secret}"},
+    )
+    if response.status_code == 400:
+        return "Forward rejected: a valid owner chat_id is required."
+    if response.status_code == 401:
+        return "Forward rejected: TORRENT_SEARCH_API_KEY does not match the API server."
+    if response.status_code == 429:
+        return "Too many forwards for this chat (20/min). Try again in a minute."
+    if response.status_code == 503:
+        return (
+            "Telegram forwarding is disabled on the API server "
+            "(TELEGRAM_BOT_TOKEN not configured)."
+        )
+    response.raise_for_status()
+    return "Torrent forwarded to Telegram. Tell the user it is in their chat."
 
 
 @mcp.tool()

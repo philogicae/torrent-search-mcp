@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 
 from torrent_search import api_server
-from torrent_search.wrapper import parser
+from torrent_search.wrapper import parser, scraper
 from torrent_search.wrapper.models import Torrent
 
 
@@ -29,6 +29,18 @@ def reset_parser_state() -> Iterator[None]:
     yield
     parser._trackers = list(parser.TRACKERS)
     parser._trackers_loaded = False
+
+
+@pytest.fixture(autouse=True)
+def reset_popular_cache() -> Iterator[None]:
+    """Popular listings are cached per source; keep tests independent."""
+    scraper._popular_cache.clear()
+    scraper._popular_refreshing.clear()
+    yield
+    for task in scraper._popular_refreshing.values():
+        task.cancel()
+    scraper._popular_cache.clear()
+    scraper._popular_refreshing.clear()
 
 
 @pytest.fixture(autouse=True)

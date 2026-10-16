@@ -44,31 +44,15 @@ def displayed_sources(names: list[str]) -> list[str]:
     return seen
 
 
-def key_builder(fn: Any, *args: Any, **kwargs: Any) -> str:
-    """Build the aiocache key for ``popular_torrents``.
+def popular_key_builder(fn: Any, *args: Any, **kwargs: Any) -> str:
+    """Build the aiocache key for the popular listing (``per_source`` only).
 
     aiocache calls ``key_builder(fn, *call_args)``; for the decorated bound
-    method ``args[0]`` is ``self``, so real arguments start at ``args[1]``.
-    The query is lowercased to match ``search_torrents``' normalization and
-    avoid duplicate cache entries that only differ by case.
+    method ``args[0]`` is ``self``, so the limit comes from ``args[1]`` or
+    the ``per_source`` keyword - both spellings share one cache entry.
     """
-    call_args = args[1:]
-    query = (
-        str(call_args[0]).lower() if call_args else str(kwargs.get("query", "")).lower()
-    )
-    limit = (
-        call_args[1]
-        if len(call_args) > 1
-        else next(
-            (
-                kwargs[name]
-                for name in ("limit", "max_items", "per_source")
-                if name in kwargs
-            ),
-            10,
-        )
-    )
-    return str({"fn": getattr(fn, "__qualname__", ""), "query": query, "limit": limit})
+    per_source = args[1] if len(args) > 1 else kwargs.get("per_source", 20)
+    return str({"fn": getattr(fn, "__qualname__", ""), "per_source": per_source})
 
 
 class TorrentSearchApi:
@@ -79,10 +63,8 @@ class TorrentSearchApi:
 
     async def _single_flight(self, key: str, factory: Any) -> Any:
         """Coalesce concurrent identical cold misses into one task."""
-        while True:
-            existing = self._inflight.get(key)
-            if existing is None:
-                break
+        existing = self._inflight.get(key)
+        if existing is not None:
             return await shield(existing)
         task = create_task(factory())
         self._inflight[key] = task
@@ -154,21 +136,18 @@ class TorrentSearchApi:
         self.CACHE.update(found_torrents)
         return found_torrents
 
-    @cached(ttl=120, key_builder=key_builder)  # 2min
-    async def popular_torrents(self, per_source: int | None = 20) -> list[Torrent]:
-        """
-        Get the most popular torrents per source with a top listing.
+    @cached(ttl=120, key_builder=popular_key_builder)  # 2min
+    async def _popular_cached(self, per_source: int | None = 20) -> list[Torrent]:
+        """Two-minute cache front-end for :meth:`popular_torrents`."""
+        return await self._popular_listing(per_source)
 
-        Args:
-            per_source: Optional maximum number of results kept per source
-                (best first). None keeps everything the source returned.
-
-        Returns:
-            A list of torrent results ranked by seeders + leechers.
-        """
+    async def _popular_listing(
+        self, per_source: int | None, refresh: bool = False
+    ) -> list[Torrent]:
         found_torrents = await self._single_flight(
-            f"popular:{per_source}",
-            lambda: scrape_popular_torrents(per_source=per_source),
+            # Refreshes never coalesce with a cached scrape already running.
+            f"popular:{per_source}:{refresh}",
+            lambda: scrape_popular_torrents(per_source=per_source, refresh=refresh),
         )
 
         for torrent in found_torrents:
@@ -179,6 +158,30 @@ class TorrentSearchApi:
         self.CACHE.clean()  # Clean cache routine
         self.CACHE.update(found_torrents)
         return found_torrents
+
+    async def popular_torrents(
+        self,
+        per_source: int | None = 20,
+        refresh: bool = False,
+    ) -> list[Torrent]:
+        """
+        Get the most popular torrents per source with a top listing.
+
+        Args:
+            per_source: Optional maximum number of results kept per source
+                (best first). None keeps everything the source returned.
+            refresh: When true, the 2-minute listing cache is dropped and every
+                source is asked for a new listing (used by the Web UI POPULAR
+                button); the aggregate cache is rebuilt on the next regular
+                call from the refreshed per-source listings.
+
+        Returns:
+            A list of torrent results ranked by seeders + leechers.
+        """
+        if refresh:
+            await type(self)._popular_cached.cache.clear()
+            return await self._popular_listing(per_source, refresh=True)
+        return await self._popular_cached(per_source)
 
     async def get_torrent(self, torrent_id: str) -> str | None:
         """

@@ -1544,7 +1544,7 @@
       // Popular sections ordered by traffic (TorrentFreak 2026 ranking),
       // using the public display domains (the API aliases its scraping
       // mirrors: apibay.org -> thepiratebay.org, yts.mx -> yts.vg).
-      const SOURCE_ORDER = ["thepiratebay.org", "1337x.to", "uindex.org", "eztvx.to", "yts.vg", "nyaa.si", "fitgirl-repacks.site", "subsplease.org", "bittorrented.com"];
+      const SOURCE_ORDER = ["thepiratebay.org", "1337x.to", "uindex.org", "eztvx.to", "yts.vg", "nyaa.si", "fitgirl-repacks.site", "subsplease.org"];
       const SESSION_KEY = "telegram_session_token";
       let viewMode = "sections"; // "search" = table, "sections" = popular tiles
       const session = {
@@ -1937,13 +1937,16 @@
         run(`/torrent/search?query=${encodeURIComponent(q)}&max_items=1000`, { method: "POST" }, $("btn-search"));
       }
 
-      function doPopular() {
+      // `force` is set by the POPULAR button: the server drops its listing
+      // caches and re-scrapes every source. Boot/boot-after-pairing loads the
+      // cached listing so a warm server answers immediately.
+      function doPopular(force) {
         viewMode = "sections";
-        run(`/torrent/popular?per_source=1000`, {}, $("btn-popular"));
+        run(`/torrent/popular?per_source=1000${force ? "&refresh=true" : ""}`, {}, $("btn-popular"));
       }
 
       $("btn-search").onclick = doSearch;
-      $("btn-popular").onclick = doPopular;
+      $("btn-popular").onclick = () => doPopular(true);
       $("query").addEventListener("keydown", (e) => {
         if (e.key === "Enter") doSearch();
       });

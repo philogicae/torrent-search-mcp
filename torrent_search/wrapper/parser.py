@@ -259,7 +259,9 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
     torrents: list[Torrent] = []
     for text in texts:
         source, content = text.split("\n", 1)
-        if "No results" in content:
+        if content.startswith("No results"):
+            # _format() emits this marker on its own; a filename containing
+            # the words must not blank the whole source.
             continue
         source = source[10:]
         data = content.splitlines()
@@ -291,9 +293,13 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# 1337x.to - HTML scrape with mirror rotation
+# 1337x - HTML scrape with mirror rotation
 # ---------------------------------------------------------------------------
 X1337_HOSTS = [
+    # Mirrors are tried in order, then the last one that answered is preferred
+    # (see _first_host). 1337x.la is currently the only host serving plain
+    # HTTP again; the Cloudflare-fronted mirrors answer a JS challenge (403).
+    "1337x.la",
     "1337x.to",
     "1337x.st",
     "x1337x.ws",
@@ -466,7 +472,7 @@ APIBAY_CATEGORIES = {
     205: "Video - TV shows",
     206: "Video - Handheld",
     207: "Video - Movies HD",
-    208: "Video - Movies HD x265",
+    208: "Video - TV shows HD",  # TPB 208 is HD TV, not x265 movies
     209: "Video - Movies 3D",
 }
 
@@ -475,13 +481,15 @@ def apibay_rows(items: list[dict[str, Any]]) -> list[list[str]]:
     rows: list[list[str]] = []
     for item in items:
         info_hash = (item.get("info_hash") or "").lower()
-        if len(info_hash) != 40 or info_hash == "0" * 40 or item.get("id") == "0":
+        # The search API sends ids/categories as strings, the precompiled
+        # top100 files as ints; accept both.
+        if len(info_hash) != 40 or info_hash == "0" * 40 or str(item.get("id")) == "0":
             continue
         name = item.get("name") or "Unknown"
         category_id = item.get("category")
         category = (
             APIBAY_CATEGORIES.get(int(category_id), "Video")
-            if isinstance(category_id, str) and category_id.isdigit()
+            if isinstance(category_id, (int, str)) and str(category_id).isdigit()
             else "Video"
         )
         rows.append(
@@ -864,7 +872,9 @@ POPULAR_SOURCES: dict[str, Callable[[int | None], Awaitable[str]]] = {
     "1337x.to": lambda limit: x1337_parse(
         "", max_items=limit
     ),  # popular movies + TV pages
-    "yts.mx": lambda _: yts_parse("", sort_by="seeds"),  # most seeded uploads
+    # Most downloaded movies: YTS accepts seeds/peers but ignores them (they
+    # fall back to newest uploads, which are mostly unseeded).
+    "yts.mx": lambda _: yts_parse("", sort_by="download_count"),
     "nyaa.si": lambda _: nyaa_popular(),  # HTML page honors seed sorting, RSS does not
     "eztvx.to": lambda _: eztv_parse(""),  # latest releases as candidate pool
 }

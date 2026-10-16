@@ -189,6 +189,87 @@ async def test_popular_source_full_cache_serves_smaller_requests() -> None:
 
 
 @pytest.mark.asyncio
+async def test_popular_source_refresh_bypasses_fresh_cache() -> None:
+    calls: list[int | None] = []
+
+    async def fetch(per: int | None) -> str:
+        calls.append(per)
+        return f"{CSV_HEADER}\nA;Anime;1 GB;9;0;0;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    await scraper._popular_source("s.example", fetch, 5)
+    refreshed = await scraper._popular_source("s.example", fetch, 5, refresh=True)
+    assert refreshed is not None and "A;" in refreshed
+    assert calls == [5, 5]  # the fresh window is ignored on an explicit refresh
+    assert scraper._popular_cache["s.example"][1] == 5
+
+
+@pytest.mark.asyncio
+async def test_popular_source_refresh_failure_serves_stale_listing() -> None:
+    async def fetch(per: int | None) -> str:
+        return f"{CSV_HEADER}\nA;Anime;1 GB;9;0;0;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    await scraper._popular_source("s.example", fetch, 5)
+
+    async def broken(per: int | None) -> str:
+        raise RuntimeError("boom")
+
+    # A failed refresh keeps the source in the listing with its cached text.
+    out = await scraper._popular_source("s.example", broken, 5, refresh=True)
+    assert out is not None and "A;" in out
+    assert "A;" in scraper._popular_cache["s.example"][2]
+
+
+@pytest.mark.asyncio
+async def test_popular_source_refresh_failure_without_cache_returns_none() -> None:
+    async def broken(per: int | None) -> str:
+        raise RuntimeError("boom")
+
+    assert await scraper._popular_source("s.example", broken, 5, refresh=True) is None
+
+
+@pytest.mark.asyncio
+async def test_popular_source_refresh_failure_ignores_uncovering_cache() -> None:
+    async def small_fetch(per: int | None) -> str:
+        return f"{CSV_HEADER}\nA;Anime;1 GB;9;0;0;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    await scraper._popular_source("s.example", small_fetch, 5)
+
+    async def broken(per: int | None) -> str:
+        raise RuntimeError("boom")
+
+    # The cached 5-item listing cannot answer a 10-item refresh.
+    assert await scraper._popular_source("s.example", broken, 10, refresh=True) is None
+
+
+@pytest.mark.asyncio
+async def test_popular_source_refresh_cancels_background_refresh() -> None:
+    async def first_fetch(per: int | None) -> str:
+        return "old listing"
+
+    await scraper._popular_source("s.example", first_fetch, 5)
+    scraper._popular_cache["s.example"] = (0.0, 5, "stale")
+
+    stalled = asyncio.Event()
+
+    async def hanging_refresh(per: int | None) -> str:
+        await stalled.wait()
+        return "never lands"
+
+    await scraper._popular_source("s.example", hanging_refresh, 5)
+    pending = scraper._popular_refreshing["s.example"]
+
+    async def fresh_fetch(per: int | None) -> str:
+        return "fresh listing"
+
+    out = await scraper._popular_source("s.example", fresh_fetch, 5, refresh=True)
+    assert out is not None and "fresh" in out
+    assert "s.example" not in scraper._popular_refreshing
+    with pytest.raises(asyncio.CancelledError):
+        await pending
+    assert "fresh" in scraper._popular_cache["s.example"][2]
+
+
+@pytest.mark.asyncio
 async def test_popular_source_serves_stale_and_refreshes_in_background() -> None:
     async def first_fetch(per: int | None) -> str:
         return "old listing"
@@ -237,6 +318,23 @@ async def test_popular_torrents_reuses_fresh_sources(monkeypatch: Any) -> None:
         "Good"
     ]
     assert calls == [5]  # second call served from the per-source cache
+
+
+@pytest.mark.asyncio
+async def test_popular_torrents_refresh_forces_refetch(monkeypatch: Any) -> None:
+    calls: list[int | None] = []
+
+    async def listing(per: int | None) -> str:
+        calls.append(per)
+        return f"{CSV_HEADER}\nGood;Anime;1 GB;7;2;10;2026-01-01;magnet:?xt=urn:btih:{'a' * 40}&dn=x"
+
+    monkeypatch.setattr(scraper, "ensure_trackers", _fake_parser(""))
+    monkeypatch.setattr(scraper, "POPULAR_SOURCES", {"ok": listing})
+    await scraper.popular_torrents(per_source=5)
+    await scraper.popular_torrents(per_source=5, refresh=True)
+    assert calls == [5, 5]  # refresh re-asks the source
+    await scraper.popular_torrents(per_source=5)
+    assert calls == [5, 5]  # and the refreshed listing is cached again
 
 
 @pytest.mark.asyncio

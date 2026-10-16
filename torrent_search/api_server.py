@@ -109,11 +109,15 @@ async def list_sources() -> list[str]:
     tags=["Torrents"],
     response_model=list[Torrent],
 )
-async def popular_torrents(response: Response, per_source: int = 20) -> list[Torrent]:
+async def popular_torrents(
+    response: Response, per_source: int = 20, refresh: bool = False
+) -> list[Torrent]:
     """
     Get the most popular torrents across sources with a top listing,
     keeping up to `per_source` results from each. Cached server-side for
     2 minutes; the response is marked no-store so browsers always re-fetch.
+    `refresh=true` drops the server-side caches and asks every source for a
+    fresh listing (the Web UI POPULAR button uses it).
     Corresponds to `TorrentSearchApi.popular_torrents()`.
     """
     response.headers.update(
@@ -123,7 +127,7 @@ async def popular_torrents(response: Response, per_source: int = 20) -> list[Tor
             "Expires": "0",
         }
     )
-    torrents: list[Torrent] = await api_client.popular_torrents(per_source)
+    torrents: list[Torrent] = await api_client.popular_torrents(per_source, refresh)
     return torrents
 
 

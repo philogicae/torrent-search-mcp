@@ -222,6 +222,17 @@ def test_extract_torrents_skips_no_results() -> None:
     assert len(torrents) == 1
 
 
+def test_extract_torrents_keeps_rows_mentioning_no_results() -> None:
+    """Only the standalone marker skips a source; filenames may contain it."""
+    text = (
+        "SOURCE -> nyaa.si\n"
+        f"{parser.CSV_HEADER}\n"
+        "Movie - No results found here;Anime;1 GB;5;1;0;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x"
+    )
+    torrents = parser.extract_torrents([text])
+    assert [t.filename for t in torrents] == ["Movie - No results found here"]
+
+
 def test_extract_torrents_trims_trailing_empty_values() -> None:
     text = (
         "SOURCE -> nyaa.si\n"
@@ -353,6 +364,22 @@ async def test_yts_parse_browse_sets_sort_by(monkeypatch: Any) -> None:
     assert seen["params"] == {"limit": "50", "sort_by": "date_added"}
 
 
+@pytest.mark.asyncio
+async def test_popular_yts_uses_download_count_sort(monkeypatch: Any) -> None:
+    """YTS ignores seeds/peers sorts; download_count is the popular one."""
+    seen: dict[str, Any] = {}
+
+    async def spy(
+        hosts: list[str], path: str, params: dict[str, str] | None = None
+    ) -> str:
+        seen["params"] = params
+        return '{"data": {"movies": []}}'
+
+    monkeypatch.setattr(parser, "_get_first", spy)
+    assert await parser.POPULAR_SOURCES["yts.mx"](5) == "No results"
+    assert seen["params"] == {"limit": "50", "sort_by": "download_count"}
+
+
 # ---------------------------------------------------------------------------
 # apibay
 # ---------------------------------------------------------------------------
@@ -400,13 +427,36 @@ def test_apibay_rows() -> None:
             "leechers": "0",
             "added": "0",
         },
+        {
+            # Precompiled top100 files send ints (both id and category).
+            "id": 4,
+            "info_hash": "b" * 40,
+            "name": "HD show",
+            "category": 208,
+            "size": "0",
+            "seeders": "0",
+            "leechers": "0",
+            "added": "0",
+        },
+        {
+            "id": 0,
+            "info_hash": "c" * 40,
+            "name": "int dead",
+            "category": 207,
+            "size": "0",
+            "seeders": "0",
+            "leechers": "0",
+            "added": "0",
+        },
     ]
     rows = parser.apibay_rows(items)
-    assert len(rows) == 2
+    assert len(rows) == 3
     assert rows[0][1] == "Video - TV shows"
     assert rows[0][3] == "100"
     assert rows[0][8] == "https://thepiratebay.org/description.php?id=1"
     assert rows[1][1] == "Video"
+    assert rows[2][1] == "Video - TV shows HD"
+    assert rows[2][8] == "https://thepiratebay.org/description.php?id=4"
 
 
 def test_apibay_rows_omits_page_url_without_id() -> None:
@@ -467,10 +517,10 @@ async def test_apibay_parse_browse_merges_top100(monkeypatch: Any) -> None:
     tv = json.dumps(
         [
             {
-                "id": "2",
+                "id": 2,
                 "info_hash": "e" * 40,
                 "name": "Show",
-                "category": "205",
+                "category": 208,
                 "size": "1000",
                 "seeders": "2",
                 "leechers": "0",
@@ -490,6 +540,10 @@ async def test_apibay_parse_browse_merges_top100(monkeypatch: Any) -> None:
     out = await parser.apibay_parse("")
     torrents = _extract("apibay.org", out)
     assert len(torrents) == 2
+    assert [t.category for t in torrents] == [
+        "Video - Movies HD",
+        "Video - TV shows HD",
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -864,7 +918,7 @@ async def test_x1337_fetch_and_detail(monkeypatch: Any) -> None:
     monkeypatch.setattr(parser, "_get_text", flaky)
 
     base, html_text = await parser._x1337_fetch("/good")
-    assert base == "https://1337x.to"
+    assert base == "https://1337x.la"
     assert "magnet:" in html_text
 
     with pytest.raises(httpx2.HTTPError):

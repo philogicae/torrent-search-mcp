@@ -26,9 +26,11 @@ def reset_parser_state() -> Iterator[None]:
     """Keep parser and scraper module globals stable across tests."""
     parser._trackers = list(parser.TRACKERS)
     parser._trackers_loaded = False
+    parser._last_good_host.clear()
     yield
     parser._trackers = list(parser.TRACKERS)
     parser._trackers_loaded = False
+    parser._last_good_host.clear()
 
 
 @pytest.fixture(autouse=True)

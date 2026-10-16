@@ -133,7 +133,12 @@ def test_list_sources_endpoint() -> None:
 
 
 def test_get_popular_torrents(monkeypatch: Any) -> None:
-    async def fake_popular(per_source: int = 10) -> list[Torrent]:
+    seen: list[tuple[int, bool]] = []
+
+    async def fake_popular(
+        per_source: int = 10, refresh: bool = False
+    ) -> list[Torrent]:
+        seen.append((per_source, refresh))
         return [_torrent()][:per_source]
 
     monkeypatch.setattr(api_server.api_client, "popular_torrents", fake_popular)
@@ -148,6 +153,14 @@ def test_get_popular_torrents(monkeypatch: Any) -> None:
     body = response.json()
     assert len(body) == 1
     assert body[0]["filename"] == "Show S01E01 1080p"
+    assert seen == [(5, False)]
+
+    # The Web UI POPULAR button asks the server to drop its caches.
+    refreshed = client.get(
+        "/torrent/popular", params={"per_source": 5, "refresh": "true"}
+    )
+    assert refreshed.status_code == 200
+    assert seen == [(5, False), (5, True)]
 
 
 def test_get_torrent_not_found(monkeypatch: Any) -> None:

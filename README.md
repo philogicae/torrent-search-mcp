@@ -65,7 +65,7 @@ uvx torrent-search-mcp --mode api
 - MCP server interface (FastMCP 4) serving the `2026-07-28` protocol revision over `stdio` or streamable HTTP (`http`), with automatic negotiation of older handshake revisions and legacy transport aliases (`streamable-http`, `sse`).
 - API server interface for alternative HTTP access (e.g., for direct API calls or testing).
 - CLI mode for quick one-off searches directly from the terminal.
-- `popular_torrents` cached for 2 minutes for Web UI delivery; searches are never cached (only identical concurrent requests are coalesced) so new results appear immediately.
+- `popular_torrents` cached for 2 minutes for Web UI delivery (a Web UI POPULAR click passes `refresh=true` to drop the caches and re-scrape every source); searches are never cached (only identical concurrent requests are coalesced) so new results appear immediately.
 - In-memory 1-hour, 5000-entry torrent cache used only to resolve magnet links via `get_torrent` without re-scraping.
 - Magnet links are always stored internally; MCP hides them unless `INCLUDE_LINKS=true`.
 - Configurable source filtering via environment variables.
@@ -82,7 +82,7 @@ uvx torrent-search-mcp --mode api
 | Source       | Scraping domain        | Fetch method          |
 | ------------ | ---------------------- | --------------------- |
 | ThePirateBay | `apibay.org`           | JSON API              |
-| 1337x        | `1337x.to` + mirrors   | HTML search/top pages |
+| 1337x        | `1337x.la` + mirrors   | HTML search/top pages |
 | Nyaa         | `nyaa.si`              | RSS + HTML top page   |
 | YTS          | `yts.mx` + mirrors     | JSON API              |
 | EZTV         | `eztvx.to`             | JSON API              |
@@ -301,7 +301,7 @@ The API server exposes similar functionalities to the MCP server. Key endpoints 
 - `GET /`: Built-in web UI (dark/light) - search, per-site popular tiles, sortable results, source-page links and magnet actions. Telegram sending requires one-time QR pairing when configured.
 - `POST /torrent/search`: Search for torrents. Query params: `query` (required), `max_items` (optional, default `20`; uncapped when `per_source` is set) and `per_source` (optional, keep up to N results per source, ranked by swarm health).
 - `GET /sources`: List the available torrent source domains.
-- `GET /torrent/popular`: Get the most popular torrents. Query param: `per_source` (optional, default `20`).
+- `GET /torrent/popular`: Get the most popular torrents. Query params: `per_source` (optional, default `20`) and `refresh` (optional, default `false`; `true` drops the server-side caches and fetches a fresh listing from every source - the Web UI POPULAR button does this on each click).
 - `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as a JSON string.
 - `GET /telegram/session`: Web UI auth state (`enabled`, `authenticated`, public bot `handle`, `prune_magnet_links`). Send the session token as `Authorization: Bearer`.
 - `POST /telegram/auth/challenge`: Create a one-time 16-character alphanumeric pairing code (rate-limited). Codes expire after ~5 minutes and are shown as a QR + deep link in the pairing popup.

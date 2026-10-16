@@ -119,8 +119,28 @@ async def _refresh_popular(
 
 
 async def _popular_source(
-    name: str, fn: Callable[[int | None], Awaitable[str]], per_source: int | None
+    name: str,
+    fn: Callable[[int | None], Awaitable[str]],
+    per_source: int | None,
+    refresh: bool = False,
 ) -> str | None:
+    if refresh:
+        # Explicit refresh: fetch now, replace the entry whatever its
+        # coverage, and drop a running background refresh so bits of the old
+        # listing cannot land in the cache afterwards.
+        pending = _popular_refreshing.pop(name, None)
+        if pending is not None:
+            pending.cancel()
+        text = await _fetch_popular_text(name, fn, per_source)
+        if text is not None:
+            _popular_cache[name] = (time(), per_source, text)
+            return text
+        # Failed refresh: keep the source in the listing with its last
+        # known-good text instead of dropping the section entirely.
+        entry = _popular_cache.get(name)
+        if entry is not None and _popular_covers(entry[1], per_source):
+            return entry[2]
+        return None
     entry = _popular_cache.get(name)
     if entry is not None and _popular_covers(entry[1], per_source):
         if time() - entry[0] < POPULAR_TTL:
@@ -139,7 +159,9 @@ async def _popular_source(
 
 
 async def popular_torrents(
-    sources: list[str] | None = None, per_source: int | None = None
+    sources: list[str] | None = None,
+    per_source: int | None = None,
+    refresh: bool = False,
 ) -> list[Torrent]:
     """
     Get the current top/popular listings from all supporting sources.
@@ -150,6 +172,9 @@ async def popular_torrents(
         sources: List of valid sources to include.
         per_source: Optional maximum number of results kept per source
             (best first). None keeps everything the source returned.
+        refresh: When true, every source is fetched again (no cache is read)
+            and its cached listing is replaced. Used by the Web UI POPULAR
+            button so a click always re-scrapes.
 
     Returns:
         A list of torrent results ranked by seeders + leechers.
@@ -162,7 +187,7 @@ async def popular_torrents(
         if sources is None or name in sources
     ]
     results = await gather(
-        *(_popular_source(name, fn, per_source) for name, fn in enabled)
+        *(_popular_source(name, fn, per_source, refresh) for name, fn in enabled)
     )
     torrents: list[Torrent] = []
     for text in results:

@@ -31,11 +31,14 @@ def test_available_sources() -> None:
     assert "nyaa.si" in ac.SOURCES
 
 
-def test_key_builder_normalizes_case_and_kwargs() -> None:
-    positional = ac.key_builder("fn", object(), "Sample Show", 10)
-    assert positional == ac.key_builder("fn", object(), "sample show", 10)
-    by_kwargs = ac.key_builder("fn", object(), query="Sample Show", max_items=10)
-    assert by_kwargs == positional
+def test_popular_key_builder_maps_argument_styles_alike() -> None:
+    positional = ac.popular_key_builder("fn", object(), 10)
+    by_kwargs = ac.popular_key_builder("fn", object(), per_source=10)
+    assert positional == by_kwargs
+    # The default per_source is part of the key too, and values never collide.
+    default = ac.popular_key_builder("fn", object())
+    assert default == ac.popular_key_builder("fn", object(), per_source=20)
+    assert len({positional, default, ac.popular_key_builder("fn", object(), 7)}) == 3
 
 
 def test_extract_info_tolerates_dashes_in_ref_id() -> None:
@@ -264,7 +267,9 @@ async def test_cli_without_query(monkeypatch: Any, capsys: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_popular_torrents_sorts_truncates_and_caches(monkeypatch: Any) -> None:
-    async def fake_popular(per_source: int = 10) -> list[Torrent]:
+    async def fake_popular(
+        per_source: int | None = 20, refresh: bool = False
+    ) -> list[Torrent]:
         calls.append(per_source)
         # Order mirrors the scraper layer, which ranks globally before returning
         return [
@@ -273,7 +278,7 @@ async def test_popular_torrents_sorts_truncates_and_caches(monkeypatch: Any) -> 
             _torrent(90, f"magnet:?xt=urn:btih:{'a' * 40}&dn=c", source="yts.mx"),
         ]
 
-    calls: list[int] = []
+    calls: list[int | None] = []
     monkeypatch.setattr(ac, "scrape_popular_torrents", fake_popular)
     api = ac.TorrentSearchApi()
     results = await api.popular_torrents(per_source=2)
@@ -285,8 +290,39 @@ async def test_popular_torrents_sorts_truncates_and_caches(monkeypatch: Any) -> 
 
 
 @pytest.mark.asyncio
+async def test_popular_torrents_refresh_bypasses_cached_listing(
+    monkeypatch: Any,
+) -> None:
+    refreshes: list[bool] = []
+
+    async def fake_popular(
+        per_source: int | None = 20, refresh: bool = False
+    ) -> list[Torrent]:
+        refreshes.append(refresh)
+        return [_torrent(5, f"magnet:?xt=urn:btih:{'a' * 40}&dn=a")]
+
+    # The aiocache backend is shared process-wide; start from a clean slate.
+    await ac.TorrentSearchApi._popular_cached.cache.clear()
+    monkeypatch.setattr(ac, "scrape_popular_torrents", fake_popular)
+    api = ac.TorrentSearchApi()
+    await api.popular_torrents(per_source=2)
+    await api.popular_torrents(per_source=2)  # served by the 2-minute cache
+    assert refreshes == [False]
+
+    await api.popular_torrents(per_source=2, refresh=True)  # forces a scrape
+    assert refreshes == [False, True]
+
+    # The refresh dropped the aggregate entry, so the next regular call
+    # rebuilds it from the refreshed per-source listings.
+    await api.popular_torrents(per_source=2)
+    assert refreshes == [False, True, False]
+
+
+@pytest.mark.asyncio
 async def test_popular_torrents_default_per_source_is_20(monkeypatch: Any) -> None:
-    async def fake_popular(per_source: int | None = 20) -> list[Torrent]:
+    async def fake_popular(
+        per_source: int | None = 20, refresh: bool = False
+    ) -> list[Torrent]:
         calls.append(per_source)
         return []
 
@@ -297,16 +333,18 @@ async def test_popular_torrents_default_per_source_is_20(monkeypatch: Any) -> No
 
 
 @pytest.mark.asyncio
-async def test_popular_torrents_keyword_per_source_cache_key(monkeypatch: Any) -> None:
-    """Different keyword per_source values must not collide in the cache."""
+async def test_popular_torrents_per_source_cache_key(monkeypatch: Any) -> None:
+    """Different per_source values must not collide in the cache."""
 
-    async def fake_popular(per_source: int | None = 20) -> list[Torrent]:
+    async def fake_popular(
+        per_source: int | None = 20, refresh: bool = False
+    ) -> list[Torrent]:
         calls.append(per_source)
         return []
 
     calls: list[int | None] = []
     # The aiocache backend is shared process-wide; start from a clean slate.
-    await ac.TorrentSearchApi.popular_torrents.cache.clear()
+    await ac.TorrentSearchApi._popular_cached.cache.clear()
     monkeypatch.setattr(ac, "scrape_popular_torrents", fake_popular)
     api = ac.TorrentSearchApi()
     await api.popular_torrents(per_source=2)
@@ -314,15 +352,15 @@ async def test_popular_torrents_keyword_per_source_cache_key(monkeypatch: Any) -
     assert calls == [2, 7]
 
 
-def test_key_builder_scopes_by_function() -> None:
+def test_popular_key_builder_scopes_by_function() -> None:
     async def one():
         return None
 
     async def two():
         return None
 
-    assert ac.key_builder(one) != ac.key_builder(two)
-    assert ac.key_builder(one) == ac.key_builder(one)
+    assert ac.popular_key_builder(one) != ac.popular_key_builder(two)
+    assert ac.popular_key_builder(one) == ac.popular_key_builder(one)
 
 
 @pytest.mark.asyncio

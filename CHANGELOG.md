@@ -1,3 +1,23 @@
+## [4.6.0] - 2026-10-16
+
+### 🚀 Features
+
+- Feat: Web UI POPULAR force-refresh (refresh param end-to-end); fix: 1337x mirror rotation, apibay categories, YTS popular sort, exact "No results" marker; refactor: per_source-only popular cache key, simplified single-flight; chore: bump 4.6.0 + uv.lock sync
+
+- torrent_search/wrapper/parser.py: 1337x.la added first in the mirror rotation (1337x.to no longer resolves, Cloudflare mirrors answer 403), apibay category ids accepted as int|str with 208 relabeled "Video - TV shows HD", YTS popular listing sorted by download_count (seeds/peers are silently ignored by the API), "No results" now matched as a standalone marker only
+- torrent_search/wrapper/scraper.py: popular_torrents(refresh=True) bypasses the per-source TTL, replaces the entry, cancels an in-flight background refresh, and falls back to the last known-good listing when a refresh fails
+- torrent_search/wrapper/api_client.py: popular_torrents(refresh) clears the 2-minute aiocache and rebuilds from the refreshed per-source listings, popular_key_builder keys on per_source only (positional and keyword calls share one entry), dead while-loop removed from \_single_flight
+- torrent_search/api_server.py: /torrent/popular gains the refresh query param (default false)
+- torrent_search/static/index.html: POPULAR button sends refresh=true on every click (boot keeps using the cached listing), dropped dead bittorrented.com entry from SOURCE_ORDER
+- tests/: refresh + stale-fallback coverage in scraper/client/endpoint, apibay int categories and 208 label, YTS sort param regression, no-results filename regression, conftest resets \_last_good_host
+- README.md: refresh param documentation, 1337x.la scraping domain, POPULAR caching note
+- pyproject.toml: version 4.5.0→4.6.0
+- uv.lock: dependency refresh (starlette, pydantic-settings, dnspython, ...)
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.5.0] - 2026-09-16
 
 ### 🚀 Features

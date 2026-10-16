@@ -1,3 +1,33 @@
+## [4.6.1] - 2026-10-16
+
+### 🚀 Features
+
+- Feat: fence scraped torrent text as untrusted data in MCP tool output
+
+Filenames, uploaders and categories come from anonymous uploaders and
+reach the model verbatim. search_torrents, popular_torrents and
+get_torrent now wrap their output in a per-response nonce tag preceded
+by a notice to treat it as data, and defang forged copies of the tag.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+### 💼 Changes
+
+- Merge pull request #1 from rotemlevi/untrusted-titles
+
+feat: fence scraped torrent text as untrusted data in MCP tool output
+
+### 📚 Documentation
+
+- Docs: clarify untrusted-data fence usage and magnet extraction in MCP tools
+
+- AGENTS.md: rewrite Security considerations and Project overview sections with fence-first emphasis, consolidate auth/link constraints, add module-level navigation
+- torrent_search/mcp_server.py: expand \_UNTRUSTED_NOTICE to explicitly permit passing fenced values to user-requested tools (e.g. magnet→forward_torrent), add defang rationale comment, document fence stripping in get_torrent/forward_torrent docstrings
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.6.0] - 2026-10-16
 
 ### 🚀 Features

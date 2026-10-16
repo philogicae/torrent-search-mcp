@@ -28,6 +28,7 @@ Torrent search MCP server - a Python-based torrent search service with MCP (Mode
 - [x] `/forward_telegram` is Bearer-session gated, rate-limited per chat (20/min), bot token never leaves server config. (2026-08-27)
 - Accepted trade-off: pairing codes are 16-character alphanumeric strings; capacity-capped (50) and TTL-bounded (5 min).
 - [x] Source-page links are retained only when they are absolute HTTP(S) URLs. (2026-08-30)
+- [x] MCP tool output carrying scraped text (`search_torrents`, `popular_torrents`, `get_torrent`) is fenced in a per-response nonce tag with an untrusted-data notice; forged copies of the tag name are defanged (prompt injection via uploader-controlled filenames). (2026-10-11)
 
 ## Conventions & constraints
 

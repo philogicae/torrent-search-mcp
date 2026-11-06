@@ -3,6 +3,7 @@ import re
 from os import getenv
 from secrets import token_hex
 from typing import Annotated, Any
+from urllib.parse import quote
 
 import httpx2
 from fastmcp import FastMCP
@@ -10,7 +11,6 @@ from pydantic import Field
 
 from .wrapper import Torrent, TorrentSearchApi
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Torrent Search")
 
 mcp: FastMCP[Any] = FastMCP("Torrent Search Tools")
@@ -49,10 +49,14 @@ _api_client: httpx2.AsyncClient | None = None
 
 
 def _api() -> httpx2.AsyncClient:
-    """Shared HTTP client for remote-API mode."""
+    """Shared HTTP client for remote-API mode (sends the API key when set)."""
     global _api_client
     if _api_client is None:
-        _api_client = httpx2.AsyncClient(base_url=API_BASE_URL, timeout=20)
+        secret = getenv("TORRENT_SEARCH_API_KEY")
+        headers = {"Authorization": f"Bearer {secret}"} if secret else None
+        _api_client = httpx2.AsyncClient(
+            base_url=API_BASE_URL, timeout=20, headers=headers
+        )
     return _api_client
 
 
@@ -131,7 +135,9 @@ def _torrent_listing(found_torrents: list[Torrent], *, by_source: bool) -> str:
     for source in sorted(groups, key=lambda s: (_source_rank(s), s)):
         lines = [f"== {source} =="]
         # Sections read best with the healthiest swarms first.
-        ranked = sorted(groups[source], key=lambda t: t.seeders, reverse=True)
+        ranked = sorted(
+            groups[source], key=lambda t: t.seeders + t.leechers, reverse=True
+        )
         lines.extend(_torrent_line(torrent) for torrent in ranked)
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
@@ -148,13 +154,15 @@ async def search_torrents(
     query: Annotated[
         str,
         Field(
+            min_length=1,
+            max_length=200,
             description=(
                 "Optimized search keywords, lowercase and space-separated. Strip generic"
                 " terms (movie, torrent, download), filler words (the, a, of) and technical"
                 " tags (1080p, h265, bluray) unless explicitly requested. TV shows:"
                 " 'name sXXeYY' for episodes, 'name sXX' for seasons. Add 'multi' only if a"
                 " multi-language version is requested."
-            )
+            ),
         ),
     ],
 ) -> str:
@@ -173,7 +181,7 @@ async def search_torrents(
     - If results are poor, irrelevant or too diverse, suggest specific keywords to improve the search.
     """
     _ = user_intent
-    logger.info(f"Searching for torrents: {query}")
+    logger.info("Searching torrents (%d chars)", len(query))
     if API_BASE_URL:
         found_torrents = await _fetch_torrents(
             "/torrent/search", {"query": query, "max_items": "20"}, post=True
@@ -191,6 +199,7 @@ async def popular_torrents(
         int,
         Field(
             ge=1,
+            le=200,
             description="How many top results to keep per source (default 20).",
         ),
     ] = 20,
@@ -205,7 +214,7 @@ async def popular_torrents(
     - Recommend the **top 5-10** results maximum, focused on latest releases.
     - For each recommendation, include: Filename, Size, Seeds/Leechs, Date, Source, and a 1-sentence "Why this?" reason.
     """
-    logger.info(f"Fetching popular torrents (per_source={per_source})")
+    logger.info("Fetching popular torrents (per_source=%s)", per_source)
     if API_BASE_URL:
         found_torrents = await _fetch_torrents(
             "/torrent/popular", {"per_source": str(per_source)}
@@ -222,7 +231,8 @@ async def get_torrent(
     torrent_id: Annotated[
         str,
         Field(
-            description="Torrent ID returned by a previous search_torrents or popular_torrents call."
+            max_length=1024,
+            description="Torrent ID returned by a previous search_torrents or popular_torrents call.",
         ),
     ],
 ) -> str:
@@ -231,12 +241,14 @@ async def get_torrent(
     The result is wrapped in the untrusted-data fence: the magnet is the fenced
     value itself, the notice and tag lines are not part of the link.
     """
-    logger.info(f"Getting magnet link for torrent: {torrent_id}")
+    logger.info("Getting magnet link for torrent id (%d chars)", len(torrent_id))
     if API_BASE_URL:
         try:
             # The REST endpoint answers application/json with a JSON string,
-            # so decode it instead of returning the quoted body.
-            return _wrap_untrusted(await _api_get_json(f"/torrent/{torrent_id}"))
+            # so decode it instead of returning the quoted body. Quote the id:
+            # it is user input and must stay one path segment.
+            magnet = await _api_get_json(f"/torrent/{quote(torrent_id, safe='')}")
+            return _wrap_untrusted(magnet)
         except httpx2.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return "Torrent not found"
@@ -249,12 +261,16 @@ async def get_torrent(
 async def authorize_webapp(
     code: Annotated[
         str,
-        Field(description="Pairing code shown in the webapp 'Telegram Access' gate."),
+        Field(
+            max_length=64,
+            description="Pairing code shown in the webapp 'Telegram Access' gate.",
+        ),
     ],
     chat_id: Annotated[
         str,
         Field(
-            description="The owner's Telegram chat id the webapp access is bound to."
+            max_length=64,
+            description="The owner's Telegram chat id the webapp access is bound to.",
         ),
     ],
 ) -> str:
@@ -289,6 +305,10 @@ async def authorize_webapp(
         return "Unknown or expired pairing code. Ask the user for the current code shown in the gate."
     if response.status_code == 401:
         return "Authorization rejected: TORRENT_SEARCH_API_KEY does not match the API server."
+    if response.status_code == 429:
+        return (
+            "Too many pairing attempts. Ask the user to wait a minute, then try again."
+        )
     response.raise_for_status()
     return (
         "Access granted. Tell the user to go back to the webapp tab: the "
@@ -302,22 +322,29 @@ async def authorize_webapp(
 async def forward_torrent(
     filename: Annotated[
         str,
-        Field(description="Exact torrent filename shown in the search results."),
+        Field(
+            max_length=512,
+            description="Exact torrent filename shown in the search results.",
+        ),
     ],
     magnet_link: Annotated[
         str,
         Field(
+            max_length=4096,
             description=(
                 "Magnet link of the torrent (from get_torrent, or from a search"
                 " run with INCLUDE_LINKS=true), as the bare magnet: drop the"
                 " untrusted-data notice and tag lines, they are not part of the"
                 " link and would break the forward."
-            )
+            ),
         ),
     ],
     chat_id: Annotated[
         str,
-        Field(description="The owner's Telegram chat id the torrent is sent to."),
+        Field(
+            max_length=64,
+            description="The owner's Telegram chat id the torrent is sent to.",
+        ),
     ],
     size: Annotated[
         str | None,
@@ -325,7 +352,7 @@ async def forward_torrent(
     ] = None,
     seeders: Annotated[
         int | None,
-        Field(description="Optional seeder count."),
+        Field(ge=0, description="Optional seeder count."),
     ] = None,
 ) -> str:
     """Send a torrent (filename + magnet) to the user's Telegram chat.
@@ -365,6 +392,8 @@ async def forward_torrent(
         return "Forward rejected: TORRENT_SEARCH_API_KEY does not match the API server."
     if response.status_code == 429:
         return "Too many forwards for this chat (20/min). Try again in a minute."
+    if response.status_code == 413:
+        return "Forward rejected: the message is too long for Telegram (4096 chars)."
     if response.status_code == 503:
         return (
             "Telegram forwarding is disabled on the API server "

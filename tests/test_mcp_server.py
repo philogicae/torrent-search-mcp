@@ -310,6 +310,26 @@ async def test_remote_api_mode_get_torrent(monkeypatch: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_remote_api_mode_get_torrent_quotes_id(monkeypatch: Any) -> None:
+    monkeypatch.setattr(mcp_server, "API_BASE_URL", "http://test")
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen["path"] = request.url.raw_path.decode()
+        return httpx2.Response(200, json="magnet:?xt=urn:btih:" + "a" * 40)
+
+    monkeypatch.setattr(
+        mcp_server,
+        "_api_client",
+        httpx2.AsyncClient(
+            transport=httpx2.MockTransport(handler), base_url="http://test"
+        ),
+    )
+    await mcp_server.get_torrent("../telegram/session?x=1")
+    assert seen["path"] == "/torrent/..%2Ftelegram%2Fsession%3Fx%3D1"
+
+
+@pytest.mark.asyncio
 async def test_remote_api_mode_get_torrent_404(monkeypatch: Any) -> None:
     monkeypatch.setattr(mcp_server, "API_BASE_URL", "http://test")
 
@@ -327,6 +347,21 @@ async def test_api_client_lazy_singleton(monkeypatch: Any) -> None:
     monkeypatch.setattr(mcp_server, "_api_client", None)
     client = mcp_server._api()
     assert client is mcp_server._api()  # built once, reused afterwards
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_api_client_sends_api_key_when_configured(monkeypatch: Any) -> None:
+    monkeypatch.setattr(mcp_server, "_api_client", None)
+    monkeypatch.setenv("TORRENT_SEARCH_API_KEY", "secret")
+    client = mcp_server._api()
+    assert client.headers["authorization"] == "Bearer secret"
+    await client.aclose()
+
+    monkeypatch.setattr(mcp_server, "_api_client", None)
+    monkeypatch.delenv("TORRENT_SEARCH_API_KEY")
+    client = mcp_server._api()
+    assert "authorization" not in client.headers
     await client.aclose()
 
 
@@ -400,6 +435,8 @@ async def test_authorize_webapp_remote(monkeypatch: Any) -> None:
             return httpx2.Response(200, json={"status": "approved"})
         if code == "stale":
             return httpx2.Response(404, json={"detail": "unknown"})
+        if code == "busy":
+            return httpx2.Response(429, json={"detail": "rate limited"})
         return httpx2.Response(401, json={"detail": "bad secret"})
 
     transport = httpx2.MockTransport(handler)
@@ -410,6 +447,7 @@ async def test_authorize_webapp_remote(monkeypatch: Any) -> None:
     )
     assert "Access granted" in await mcp_server.authorize_webapp("good", "12345")
     assert "Unknown or expired" in await mcp_server.authorize_webapp("stale", "12345")
+    assert "Too many pairing" in await mcp_server.authorize_webapp("busy", "12345")
     assert "does not match" in await mcp_server.authorize_webapp("other", "12345")
 
 
@@ -480,6 +518,7 @@ async def test_forward_torrent_posts_to_api(monkeypatch: Any) -> None:
         (400, "chat_id"),
         (401, "does not match"),
         (429, "Too many forwards"),
+        (413, "too long"),
         (503, "disabled on the API server"),
     ],
 )

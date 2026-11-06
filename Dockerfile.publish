@@ -4,3 +4,4 @@ RUN pip install --upgrade pip
 ARG VERSION
 RUN pip install torrent-search-mcp==$VERSION
 EXPOSE 8000
+CMD ["torrent-search-mcp", "--mode", "http"]

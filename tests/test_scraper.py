@@ -242,39 +242,7 @@ async def test_popular_source_refresh_failure_ignores_uncovering_cache() -> None
 
 
 @pytest.mark.asyncio
-async def test_popular_source_refresh_cancels_background_refresh() -> None:
-    async def first_fetch(per: int | None) -> str:
-        return "old listing"
-
-    await scraper._popular_source("s.example", first_fetch, 5)
-    scraper._popular_cache["s.example"] = (0.0, 5, "stale")
-
-    stalled = asyncio.Event()
-
-    async def hanging_refresh(per: int | None) -> str:
-        await stalled.wait()
-        return "never lands"
-
-    await scraper._popular_source("s.example", hanging_refresh, 5)
-    pending = scraper._popular_refreshing["s.example"]
-
-    async def fresh_fetch(per: int | None) -> str:
-        return "fresh listing"
-
-    out = await scraper._popular_source("s.example", fresh_fetch, 5, refresh=True)
-    assert out is not None and "fresh" in out
-    assert "s.example" not in scraper._popular_refreshing
-    with pytest.raises(asyncio.CancelledError):
-        await pending
-    assert "fresh" in scraper._popular_cache["s.example"][2]
-
-
-@pytest.mark.asyncio
-async def test_popular_source_serves_stale_and_refreshes_in_background() -> None:
-    async def first_fetch(per: int | None) -> str:
-        return "old listing"
-
-    await scraper._popular_source("s.example", first_fetch, 5)
+async def test_popular_source_stale_refetches_before_answering() -> None:
     scraper._popular_cache["s.example"] = (0.0, 5, "SOURCE -> s.example\nstale")
 
     refreshed: list[int | None] = []
@@ -284,21 +252,32 @@ async def test_popular_source_serves_stale_and_refreshes_in_background() -> None
         return "fresh listing"
 
     out = await scraper._popular_source("s.example", fresh_fetch, 5)
-    assert out is not None and "stale" in out
-    await scraper._popular_refreshing["s.example"]
+    assert out == "SOURCE -> s.example\nfresh listing"
     assert refreshed == [5]
     assert "fresh listing" in scraper._popular_cache["s.example"][2]
 
 
 @pytest.mark.asyncio
-async def test_popular_refresh_keeps_better_coverage() -> None:
+async def test_popular_source_stale_refetch_failure_serves_stale() -> None:
+    scraper._popular_cache["s.example"] = (0.0, 5, "SOURCE -> s.example\nstale")
+
+    async def broken(per: int | None) -> str:
+        raise RuntimeError("boom")
+
+    out = await scraper._popular_source("s.example", broken, 5)
+    assert out is not None and "stale" in out
+
+
+@pytest.mark.asyncio
+async def test_popular_source_stale_refetch_replaces_coverage() -> None:
     scraper._popular_cache["s.example"] = (0.0, None, "full listing")
 
     async def fetch(per: int | None) -> str:
         return "small listing"
 
-    await scraper._refresh_popular("s.example", fetch, 5)
-    assert scraper._popular_cache["s.example"][2] == "full listing"
+    out = await scraper._popular_source("s.example", fetch, 5)
+    assert out == "SOURCE -> s.example\nsmall listing"
+    assert scraper._popular_cache["s.example"][1] == 5
 
 
 @pytest.mark.asyncio

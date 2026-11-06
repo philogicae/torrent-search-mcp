@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 import httpx2
 
-from .models import Torrent
+from .models import Torrent, is_magnet_link
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -34,6 +34,7 @@ UA = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 TIMEOUT = httpx2.Timeout(20)
+MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
 # Public trackers appended to magnets built from a bare info hash.
 TRACKERS = [
@@ -53,6 +54,7 @@ TRACKERS = [
 TRACKERS_BEST_URL = (
     "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt"
 )
+MAX_TRACKERS = 100
 
 CSV_HEADER = (
     "filename;category;size;seeders;leechers;downloads;date;magnet_link;page_url"
@@ -71,9 +73,19 @@ def _merge_trackers(remote_text: str) -> list[str]:
     remote = [
         line.strip()
         for line in remote_text.splitlines()
-        if line.strip() and not line.strip().startswith("#")
+        if line.strip()
+        and not line.strip().startswith("#")
+        and re.match(r"^(?:udp|https?)://", line.strip(), re.IGNORECASE)
     ]
-    return list(dict.fromkeys(TRACKERS + remote))
+    return list(dict.fromkeys(TRACKERS + remote))[:MAX_TRACKERS]
+
+
+_INFO_HASH = re.compile(r"(?:[0-9a-fA-F]{40}|[A-Za-z2-7]{32})\Z")
+
+
+def is_info_hash(value: Any) -> bool:
+    """True for a 40-hex or 32-base32 BitTorrent v1 info hash."""
+    return isinstance(value, str) and _INFO_HASH.fullmatch(value) is not None
 
 
 async def ensure_trackers() -> None:
@@ -90,7 +102,13 @@ async def ensure_trackers() -> None:
 
 
 def build_magnet(info_hash: str, name: str) -> str:
-    """Build a magnet URI from an info hash and display name."""
+    """Build a magnet URI from an info hash and display name.
+
+    Returns an empty string for invalid hashes so source data can never inject
+    extra magnet parameters through the ``xt`` value.
+    """
+    if not is_info_hash(info_hash):
+        return ""
     trackers = "".join(f"&tr={quote(tracker, safe='')}" for tracker in _trackers)
     return f"magnet:?xt=urn:btih:{info_hash}&dn={quote(name, safe='')}{trackers}"
 
@@ -119,10 +137,17 @@ def fmt_date(value: Any) -> str:
     if isinstance(value, bool):
         return "N/A"
     if isinstance(value, (int, float)) or (isinstance(value, str) and value.isdigit()):
-        ts = int(value)
+        try:
+            ts = int(value)
+        except (OverflowError, ValueError):
+            return "N/A"
         if not ts:
             return "N/A"
-        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+        try:
+            return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):
+            # Sources occasionally send milliseconds instead of seconds.
+            return "N/A"
     if isinstance(value, str) and value:
         # Date-only strings come from sources that do not provide a time of day
         # (e.g. 1337x detail pages). Keep them as-is so the UI does not invent one.
@@ -157,16 +182,56 @@ def _row(
     page_url: str | None = None,
 ) -> list[str]:
     return [
-        filename.replace(";", ",").strip(),
-        category,
-        size,
-        str(seeders or 0),
-        str(leechers or 0),
-        str(downloads) if downloads else "N/A",
+        _csv_text(filename),
+        _csv_text(category),
+        _csv_text(size) or "N/A",
+        str(_as_int(seeders)),
+        str(_as_int(leechers)),
+        _csv_text(downloads) if downloads else "N/A",
         fmt_date(date),
-        magnet_link,
-        page_url or "",
+        _csv_url(magnet_link),
+        _csv_url(page_url),
     ]
+
+
+def _csv_text(value: Any) -> str:
+    """Flatten a scraped value so it cannot break the CSV line protocol."""
+    return " ".join(str(value or "").replace(";", ",").split())
+
+
+def _csv_url(value: Any) -> str:
+    """Flatten a URL-like value, percent-encoding semicolons (CSV separator)."""
+    return str(value or "").replace("\r", "").replace("\n", "").replace(";", "%3B")
+
+
+def _query_tokens(query: str) -> list[str]:
+    """Normalize a query into searchable tokens (drops 1-char noise)."""
+    return [
+        token
+        for token in re.findall(r"[^\W_]+", query.lower(), re.UNICODE)
+        if len(token) > 1
+    ]
+
+
+def _matches_query(name: str, query: str) -> bool:
+    """True when every meaningful query token appears in a result name."""
+    tokens = _query_tokens(query)
+    if not tokens:
+        return True
+    normalized = " ".join(re.findall(r"[^\W_]+", name.lower(), re.UNICODE))
+    return all(token in normalized for token in tokens)
+
+
+def _as_int(value: Any) -> int:
+    """Best-effort integer for scraped counters ("1,234" included)."""
+    if isinstance(value, bool):
+        return int(value)
+    try:
+        if isinstance(value, (int, float)):
+            return int(value)
+        return int(str(value or "").replace(",", "").strip())
+    except (OverflowError, ValueError):
+        return 0
 
 
 def _format(rows: list[list[str]]) -> str:
@@ -177,6 +242,8 @@ def _format(rows: list[list[str]]) -> str:
 
 
 _client: httpx2.AsyncClient | None = None
+RETRY_ATTEMPTS = 2
+RETRY_DELAY = 0.2
 
 
 def _get_client() -> httpx2.AsyncClient:
@@ -190,9 +257,32 @@ def _get_client() -> httpx2.AsyncClient:
 
 
 async def _get_text(url: str, params: dict[str, str] | None = None) -> str:
-    response = await _get_client().get(url, params=params)
-    response.raise_for_status()
-    return response.text
+    last_error: httpx2.TransportError | None = None
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            response = await _get_client().get(url, params=params)
+            response.raise_for_status()
+            if len(getattr(response, "content", b"")) > MAX_RESPONSE_BYTES:
+                raise ValueError(f"response from {url} is too large")
+            return response.text
+        except httpx2.TransportError as e:
+            # Only connection resets are worth an immediate retry; retrying a
+            # read timeout would consume the source's 30s budget twice.
+            last_error = e
+            if not isinstance(e, httpx2.ConnectError) or attempt + 1 >= RETRY_ATTEMPTS:
+                break
+            await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("request retry loop exhausted")  # pragma: no cover
+
+
+async def aclose_client() -> None:
+    """Close the shared HTTP client (process shutdown / test isolation)."""
+    global _client
+    if _client is not None:
+        client, _client = _client, None
+        await client.aclose()
 
 
 async def _get_json(url: str, params: dict[str, str] | None = None) -> Any:
@@ -258,12 +348,14 @@ def extract_torrents(texts: list[str]) -> list[Torrent]:
     """
     torrents: list[Torrent] = []
     for text in texts:
-        source, content = text.split("\n", 1)
+        source, separator, content = text.partition("\n")
+        if not separator or not content:
+            continue
+        source = source.removeprefix("SOURCE -> ")
         if content.startswith("No results"):
             # _format() emits this marker on its own; a filename containing
             # the words must not blank the whole source.
             continue
-        source = source[10:]
         data = content.splitlines()
         headers = data[0].split(";")
         for line in data[1:]:
@@ -307,6 +399,27 @@ X1337_HOSTS = [
     "1337xx.to",
 ]
 X1337_STOP_WORDS = {"the", "a", "an", "of", "and", "or", "to"}
+X1337_CATEGORIES = [
+    ("Movies", "Video - Movies"),
+    ("TV", "Video - TV shows"),
+    ("Games", "Games"),
+    ("Apps", "Applications"),
+    ("Music", "Audio"),
+    ("Anime", "Anime"),
+]
+X1337_POPULAR = [
+    ("/popular-movies", "Video - Movies"),
+    ("/popular-tv", "Video - TV shows"),
+    ("/popular-games", "Games"),
+    ("/popular-apps", "Applications"),
+    ("/popular-music", "Audio"),
+    ("/popular-anime", "Anime"),
+]
+# Detail pages are one request each; cap them so a wide query cannot turn one
+# source into hundreds of round trips (the source timeout would cut it anyway).
+X1337_MAX_DETAILS = 40
+X1337_SEARCH_PAGES = 1
+
 X1337_MONTHS = {
     "jan": 1,
     "feb": 2,
@@ -387,15 +500,19 @@ async def _x1337_fetch(path: str) -> tuple[str, str]:
 async def _x1337_detail(base: str, path: str) -> tuple[str, str] | None:
     """Fetch a torrent page and return (magnet, date); None on failure.
 
-    Detail pages resolve through the mirror rotation (up to ~5 requests
-    each), so concurrency is bounded to keep the mirror hosts from
-    throttling the whole listing.
+    The listing host is tried first; if it fails, the regular mirror rotation
+    gets one chance so a single dead mirror cannot drop every detail page.
+    Detail fetches are bounded to keep the mirror hosts from throttling the
+    whole listing.
     """
     async with _x1337_detail_slots:
         try:
             detail_html = await _get_text(f"{base}{path}")
         except httpx2.HTTPError:
-            return None
+            try:
+                _, detail_html = await _first_host(X1337_HOSTS, path)
+            except httpx2.HTTPError:
+                return None
     magnet_match = re.search(
         r"magnet:\?xt=urn:btih:[^\"'<>\s]+", detail_html, re.IGNORECASE
     )
@@ -409,17 +526,15 @@ async def x1337_parse(query: str, max_items: int | None = None) -> str:
     if q:
         encoded = quote(q, safe="").replace("%20", "+")
         paths = [
-            (f"/category-search/{encoded}/Movies/1/", "Video - Movies"),
-            (f"/category-search/{encoded}/TV/1/", "Video - TV shows"),
+            (f"/category-search/{encoded}/{category}/{page}/", label)
+            for category, label in X1337_CATEGORIES
+            for page in range(1, X1337_SEARCH_PAGES + 1)
         ]
     else:
-        paths = [
-            ("/popular-movies", "Video - Movies"),
-            ("/popular-tv", "Video - TV shows"),
-        ]
+        paths = X1337_POPULAR
 
     tokens = [t for t in q.lower().split() if t not in X1337_STOP_WORDS] if q else []
-    candidates: list[tuple[str, str, list[str]]] = []
+    candidates: dict[str, tuple[str, str, list[str]]] = {}
     pages = await asyncio.gather(
         *(_x1337_fetch(path) for path, _ in paths), return_exceptions=True
     )
@@ -432,16 +547,22 @@ async def x1337_parse(query: str, max_items: int | None = None) -> str:
             source_rows = [
                 row for row in source_rows if all(t in row[0].lower() for t in tokens)
             ]
-        candidates.extend((base, category, row) for row in source_rows)
-    candidates.sort(key=lambda candidate: int(candidate[2][3]), reverse=True)
-    if max_items is not None:
-        candidates = candidates[:max_items]
+        for row in source_rows:
+            # The same torrent can show up on more than one category/page.
+            candidates.setdefault(row[1], (base, category, row))
+    ordered = sorted(
+        candidates.values(), key=lambda candidate: int(candidate[2][3]), reverse=True
+    )
+    limit = (
+        X1337_MAX_DETAILS if max_items is None else min(max_items, X1337_MAX_DETAILS)
+    )
+    ordered = ordered[:limit]
     details = await asyncio.gather(
-        *(_x1337_detail(base, row[1]) for base, _, row in candidates),
+        *(_x1337_detail(base, row[1]) for base, _, row in ordered),
         return_exceptions=True,
     )
     results: list[list[str]] = []
-    for (base, category, row), detail in zip(candidates, details):
+    for (base, category, row), detail in zip(ordered, details):
         if isinstance(detail, BaseException) or detail is None:
             continue
         name, _path, size, seeds, leeches = row
@@ -466,6 +587,12 @@ async def x1337_parse(query: str, max_items: int | None = None) -> str:
 # apibay.org - The Pirate Bay JSON API
 # ---------------------------------------------------------------------------
 APIBAY_CATEGORIES = {
+    100: "Audio",
+    101: "Audio - Music",
+    102: "Audio - Audio books",
+    103: "Audio - Sound clips",
+    104: "Audio - FLAC",
+    199: "Audio - Other",
     200: "Video",
     201: "Video - Movies",
     202: "Video - Movies DVDR",
@@ -474,23 +601,56 @@ APIBAY_CATEGORIES = {
     207: "Video - Movies HD",
     208: "Video - TV shows HD",  # TPB 208 is HD TV, not x265 movies
     209: "Video - Movies 3D",
+    299: "Video - Other",
+    300: "Applications",
+    301: "Applications - Windows",
+    302: "Applications - Mac",
+    303: "Applications - UNIX",
+    304: "Applications - Mobile",
+    399: "Applications - Other",
+    400: "Games",
+    401: "Games - PC",
+    402: "Games - Mac",
+    403: "Games - PSx",
+    404: "Games - XBOX360",
+    405: "Games - Wii",
+    406: "Games - Handheld",
+    407: "Games - IOS",
+    408: "Games - Android",
+    499: "Games - Other",
+    600: "Other",
+    601: "Other - E-books",
+    602: "Other - Comics",
+    603: "Other - Pictures",
+    604: "Other - Covers",
+    605: "Other - Physibles",
+    699: "Other",
 }
+
+# TPB's official top100 files, one per broad category (porn excluded).
+APIBAY_POPULAR_CATEGORIES = (100, 200, 207, 208, 300, 400, 600)
 
 
 def apibay_rows(items: list[dict[str, Any]]) -> list[list[str]]:
     rows: list[list[str]] = []
     for item in items:
+        if not isinstance(item, dict):
+            continue
         info_hash = (item.get("info_hash") or "").lower()
         # The search API sends ids/categories as strings, the precompiled
         # top100 files as ints; accept both.
-        if len(info_hash) != 40 or info_hash == "0" * 40 or str(item.get("id")) == "0":
+        if (
+            not is_info_hash(info_hash)
+            or info_hash == "0" * 40
+            or str(item.get("id")) == "0"
+        ):
             continue
         name = item.get("name") or "Unknown"
         category_id = item.get("category")
         category = (
-            APIBAY_CATEGORIES.get(int(category_id), "Video")
+            APIBAY_CATEGORIES.get(int(category_id), "Other")
             if isinstance(category_id, (int, str)) and str(category_id).isdigit()
-            else "Video"
+            else "Other"
         )
         rows.append(
             _row(
@@ -518,13 +678,19 @@ async def apibay_parse(query: str) -> str:
         data = await _get_json("https://apibay.org/q.php", {"q": q})
         items = data if isinstance(data, list) else []
     else:
-        movies, tv = await asyncio.gather(
-            _get_json("https://apibay.org/precompiled/data_top100_207.json"),
-            _get_json("https://apibay.org/precompiled/data_top100_208.json"),
+        pages = await asyncio.gather(
+            *(
+                _get_json(f"https://apibay.org/precompiled/data_top100_{c}.json")
+                for c in APIBAY_POPULAR_CATEGORIES
+            ),
             return_exceptions=True,
         )
         items = [
-            item for page in (movies, tv) if isinstance(page, list) for item in page
+            item
+            for page in pages
+            if isinstance(page, list)
+            for item in page
+            if isinstance(item, dict)
         ]
     return _format(apibay_rows(items))
 
@@ -535,11 +701,14 @@ async def apibay_parse(query: str) -> str:
 def eztv_rows(data: dict[str, Any]) -> list[list[str]]:
     rows: list[list[str]] = []
     for torrent in data.get("torrents") or []:
+        if not isinstance(torrent, dict):
+            continue
         info_hash = (torrent.get("hash") or "").lower()
-        if not info_hash:
+        if not is_info_hash(info_hash):
             continue
         name = torrent.get("filename") or torrent.get("title") or info_hash
-        magnet = torrent.get("magnet_url") or build_magnet(info_hash, name)
+        provided = torrent.get("magnet_url")
+        magnet = provided if is_magnet_link(provided) else build_magnet(info_hash, name)
         rows.append(
             _row(
                 name,
@@ -555,15 +724,35 @@ def eztv_rows(data: dict[str, Any]) -> list[list[str]]:
     return rows
 
 
+EZTV_PAGES = 2
+
+
 async def eztv_parse(query: str) -> str:
     # ponytail: the EZTV API has no query search (it ignores `q`), so queries
-    # are matched client-side against the latest releases
-    data = await _get_json(
-        "https://eztvx.to/api/get-torrents", {"limit": "100", "page": "1"}
+    # are matched client-side against the latest releases. Two pages double
+    # the candidate pool without slowing the source much (parallel fetch).
+    pages = await asyncio.gather(
+        *(
+            _get_json(
+                "https://eztvx.to/api/get-torrents",
+                {"limit": "100", "page": str(page)},
+            )
+            for page in range(1, EZTV_PAGES + 1)
+        ),
+        return_exceptions=True,
     )
-    rows = eztv_rows(data if isinstance(data, dict) else {})
-    if tokens := [t for t in query.strip().lower().split() if t]:
-        rows = [r for r in rows if all(t in r[0].lower() for t in tokens)]
+    rows: list[list[str]] = []
+    seen: set[str] = set()
+    for page in pages:
+        if not isinstance(page, dict):
+            continue
+        for row in eztv_rows(page):
+            if row[7] in seen:
+                continue
+            seen.add(row[7])
+            rows.append(row)
+    if query.strip():
+        rows = [r for r in rows if _matches_query(r[0], query)]
     return _format(rows)
 
 
@@ -599,11 +788,17 @@ def fitgirl_rows(xml: str) -> list[list[str]]:
 
 async def fitgirl_parse(query: str) -> str:
     base = "https://fitgirl-repacks.site"
-    if query.strip():
-        url = f"{base}/?s={quote(query.strip(), safe='')}&feed=rss2"
+    q = query.strip()
+    if q:
+        url = f"{base}/?s={quote(q, safe='')}&feed=rss2"
     else:
         url = f"{base}/feed/"
-    return _format(fitgirl_rows(await _get_text(url)))
+    rows = fitgirl_rows(await _get_text(url))
+    # WordPress search matches post bodies too, so it returns loosely related
+    # games; keep only titles that actually contain the query tokens.
+    if q:
+        rows = [row for row in rows if _matches_query(row[0], q)]
+    return _format(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -614,13 +809,13 @@ def nyaa_rss_rows(xml: str) -> list[list[str]]:
     for item in xml.split("<item>")[1:]:
         info_hash = _rss_field(item, "nyaa:infoHash").lower()
         name = html.unescape(_rss_field(item, "title"))
-        if not info_hash or not name:
+        if not is_info_hash(info_hash) or not name:
             continue
         rows.append(
             _row(
                 name,
-                _rss_field(item, "nyaa:category") or "Anime",
-                _rss_field(item, "nyaa:size") or "N/A",
+                html.unescape(_rss_field(item, "nyaa:category")) or "Anime",
+                html.unescape(_rss_field(item, "nyaa:size")) or "N/A",
                 _rss_field(item, "nyaa:seeders"),
                 _rss_field(item, "nyaa:leechers"),
                 _rss_field(item, "nyaa:downloads"),
@@ -653,16 +848,26 @@ def nyaa_html_rows(html_text: str) -> list[list[str]]:
             continue
         cells = re.findall(r'<td class="text-center"[^>]*>(.*?)</td>', tr, DOTALL)
         ts_match = re.search(r'data-timestamp="(\d+)"', tr)
+        category_title = re.search(r'<a href="/\?c=[^"]+"[^>]*title="([^"]+)"', tr)
+        category_text = re.search(r'<a href="/\?c=[^"]+"[^>]*>(.*?)</a>', tr, DOTALL)
         # Cells: [links, size, date, seeders, leechers, downloads]
         if len(cells) < 6:
             continue
         seeds = re.search(r"([\d,]+)", cells[3])
         leechers = re.search(r"([\d,]+)", cells[4])
         downloads = re.search(r"([\d,]+)", cells[5])
+        if category_title:
+            category = html.unescape(category_title.group(1))
+        elif category_text:
+            category = html.unescape(
+                sub(r"<[^>]+>", " ", category_text.group(1))
+            ).strip()
+        else:
+            category = "Anime"
         rows.append(
             _row(
                 html.unescape(name_match.group(2)),
-                "Anime",
+                category or "Anime",
                 (cells[1].strip() or "N/A"),
                 (seeds.group(1).replace(",", "") if seeds else 0),
                 (leechers.group(1).replace(",", "") if leechers else 0),
@@ -698,10 +903,16 @@ def _pick_download(downloads: list[dict[str, Any]]) -> dict[str, Any] | None:
 def subsplease_rows(data: dict[str, Any]) -> list[list[str]]:
     rows: list[list[str]] = []
     for entry in data.values():
-        download = _pick_download(entry.get("downloads") or [])
+        if not isinstance(entry, dict):
+            continue
+        download = _pick_download(
+            [d for d in entry.get("downloads") or [] if isinstance(d, dict)]
+        )
         if not download:
             continue
         magnet = download["magnet"]
+        if not isinstance(magnet, str):
+            continue
         show = entry.get("show") or "Unknown"
         episode = f" - {entry['episode']}" if entry.get("episode") else ""
         name = f"{show}{episode} [{download.get('res') or '?'}p]"
@@ -762,15 +973,20 @@ def _uindex_date(value: str) -> str:
     if not match:
         return fmt_date(value)
     seconds = float(match.group(1)) * _UINDEX_AGE_SECONDS[match.group(2)]
-    return datetime.fromtimestamp(time() - seconds, tz=timezone.utc).strftime(
-        "%Y-%m-%d"
-    )
+    try:
+        return datetime.fromtimestamp(time() - seconds, tz=timezone.utc).strftime(
+            "%Y-%m-%d"
+        )
+    except (OverflowError, OSError, ValueError):
+        return "N/A"
 
 
 def uindex_rows(html_text: str) -> list[list[str]]:
     """Parse the top-list table; the name link href is the magnet itself."""
     rows: list[list[str]] = []
-    for tr in re.findall(r"<tr><td class=\"top-col-rank\">.*?</tr>", html_text, DOTALL):
+    for tr in re.findall(
+        r'<tr[^>]*>\s*<td class="top-col-rank".*?</tr>', html_text, DOTALL
+    ):
         magnet_match = re.search(r'href="(magnet:\?xt=urn:btih:[^"]+)"', tr)
         name_match = re.search(
             r'href="(/details\.php\?id=\d+)"[^>]*class="sr-torrent-link"[^>]*>(.*?)</a>',
@@ -812,8 +1028,8 @@ async def uindex_parse(query: str) -> str:
     # client-side against the current top list (same approach as EZTV).
     xml = await _get_text(UINDEX_TOP_URL)
     rows = uindex_rows(xml)
-    if tokens := [t for t in query.strip().lower().split() if t]:
-        rows = [r for r in rows if all(t in r[0].lower() for t in tokens)]
+    if query.strip():
+        rows = [r for r in rows if _matches_query(r[0], query)]
     return _format(rows)
 
 
@@ -821,15 +1037,23 @@ async def uindex_parse(query: str) -> str:
 # yts.mx - JSON API
 # ---------------------------------------------------------------------------
 YTS_HOSTS = ["yts.mx", "yts.am", "yts.rs"]
+YTS_PAGES = 2
 
 
 def yts_rows(data: dict[str, Any]) -> list[list[str]]:
     rows: list[list[str]] = []
-    for movie in data.get("data", {}).get("movies") or []:
+    movies = data.get("data")
+    if not isinstance(movies, dict):
+        return rows
+    for movie in movies.get("movies") or []:
+        if not isinstance(movie, dict):
+            continue
         title = movie.get("title_long") or movie.get("title") or "Unknown"
         for torrent in movie.get("torrents") or []:
-            info_hash = torrent.get("hash")
-            if not info_hash:
+            if not isinstance(torrent, dict):
+                continue
+            info_hash = (torrent.get("hash") or "").lower()
+            if not is_info_hash(info_hash):
                 continue
             tag = " ".join(
                 x for x in (torrent.get("quality"), torrent.get("type")) if x
@@ -844,7 +1068,7 @@ def yts_rows(data: dict[str, Any]) -> list[list[str]]:
                     torrent.get("peers"),
                     None,
                     movie.get("date_uploaded_unix"),
-                    build_magnet(info_hash.lower(), filename),
+                    build_magnet(info_hash, filename),
                 )
             )
     return rows
@@ -852,13 +1076,30 @@ def yts_rows(data: dict[str, Any]) -> list[list[str]]:
 
 async def yts_parse(query: str, *, sort_by: str = "") -> str:
     q = query.strip()
-    params: dict[str, str] = {"limit": "50"}
+    base_params: dict[str, str] = {"limit": "50"}
     if q:
-        params["query_term"] = q
+        base_params["query_term"] = q
     else:
-        params["sort_by"] = sort_by or "date_added"
-    data = json.loads(await _get_first(YTS_HOSTS, "/api/v2/list_movies.json", params))
-    return _format(yts_rows(data if isinstance(data, dict) else {}))
+        base_params["sort_by"] = sort_by or "date_added"
+
+    async def fetch_page(page: int) -> Any:
+        params = {**base_params, "page": str(page)}
+        return json.loads(
+            await _get_first(YTS_HOSTS, "/api/v2/list_movies.json", params)
+        )
+
+    page_count = YTS_PAGES if not q else 1
+    pages = await asyncio.gather(
+        *(fetch_page(page) for page in range(1, page_count + 1)),
+        return_exceptions=True,
+    )
+    movies: list[Any] = []
+    for data in pages:
+        if isinstance(data, dict):
+            payload = data.get("data")
+            if isinstance(payload, dict):
+                movies.extend(payload.get("movies") or [])
+    return _format(yts_rows({"data": {"movies": movies}}))
 
 
 # ---------------------------------------------------------------------------

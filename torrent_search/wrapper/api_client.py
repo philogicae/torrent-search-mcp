@@ -1,5 +1,6 @@
 import logging
 from asyncio import Task, create_task, shield
+from collections.abc import Callable, Coroutine
 from contextlib import suppress
 from os import getenv
 from sys import argv
@@ -8,7 +9,7 @@ from typing import Any, ClassVar
 from aiocache import cached
 
 from .models import Cache, Torrent
-from .scraper import WEBSITES, search_torrents
+from .scraper import POPULAR_TTL, WEBSITES, search_torrents
 from .scraper import popular_torrents as scrape_popular_torrents
 
 logger = logging.getLogger("Torrent Search")
@@ -44,6 +45,21 @@ def displayed_sources(names: list[str]) -> list[str]:
     return seen
 
 
+def _health(torrent: Torrent) -> int:
+    return torrent.seeders + torrent.leechers
+
+
+def _dedupe_by_info_hash(torrents: list[Torrent]) -> list[Torrent]:
+    """Keep the healthiest copy when several sources expose the same torrent."""
+    best: dict[str, Torrent] = {}
+    for torrent in torrents:
+        key = torrent.info_hash or torrent.id
+        current = best.get(key)
+        if current is None or _health(torrent) > _health(current):
+            best[key] = torrent
+    return list(best.values())
+
+
 def popular_key_builder(fn: Any, *args: Any, **kwargs: Any) -> str:
     """Build the aiocache key for the popular listing (``per_source`` only).
 
@@ -61,7 +77,9 @@ class TorrentSearchApi:
     CACHE: Cache = Cache()
     _inflight: ClassVar[dict[str, Task[Any]]] = {}
 
-    async def _single_flight(self, key: str, factory: Any) -> Any:
+    async def _single_flight(
+        self, key: str, factory: Callable[[], Coroutine[Any, Any, Any]]
+    ) -> Any:
         """Coalesce concurrent identical cold misses into one task."""
         existing = self._inflight.get(key)
         if existing is not None:
@@ -100,11 +118,12 @@ class TorrentSearchApi:
         Returns:
             A list of torrent results.
         """
-        query = query.lower()
+        query = " ".join(query.split()).lower()
         found_torrents = await self._single_flight(
             f"search:{query}:{max_items}",
             lambda: search_torrents(query, SOURCES),
         )
+        found_torrents = _dedupe_by_info_hash(found_torrents)
 
         if per_source is not None:
             grouped: dict[str, list[Torrent]] = {}
@@ -112,33 +131,27 @@ class TorrentSearchApi:
                 grouped.setdefault(torrent.source or "", []).append(torrent)
             spread: list[Torrent] = []
             for group in grouped.values():
-                group.sort(
-                    key=lambda torrent: torrent.seeders + torrent.leechers,
-                    reverse=True,
-                )
+                group.sort(key=_health, reverse=True)
                 spread.extend(group[:per_source])
             found_torrents = spread
 
-        found_torrents = sorted(
-            found_torrents,
-            key=lambda torrent: torrent.seeders + torrent.leechers,
-            reverse=True,
-        )
+        found_torrents = sorted(found_torrents, key=_health, reverse=True)
         if max_items is not None:
             found_torrents = found_torrents[:max_items]
 
         for torrent in found_torrents:
             torrent.source = display_source(torrent.source or "")
-            # Re-search hint: None (uncapped spread) still embeds the default.
-            torrent.prepend_info(query, max_items if max_items is not None else 20)
+            # A 0 marker means "uncapped" (per_source-only searches); ids stay
+            # decodable and get_torrent can re-run the same uncapped search.
+            torrent.prepend_info(query, max_items if max_items is not None else 0)
 
         self.CACHE.clean()  # Clean cache routine
         self.CACHE.update(found_torrents)
         return found_torrents
 
-    @cached(ttl=120, key_builder=popular_key_builder)  # 2min
+    @cached(ttl=POPULAR_TTL, key_builder=popular_key_builder)  # 5min
     async def _popular_cached(self, per_source: int | None = 20) -> list[Torrent]:
-        """Two-minute cache front-end for :meth:`popular_torrents`."""
+        """Five-minute cache front-end for :meth:`popular_torrents`."""
         return await self._popular_listing(per_source)
 
     async def _popular_listing(
@@ -170,7 +183,7 @@ class TorrentSearchApi:
         Args:
             per_source: Optional maximum number of results kept per source
                 (best first). None keeps everything the source returned.
-            refresh: When true, the 2-minute listing cache is dropped and every
+            refresh: When true, the 5-minute listing cache is dropped and every
                 source is asked for a new listing (used by the Web UI POPULAR
                 button); the aggregate cache is rebuilt on the next regular
                 call from the refreshed per-source listings.
@@ -195,13 +208,15 @@ class TorrentSearchApi:
         """
         found_torrent: Torrent | None = self.CACHE.get(torrent_id)
 
-        query, max_items = "", 10
+        query, max_items = "", None
         with suppress(Exception):
-            query, max_items = Torrent.extract_info(torrent_id)[:2]
+            query, encoded_max, _, _ = Torrent.extract_info(torrent_id)
+            # 0 is the "uncapped" marker written for per_source-only searches.
+            max_items = None if encoded_max == 0 else encoded_max
         if not query and not found_torrent:
             # Garbage ids, or popular-listing ids whose cache entry expired
             # (they carry no query marker and cannot be re-searched).
-            logger.warning("Invalid torrent ID: %s", torrent_id)
+            logger.warning("Invalid torrent ID (%d chars).", len(torrent_id))
             return None
 
         if not found_torrent:  # Missing or uncached

@@ -28,6 +28,8 @@ SESSION_TTL_SECONDS = 30 * 24 * 3600  # sessions older than this are purged
 DEFAULT_AUTH_FILE = "./authorized_tokens.json"
 DEFAULT_CHALLENGE_TTL = 300.0  # 5 minutes to get the code approved
 MAX_PENDING_CHALLENGES = 50
+MAX_SESSIONS_PER_CHAT = 20
+MAX_SESSIONS = 1000
 _CODE_ALPHABET = string.ascii_letters + string.digits
 _CODE_LENGTH = 16
 
@@ -70,7 +72,9 @@ class TelegramAuthStore:
         ]
         for token_hash in stale:
             del self._sessions[token_hash]
-        if stale:
+        before = len(self._sessions)
+        self._enforce_session_limits()
+        if stale or len(self._sessions) != before:
             self.save()
 
     def _reload_if_changed(self) -> None:
@@ -102,8 +106,7 @@ class TelegramAuthStore:
             self._sessions, self._fingerprint = {}, fingerprint
         except Exception:  # noqa: BLE001 - corrupt store must fail closed
             logger.warning("Invalid telegram auth file %s; ignoring.", self.path)
-            if not self._loaded:
-                self._sessions, self._fingerprint = {}, fingerprint
+            self._sessions, self._fingerprint = {}, fingerprint
         self._loaded = True
 
     def save(self) -> None:
@@ -129,6 +132,8 @@ class TelegramAuthStore:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, indent=2)
                 handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
             os.chmod(tmp_name, 0o600)
             os.replace(tmp_name, self.path)
         except BaseException:
@@ -147,7 +152,27 @@ class TelegramAuthStore:
             "chat_id": str(chat_id),
             "created": int(time.time()),
         }
+        self._enforce_session_limits()
         self.save()
+
+    def _enforce_session_limits(self) -> None:
+        """Bound per-chat and global session counts (oldest are revoked)."""
+        by_chat: dict[str, list[tuple[float, str]]] = {}
+        for token_hash, entry in self._sessions.items():
+            by_chat.setdefault(str(entry["chat_id"]), []).append(
+                (float(entry.get("created", 0)), token_hash)
+            )
+        for entries in by_chat.values():
+            entries.sort()
+            for _, token_hash in entries[:-MAX_SESSIONS_PER_CHAT]:
+                del self._sessions[token_hash]
+        if len(self._sessions) > MAX_SESSIONS:
+            oldest = sorted(
+                self._sessions.items(),
+                key=lambda item: float(item[1].get("created", 0)),
+            )[: len(self._sessions) - MAX_SESSIONS]
+            for token_hash, _ in oldest:
+                del self._sessions[token_hash]
 
     def chat_id_for_token(self, token: str) -> str | None:
         self._reload_if_changed()
@@ -214,10 +239,11 @@ class ChallengeManager:
         parameters without any URL-encoding ambiguity.
         """
         self._sweep()
-        while len(self._pending) >= self.max_pending:
-            oldest = min(self._pending.items(), key=lambda item: item[1])[0]
-            del self._pending[oldest]
-            logger.info("Challenge capacity reached; evicted oldest pending code.")
+        if self.max_pending > 0:
+            while len(self._pending) >= self.max_pending:
+                oldest = min(self._pending.items(), key=lambda item: item[1])[0]
+                del self._pending[oldest]
+                logger.info("Challenge capacity reached; evicted oldest pending code.")
         code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_LENGTH))
         self._pending[code] = time.monotonic() + self.ttl
         return code, self.ttl
@@ -249,14 +275,30 @@ class ChallengeManager:
 class RateLimiter:
     """Tiny sliding-window limiter (per key), in-memory, no dependencies."""
 
-    def __init__(self, max_events: int, per_seconds: float) -> None:
+    def __init__(
+        self, max_events: int, per_seconds: float, max_keys: int = 2_000
+    ) -> None:
         self.max_events = max_events
         self.per_seconds = per_seconds
+        self.max_keys = max_keys
         self._events: dict[str, list[float]] = {}
+
+    def _evict_oldest_key(self) -> None:
+        oldest = min(
+            self._events,
+            key=lambda key: self._events[key][-1] if self._events[key] else 0.0,
+        )
+        del self._events[oldest]
 
     def allow(self, key: str) -> bool:
         now = time.monotonic()
-        window = self._events.setdefault(key, [])
+        window = self._events.get(key)
+        if window is None:
+            # Bound the key set: client IPs are attacker-controlled, so an
+            # unbounded dict would be a slow memory leak.
+            if self.max_keys > 0 and len(self._events) >= self.max_keys:
+                self._evict_oldest_key()
+            window = self._events[key] = []
         cutoff = now - self.per_seconds
         while window and window[0] <= cutoff:
             window.pop(0)

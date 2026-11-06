@@ -1,5 +1,5 @@
 import logging
-from asyncio import Task, create_task, gather, wait_for
+from asyncio import gather, wait_for
 from collections.abc import Awaitable, Callable
 from time import time
 
@@ -44,21 +44,27 @@ SOURCE_TIMEOUT: float = (
     30.0  # hard cap per source per request (yts mirror alone can take ~20s)
 )
 
-# Per-source fresh window for popular listings: within it a source is served
-# from its own cache, so a popular call only refetches genuinely stale sources.
+# Fresh window shared by the per-source listings and the aggregate popular
+# cache. Once it expires, the next popular request refetches the stale sources
+# before answering; a failed refetch falls back to the last known-good listing.
 POPULAR_TTL: float = 300.0
 # source -> (fetched_at, per_source used for the fetch, listing text)
 _popular_cache: dict[str, tuple[float, int | None, str]] = {}
-# source -> in-flight background refresh while a stale entry is served
-_popular_refreshing: dict[str, Task[None]] = {}
 
 
 async def _scrape_source(source: str, parser: SourceParser, query: str) -> str | None:
+    started = time()
     try:
         processed_text = await wait_for(parser(query), timeout=SOURCE_TIMEOUT)
+        logger.debug(
+            "Source %s returned %d rows in %.2fs.",
+            source,
+            max(processed_text.count("\n") - 1, 0),
+            time() - started,
+        )
         return f"SOURCE -> {source}\n{processed_text}"
     except Exception as e:  # noqa: BLE001 - keep the source out of the search
-        logger.warning("Error scraping %s for query '%s': %s", source, query, e)
+        logger.warning("Error scraping %s for query '%r': %s", source, query, e)
         return None
 
 
@@ -86,8 +92,16 @@ async def scrape_torrents(query: str, sources: list[str] | None = None) -> list[
 async def _fetch_popular_text(
     name: str, fn: Callable[[int | None], Awaitable[str]], per_source: int | None
 ) -> str | None:
+    started = time()
     try:
-        return f"SOURCE -> {name}\n{await wait_for(fn(per_source), timeout=SOURCE_TIMEOUT)}"
+        text = await wait_for(fn(per_source), timeout=SOURCE_TIMEOUT)
+        logger.debug(
+            "Popular source %s returned %d rows in %.2fs.",
+            name,
+            max(text.count("\n") - 1, 0),
+            time() - started,
+        )
+        return f"SOURCE -> {name}\n{text}"
     except Exception as e:  # noqa: BLE001 - keep the source out of the listing
         logger.warning("Error fetching popular listing from %s: %s", name, e)
         return None
@@ -104,58 +118,29 @@ def _popular_covers(used: int | None, requested: int | None) -> bool:
     return requested is not None and used >= requested
 
 
-async def _refresh_popular(
-    name: str, fn: Callable[[int | None], Awaitable[str]], per_source: int | None
-) -> None:
-    """Background refresh of a stale popular listing (keeps the best coverage)."""
-    try:
-        text = await _fetch_popular_text(name, fn, per_source)
-        if text is not None:
-            existing = _popular_cache.get(name)
-            if existing is None or _popular_covers(per_source, existing[1]):
-                _popular_cache[name] = (time(), per_source, text)
-    finally:
-        _popular_refreshing.pop(name, None)
-
-
 async def _popular_source(
     name: str,
     fn: Callable[[int | None], Awaitable[str]],
     per_source: int | None,
     refresh: bool = False,
 ) -> str | None:
-    if refresh:
-        # Explicit refresh: fetch now, replace the entry whatever its
-        # coverage, and drop a running background refresh so bits of the old
-        # listing cannot land in the cache afterwards.
-        pending = _popular_refreshing.pop(name, None)
-        if pending is not None:
-            pending.cancel()
-        text = await _fetch_popular_text(name, fn, per_source)
-        if text is not None:
-            _popular_cache[name] = (time(), per_source, text)
-            return text
-        # Failed refresh: keep the source in the listing with its last
-        # known-good text instead of dropping the section entirely.
-        entry = _popular_cache.get(name)
-        if entry is not None and _popular_covers(entry[1], per_source):
-            return entry[2]
-        return None
     entry = _popular_cache.get(name)
-    if entry is not None and _popular_covers(entry[1], per_source):
-        if time() - entry[0] < POPULAR_TTL:
-            return entry[2]
-        # Stale but usable: answer now and refresh in the background, so a
-        # slow source never holds back the aggregate listing.
-        if name not in _popular_refreshing:
-            _popular_refreshing[name] = create_task(
-                _refresh_popular(name, fn, per_source)
-            )
+    if (
+        not refresh
+        and entry is not None
+        and _popular_covers(entry[1], per_source)
+        and time() - entry[0] < POPULAR_TTL
+    ):
         return entry[2]
     text = await _fetch_popular_text(name, fn, per_source)
     if text is not None:
         _popular_cache[name] = (time(), per_source, text)
-    return text
+        return text
+    # Failed refresh: keep the source in the listing with its last known-good
+    # text when that text covers the request, instead of dropping the section.
+    if entry is not None and _popular_covers(entry[1], per_source):
+        return entry[2]
+    return None
 
 
 async def popular_torrents(
@@ -166,7 +151,9 @@ async def popular_torrents(
     """
     Get the current top/popular listings from all supporting sources.
 
-    Uses only plain HTTP endpoints.
+    Uses only plain HTTP endpoints. A source listing older than ``POPULAR_TTL``
+    (5 minutes) is refetched before the aggregate is returned; an explicit
+    ``refresh`` bypasses every cached listing.
 
     Args:
         sources: List of valid sources to include.
@@ -193,11 +180,7 @@ async def popular_torrents(
     for text in results:
         if text is None:
             continue
-        try:
-            found = extract_torrents([text])
-        except Exception:  # noqa: BLE001 - skip a single broken source
-            logger.warning("Failed to extract popular results for one source.")
-            continue
+        found = extract_torrents([text])
         found.sort(key=lambda torrent: torrent.seeders + torrent.leechers, reverse=True)
         torrents.extend(found[:per_source])
     torrents.sort(key=lambda torrent: torrent.seeders + torrent.leechers, reverse=True)

@@ -1,9 +1,19 @@
 import argparse
+import logging
 import sys
+from typing import Any, cast
 
 import uvicorn
 
-from .mcp_server import mcp
+
+def _run_mcp(transport: str, host: str, port: int) -> None:
+    """Import FastMCP only when an MCP transport is actually started."""
+    from .mcp_server import mcp
+
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+    else:
+        mcp.run(transport=cast(Any, transport), host=host, port=port)
 
 
 def main() -> None:
@@ -48,6 +58,11 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO)
+    # HTTP client INFO logs every outbound URL (including search queries);
+    # keep warnings only so normal runs stay quiet and queries stay out of logs.
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
+    logging.getLogger("httpcore2").setLevel(logging.WARNING)
 
     if args.mode == "cli":
         from asyncio import run
@@ -66,10 +81,7 @@ def main() -> None:
         )
     else:
         print(f"Starting MCP server on {args.host}:{args.port}", file=sys.stderr)
-        mcp.run(
-            transport=args.mode,
-            **({} if args.mode == "stdio" else {"host": args.host, "port": args.port}),
-        )
+        _run_mcp(args.mode, args.host, args.port)
 
 
 if __name__ == "__main__":  # pragma: no cover - module entry guard

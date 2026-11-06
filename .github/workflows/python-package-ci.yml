@@ -1,10 +1,13 @@
 name: CI-CD
 
-on: push
+on: [push, pull_request]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   UV_SYSTEM_PYTHON: 1
@@ -46,7 +49,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev --frozen
       - name: Run pytest
-        run: uv run pytest -v --tb=no -n auto --dist worksteal --cov=torrent_search --cov-report=term-missing --cov-report=markdown-append:$GITHUB_STEP_SUMMARY
+        run: uv run pytest -v --tb=no -n auto --dist worksteal --cov=torrent_search --cov-report=term-missing --cov-report=markdown-append:$GITHUB_STEP_SUMMARY --cov-fail-under=100
 
   build:
     name: Build distribution 📦

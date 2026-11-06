@@ -42,6 +42,10 @@ def test_webui_served_at_root(client: TestClient) -> None:
     assert response.headers["content-type"].startswith("text/html")
     assert "Torrent Search" in response.text
     assert "__TELEGRAM_BOT_HANDLE__" not in response.text
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert "geolocation=()" in response.headers["permissions-policy"]
     # UI affordances shipped with the redesign.
     for marker in (
         "loading-label",
@@ -122,6 +126,7 @@ def test_get_torrent_encoded_unsafe_id_stays_one_segment(monkeypatch: Any) -> No
 def test_get_torrent_returns_magnet(client: TestClient) -> None:
     response = client.get("/torrent/any-id")
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache, no-store"
     assert response.json() == "magnet:?xt=urn:btih:aaaa&dn=x"
 
 
@@ -130,6 +135,12 @@ def test_list_sources_endpoint() -> None:
     response = client.get("/sources")
     assert response.status_code == 200
     assert "thepiratebay.org" in response.json()
+
+
+def test_docs_available_without_gate() -> None:
+    client = TestClient(api_server.app)
+    assert client.get("/docs").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
 
 
 def test_get_popular_torrents(monkeypatch: Any) -> None:
@@ -171,3 +182,58 @@ def test_get_torrent_not_found(monkeypatch: Any) -> None:
     client = TestClient(api_server.app)
     response = client.get("/torrent/any-id")
     assert response.status_code == 404
+
+
+def test_search_rejects_invalid_bounds(client: TestClient) -> None:
+    assert client.post("/torrent/search", params={"query": ""}).status_code == 422
+    assert (
+        client.post(
+            "/torrent/search", params={"query": "show", "max_items": 0}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/torrent/search", params={"query": "show", "per_source": 201}
+        ).status_code
+        == 422
+    )
+    assert client.get("/torrent/popular", params={"per_source": 0}).status_code == 422
+
+
+def test_torrent_endpoints_rate_limited(client: TestClient, monkeypatch: Any) -> None:
+    monkeypatch.setattr(api_server, "_SEARCH_LIMITER", api_server.RateLimiter(0, 60))
+    monkeypatch.setattr(api_server, "_POPULAR_LIMITER", api_server.RateLimiter(0, 60))
+    monkeypatch.setattr(api_server, "_GET_LIMITER", api_server.RateLimiter(0, 60))
+    assert client.post("/torrent/search", params={"query": "show"}).status_code == 429
+    assert client.get("/torrent/popular").status_code == 429
+    assert client.get("/torrent/any-id").status_code == 429
+
+
+def test_lifespan_closes_shared_clients(monkeypatch: Any) -> None:
+    closed: list[str] = []
+
+    class FakeClient:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def aclose(self) -> None:
+            closed.append(self.name)
+
+    async def fake_parser_close() -> None:
+        closed.append("parser")
+
+    monkeypatch.setattr(api_server, "_bot_client", FakeClient("bot"))
+    monkeypatch.setattr(api_server, "_relay_client", FakeClient("relay"))
+    monkeypatch.setattr(api_server, "aclose_client", fake_parser_close)
+
+    async def run() -> None:
+        async with api_server._lifespan(api_server.app):
+            pass
+
+    import asyncio
+
+    asyncio.run(run())
+    assert sorted(closed) == ["bot", "parser", "relay"]
+    assert api_server._bot_client is None
+    assert api_server._relay_client is None

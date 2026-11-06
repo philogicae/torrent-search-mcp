@@ -37,12 +37,8 @@ def reset_parser_state() -> Iterator[None]:
 def reset_popular_cache() -> Iterator[None]:
     """Popular listings are cached per source; keep tests independent."""
     scraper._popular_cache.clear()
-    scraper._popular_refreshing.clear()
     yield
-    for task in scraper._popular_refreshing.values():
-        task.cancel()
     scraper._popular_cache.clear()
-    scraper._popular_refreshing.clear()
 
 
 @pytest.fixture(autouse=True)

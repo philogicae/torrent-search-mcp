@@ -62,14 +62,17 @@ uvx torrent-search-mcp --mode api
 ## Features
 
 - API wrapper for **ThePirateBay**, **1337x**, **Nyaa**, **YTS**, **EZTV**, **FitGirl**, **SubsPlease** and **UIndex**.
+- 1337x searches cover Movies, TV, Games, Apps, Music and Anime categories (popular pages for the same set); TPB search maps the full category tree (video, audio, applications, games, other).
+- Search results are deduplicated across providers by BitTorrent info hash (the healthiest copy wins); short connection-reset retries and an 8 MiB response cap keep flaky sources contained.
+- Search URLs are shareable: `/?q=...` reopens the same search; browser back/forward switches between searches and popular.
 - MCP server interface (FastMCP 4) serving the `2026-07-28` protocol revision over `stdio` or streamable HTTP (`http`), with automatic negotiation of older handshake revisions and legacy transport aliases (`streamable-http`, `sse`).
 - API server interface for alternative HTTP access (e.g., for direct API calls or testing).
 - CLI mode for quick one-off searches directly from the terminal.
-- `popular_torrents` cached for 2 minutes for Web UI delivery (a Web UI POPULAR click passes `refresh=true` to drop the caches and re-scrape every source); searches are never cached (only identical concurrent requests are coalesced) so new results appear immediately.
+- `popular_torrents` cached for 5 minutes for Web UI delivery (a Web UI POPULAR click passes `refresh=true` to drop the caches and re-scrape every source); searches are never cached (only identical concurrent requests are coalesced) so new results appear immediately.
 - In-memory 1-hour, 5000-entry torrent cache used only to resolve magnet links via `get_torrent` without re-scraping.
 - Magnet links are always stored internally; MCP hides them unless `INCLUDE_LINKS=true`.
 - Configurable source filtering via environment variables.
-- Telegram-gated web UI: one-time QR/deep-link pairing, forward-to-Telegram popup and (optional) server-side forwarding.
+- Telegram-gated web UI: one-time QR/deep-link pairing, HttpOnly session cookie (set at approval, survives tab close), forward-to-Telegram popup and (optional) server-side forwarding.
 - Tools:
   - Search for torrents across all available sources.
   - Get the most popular torrents per source (apibay, uindex, 1337x, YTS, nyaa, EZTV).
@@ -79,16 +82,16 @@ uvx torrent-search-mcp --mode api
 
 ## Supported Sources
 
-| Source       | Scraping domain        | Fetch method          |
-| ------------ | ---------------------- | --------------------- |
-| ThePirateBay | `apibay.org`           | JSON API              |
-| 1337x        | `1337x.la` + mirrors   | HTML search/top pages |
-| Nyaa         | `nyaa.si`              | RSS + HTML top page   |
-| YTS          | `yts.mx` + mirrors     | JSON API              |
-| EZTV         | `eztvx.to`             | JSON API              |
-| FitGirl      | `fitgirl-repacks.site` | RSS                   |
-| SubsPlease   | `subsplease.org`       | JSON API              |
-| UIndex       | `uindex.org`           | HTML top list         |
+| Source       | Scraping domain        | Fetch method                         |
+| ------------ | ---------------------- | ------------------------------------ |
+| ThePirateBay | `apibay.org`           | JSON API                             |
+| 1337x        | `1337x.la` + mirrors   | HTML search/top pages (6 categories) |
+| Nyaa         | `nyaa.si`              | RSS + HTML top page                  |
+| YTS          | `yts.mx` + mirrors     | JSON API                             |
+| EZTV         | `eztvx.to`             | JSON API                             |
+| FitGirl      | `fitgirl-repacks.site` | RSS                                  |
+| SubsPlease   | `subsplease.org`       | JSON API                             |
+| UIndex       | `uindex.org`           | HTML top list                        |
 
 The API exposes public display domains where applicable: `apibay.org` is shown as `thepiratebay.org`, and `yts.mx` as `yts.vg`. Results may include a validated HTTP(S) `page_url` linking back to their source page.
 
@@ -108,21 +111,22 @@ Sources can be excluded individually via the [`EXCLUDE_SOURCES`](#configuration-
 
 The application reads configuration from environment variables. The recommended way to set them is by creating a `.env` file in your project's root directory. The application will load it automatically. See `.env.example` for all available options.
 
-| Variable                 | Default                    | Description                                                                                                                                                                                                                                      |
-| ------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `INCLUDE_LINKS`          | `false`                    | When `true`, include magnet links in the MCP `search_torrents` / `popular_torrents` results. Left off by default to greatly reduce token usage.                                                                                                  |
-| `EXCLUDE_SOURCES`        | _(none)_                   | Comma-separated list of sources to exclude from results (e.g. `nyaa.si,1337x.to`).                                                                                                                                                               |
-| `TORRENT_SEARCH_API_URL` | _(none)_                   | MCP only: base URL of a running Torrent Search REST API - tools proxy it instead of scraping locally. Unset = standalone.                                                                                                                        |
-| `TELEGRAM_BOT_HANDLE`    | _(none)_                   | Telegram bot handle used by the Web UI torrent action. Unset = the web UI runs without the pairing gate and Telegram features stay hidden.                                                                                                       |
-| `TORRENT_SEARCH_API_KEY` | _(none)_                   | Secret required to approve Web UI pairing codes (register endpoint + `authorize_webapp` MCP tool). Must match between API and MCP servers. Unset = pairing disabled (no gate).                                                                   |
-| `TELEGRAM_BOT_TOKEN`     | _(none)_                   | Bot token enabling server-side sending via `POST /forward_telegram` (non-agent mode). Unset = that endpoint replies 503 unless agent mode is configured; the Web UI forward popup still works through Telegram draft deep links.                 |
-| `AGENT_RELAY_URL`        | _(none)_                   | Agent relay mode (with `AGENT_RELAY_TOKEN`, required): forward becomes a Confirm/Cancel dialog POSTing `{chat_id, sender, notice, prompt}` to the agent's HTTP relay instead of the Bot API (bots never receive bot-authored Telegram messages). |
-| `AGENT_RELAY_TOKEN`      | _(none)_                   | Agent relay mode: shared secret sent as the `X-Relay-Token` header; must match the agent's `AGENT_RELAY_TOKEN`.                                                                                                                                  |
-| `TELEGRAM_AGENT_NAME`    | _(none)_                   | Agent relay mode: `sender` name passed to the relay (spoofed as the chat identity downstream).                                                                                                                                                   |
-| `TELEGRAM_MSG_FORWARD`   | _(none)_                   | Agent relay mode: `notice` echoed into the chat by the agent before it processes the prompt.                                                                                                                                                     |
-| `PRUNE_MAGNET_LINKS`     | `false`                    | When `true`, magnets sent over every Telegram path (forward popup draft + `/forward_telegram`) are pruned to `magnet:?xt=urn:btih:<hash>&dn=<name>`; copy/magnet buttons keep originals.                                                         |
-| `TELEGRAM_AUTH_FILE`     | `./authorized_tokens.json` | Persistence file for authorized session tokens (SHA-256 hashes only); shared between API and MCP processes via mtime-based reload.                                                                                                               |
-| `WEBUI_URL`              | _(none)_                   | MCP only: public URL of the web UI; enables the `torrent_webapp` tool that presents the app and its pairing flow.                                                                                                                                |
+| Variable                 | Default                    | Description                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INCLUDE_LINKS`          | `false`                    | When `true`, include magnet links in the MCP `search_torrents` / `popular_torrents` results. Left off by default to greatly reduce token usage.                                                                                                                                                                 |
+| `EXCLUDE_SOURCES`        | _(none)_                   | Comma-separated list of sources to exclude from results (e.g. `nyaa.si,1337x.to`).                                                                                                                                                                                                                              |
+| `TORRENT_SEARCH_API_URL` | _(none)_                   | MCP only: base URL of a running Torrent Search REST API - tools proxy it instead of scraping locally. Unset = standalone.                                                                                                                                                                                       |
+| `TELEGRAM_BOT_HANDLE`    | _(none)_                   | Telegram bot handle used by the Web UI torrent action. The pairing gate is enabled only when this **and** `TORRENT_SEARCH_API_KEY` are set; otherwise the web UI runs open and Telegram features stay hidden.                                                                                                   |
+| `TORRENT_SEARCH_API_KEY` | _(none)_                   | Secret required to approve Web UI pairing codes (register endpoint + `authorize_webapp` MCP tool). When set with the bot handle it also gates `/torrent/*` for direct API callers and is sent by the MCP server on every REST call. Must match between API and MCP servers. Unset = pairing disabled (no gate). |
+| `TELEGRAM_BOT_TOKEN`     | _(none)_                   | Bot token enabling server-side sending via `POST /forward_telegram` (non-agent mode). Unset = that endpoint replies 503 unless agent mode is configured; the Web UI forward popup still works through Telegram draft deep links.                                                                                |
+| `AGENT_RELAY_URL`        | _(none)_                   | Agent relay mode (with `AGENT_RELAY_TOKEN`, required): forward becomes a Confirm/Cancel dialog POSTing `{chat_id, sender, notice, prompt}` to the agent's HTTP relay instead of the Bot API (bots never receive bot-authored Telegram messages).                                                                |
+| `AGENT_RELAY_TOKEN`      | _(none)_                   | Agent relay mode: shared secret sent as the `X-Relay-Token` header; must match the agent's `AGENT_RELAY_TOKEN`.                                                                                                                                                                                                 |
+| `TELEGRAM_AGENT_NAME`    | _(none)_                   | Agent relay mode: `sender` name passed to the relay (spoofed as the chat identity downstream).                                                                                                                                                                                                                  |
+| `TELEGRAM_MSG_FORWARD`   | _(none)_                   | Agent relay mode: `notice` echoed into the chat by the agent before it processes the prompt.                                                                                                                                                                                                                    |
+| `PRUNE_MAGNET_LINKS`     | `false`                    | When `true`, magnets sent over every Telegram path (forward popup draft + `/forward_telegram`) are pruned to `magnet:?xt=urn:btih:<hash>&dn=<name>`; copy/magnet buttons keep originals.                                                                                                                        |
+| `TELEGRAM_AUTH_FILE`     | `./authorized_tokens.json` | Persistence file for the API server's authorized session tokens (SHA-256 hashes only). The standalone MCP server proxies the API and does not keep a local copy.                                                                                                                                                |
+| `COOKIE_SECURE`          | auto                       | Force the Web UI session cookie's `Secure` flag (`true`/`false`). By default it is set when the request is HTTPS or `X-Forwarded-Proto: https`.                                                                                                                                                                 |
+| `WEBUI_URL`              | _(none)_                   | MCP only: public URL of the web UI; enables the `torrent_webapp` tool that presents the app and its pairing flow.                                                                                                                                                                                               |
 
 ### Installation
 
@@ -298,20 +302,22 @@ The API server will then be accessible at `http://<host>:<port>`.
 **Available Endpoints:**
 The API server exposes similar functionalities to the MCP server. Key endpoints include:
 
-- `GET /`: Built-in web UI (dark/light) - search, per-site popular tiles, sortable results, source-page links and magnet actions. Telegram sending requires one-time QR pairing when configured.
-- `POST /torrent/search`: Search for torrents. Query params: `query` (required), `max_items` (optional, default `20`; uncapped when `per_source` is set) and `per_source` (optional, keep up to N results per source, ranked by swarm health).
+- `GET /`: Built-in web UI (dark/light) - search, per-site popular tiles, sortable results, source-page links and magnet actions. Searches are shareable via `?q=<query>` (the URL restores the search on load and back/forward navigates between searches and popular). Telegram sending requires one-time QR pairing when configured.
+- `POST /torrent/search`: Search for torrents. Query params: `query` (required, 1-200 chars), `max_items` (optional, default `20`, 1-200; uncapped when `per_source` is set) and `per_source` (optional, 1-200; keep up to N results per source, ranked by swarm health).
 - `GET /sources`: List the available torrent source domains.
-- `GET /torrent/popular`: Get the most popular torrents. Query params: `per_source` (optional, default `20`) and `refresh` (optional, default `false`; `true` drops the server-side caches and fetches a fresh listing from every source - the Web UI POPULAR button does this on each click).
+- `GET /torrent/popular`: Get the most popular torrents. Query params: `per_source` (optional, default `20`, 1-200) and `refresh` (optional, default `false`; `true` drops the server-side caches and fetches a fresh listing from every source - the Web UI POPULAR button does this on each click). The listing is cached for 5 minutes.
 - `GET /torrent/{torrent_id}`: Get the magnet link for a specific torrent by id. Returns the magnet URI as a JSON string.
-- `GET /telegram/session`: Web UI auth state (`enabled`, `authenticated`, public bot `handle`, `prune_magnet_links`). Send the session token as `Authorization: Bearer`.
+- `GET /telegram/session`: Web UI auth state (`enabled`, `authenticated`, public bot `handle`, `prune_magnet_links`). The browser sends the HttpOnly session cookie automatically; a legacy Bearer token is still accepted and migrated to the cookie.
 - `POST /telegram/auth/challenge`: Create a one-time 16-character alphanumeric pairing code (rate-limited). Codes expire after ~5 minutes and are shown as a QR + deep link in the pairing popup.
-- `GET /telegram/auth/poll?code=`: Poll a pairing code; on approval returns the one-time session token for the browser to store.
+- `GET /telegram/auth/poll?code=`: Poll a pairing code; on approval returns the one-time session token **and sets the HttpOnly `torrent_session` cookie** (30 days, `SameSite=Lax`). The cookie is set before the JS continues, so closing the tab immediately does not lose the session.
 - `DELETE /telegram/auth/challenge/{code}`: Cancel a pending pairing code.
 - `POST /telegram/auth/register`: Approve a pairing code bound to a Telegram `chat_id`. Requires `Authorization: Bearer $TORRENT_SEARCH_API_KEY`.
-- `POST /telegram/auth/logout`: Revoke the presented session token.
-- `POST /forward_telegram`: Send torrent info to the Telegram chat bound to the presented session token; server-to-server callers may instead use `Authorization: Bearer $TORRENT_SEARCH_API_KEY` with the target `chat_id` query param. JSON body: `filename` (required), `magnet_link` (required), optional `size`, `seeders`. When `PRUNE_MAGNET_LINKS=true` the forwarded magnet is pruned; requires `TELEGRAM_BOT_TOKEN`, otherwise 503.
+- `POST /telegram/auth/logout`: Revoke the presented session token and clear the session cookie.
+- `POST /forward_telegram`: Send torrent info to the Telegram chat bound to the presented session cookie/token; server-to-server callers may instead use `Authorization: Bearer $TORRENT_SEARCH_API_KEY` with the target `chat_id` query param. JSON body: `filename` (required), `magnet_link` (required), optional `size`, `seeders`. When `PRUNE_MAGNET_LINKS=true` the forwarded magnet is pruned; requires `TELEGRAM_BOT_TOKEN`, otherwise 503.
 - `/docs`: Interactive API documentation (Swagger UI).
 - `/redoc`: Alternative API documentation (ReDoc).
+
+When `TELEGRAM_BOT_HANDLE` and `TORRENT_SEARCH_API_KEY` are both configured, `/torrent/*` requires either a valid browser session (HttpOnly cookie, or a legacy Bearer token) or the API key (`Authorization: Bearer $TORRENT_SEARCH_API_KEY`); search/popular/magnet lookups are also rate-limited per client IP. Swagger/ReDoc/OpenAPI require the same authentication while the gate is active.
 
 Environment variables are configured the same way as for the MCP server (via an `.env` file in the project root).
 

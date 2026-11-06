@@ -113,7 +113,7 @@ async def test_search_lowercases_query_before_scraping(monkeypatch: Any) -> None
 
     monkeypatch.setattr(ac, "search_torrents", fake_search)
     api = ac.TorrentSearchApi()
-    torrents = await api.search_torrents("MiXeD CaSe")
+    torrents = await api.search_torrents("  MiXeD \t CaSe  ")
     assert seen == ["mixed case"]
     # Ids embed the normalized query, so get_torrent re-searches stay lowercase.
     query, _, _, _ = Torrent.extract_info(torrents[0].id)
@@ -192,6 +192,46 @@ async def test_get_torrent_researches_when_missing(monkeypatch: Any) -> None:
     torrent_id = torrents[0].id
     api.CACHE.cache.clear()
     assert await api.get_torrent(torrent_id) == torrents[0].magnet_link
+
+
+@pytest.mark.asyncio
+async def test_search_dedupes_same_info_hash_across_sources(
+    monkeypatch: Any,
+) -> None:
+    async def fake_search(
+        query: str, sources: list[str] | None = None
+    ) -> list[Torrent]:
+        return [
+            _torrent(5, f"magnet:?xt=urn:btih:{'a' * 40}&dn=low", source="nyaa.si"),
+            _torrent(50, f"magnet:?xt=urn:btih:{'a' * 40}&dn=high", source="yts.mx"),
+        ]
+
+    monkeypatch.setattr(ac, "search_torrents", fake_search)
+    api = ac.TorrentSearchApi()
+    torrents = await api.search_torrents("dedupe query")
+    assert len(torrents) == 1
+    assert torrents[0].source == "yts.vg"
+    assert torrents[0].seeders == 50
+
+
+@pytest.mark.asyncio
+async def test_get_torrent_researches_uncapped_for_per_source_search(
+    monkeypatch: Any,
+) -> None:
+    seen: list[int | None] = []
+    api = ac.TorrentSearchApi()
+    torrent = _torrent(5, f"magnet:?xt=urn:btih:{'a' * 40}&dn=1")
+    torrent.prepend_info("spread query", 0)
+
+    async def fake_search(
+        query: str, max_items: int | None = 20, per_source: int | None = None
+    ) -> list[Torrent]:
+        seen.append(max_items)
+        return [torrent]
+
+    monkeypatch.setattr(api, "search_torrents", fake_search)
+    assert await api.get_torrent(torrent.id) == torrent.magnet_link
+    assert seen == [None]
 
 
 @pytest.mark.asyncio
@@ -306,7 +346,7 @@ async def test_popular_torrents_refresh_bypasses_cached_listing(
     monkeypatch.setattr(ac, "scrape_popular_torrents", fake_popular)
     api = ac.TorrentSearchApi()
     await api.popular_torrents(per_source=2)
-    await api.popular_torrents(per_source=2)  # served by the 2-minute cache
+    await api.popular_torrents(per_source=2)  # served by the 5-minute cache
     assert refreshes == [False]
 
     await api.popular_torrents(per_source=2, refresh=True)  # forces a scrape

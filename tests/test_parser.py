@@ -78,6 +78,16 @@ def test_get_client_reuses_instance() -> None:
 
 
 @pytest.mark.asyncio
+async def test_aclose_client_closes_and_resets() -> None:
+    parser._client = None
+    client = parser._get_client()
+    await parser.aclose_client()
+    assert parser._client is None
+    assert client.is_closed
+    await parser.aclose_client()  # idempotent when nothing is open
+
+
+@pytest.mark.asyncio
 async def test_get_text_and_get_json(monkeypatch: Any) -> None:
     class FakeResponse:
         def raise_for_status(self) -> None:
@@ -95,11 +105,83 @@ async def test_get_text_and_get_json(monkeypatch: Any) -> None:
     assert await parser._get_json("http://x") == {"ok": 1}
 
 
+@pytest.mark.asyncio
+async def test_get_text_retries_transport_errors(monkeypatch: Any) -> None:
+    calls: list[str] = []
+
+    class FakeResponse:
+        text = "ok"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    async def flaky(url: str, params: dict[str, str] | None = None) -> FakeResponse:
+        calls.append(url)
+        if len(calls) == 1:
+            raise httpx2.ConnectError("reset")
+        return FakeResponse()
+
+    monkeypatch.setattr(parser, "_get_client", lambda: SimpleNamespace(get=flaky))
+    monkeypatch.setattr(parser, "RETRY_DELAY", 0)
+    assert await parser._get_text("http://x") == "ok"
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_text_surfaces_last_transport_error(monkeypatch: Any) -> None:
+    calls: list[str] = []
+
+    async def always_down(url: str, params: dict[str, str] | None = None) -> Any:
+        calls.append(url)
+        raise httpx2.ConnectError("down")
+
+    monkeypatch.setattr(parser, "_get_client", lambda: SimpleNamespace(get=always_down))
+    monkeypatch.setattr(parser, "RETRY_DELAY", 0)
+    with pytest.raises(httpx2.ConnectError):
+        await parser._get_text("http://x")
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_text_does_not_retry_read_timeouts(monkeypatch: Any) -> None:
+    calls: list[str] = []
+
+    async def timeout(url: str, params: dict[str, str] | None = None) -> Any:
+        calls.append(url)
+        raise httpx2.ReadTimeout("slow")
+
+    monkeypatch.setattr(parser, "_get_client", lambda: SimpleNamespace(get=timeout))
+    with pytest.raises(httpx2.ReadTimeout):
+        await parser._get_text("http://x")
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_text_rejects_oversized_response(monkeypatch: Any) -> None:
+    class HugeResponse:
+        text = "x"
+
+        def __init__(self) -> None:
+            self.content = b"x" * (parser.MAX_RESPONSE_BYTES + 1)
+
+        def raise_for_status(self) -> None:
+            return None
+
+    async def huge(url: str, params: dict[str, str] | None = None) -> HugeResponse:
+        return HugeResponse()
+
+    monkeypatch.setattr(parser, "_get_client", lambda: SimpleNamespace(get=huge))
+    with pytest.raises(ValueError, match="too large"):
+        await parser._get_text("http://x")
+
+
 def test_build_magnet() -> None:
     magnet = parser.build_magnet("a" * 40, "My Torrent & File")
     assert magnet.startswith(f"magnet:?xt=urn:btih:{'a' * 40}&dn=")
     assert "My%20Torrent%20%26%20File" in magnet
     assert "tracker.opentrackr.org" in magnet
+    assert parser.build_magnet("not-a-hash", "x") == ""
+    assert parser.build_magnet("", "x") == ""
 
 
 def test_human_size() -> None:
@@ -126,6 +208,9 @@ def test_fmt_date() -> None:
     )
     assert parser.fmt_date("2026-01-01") == "2026-01-01"
     assert parser.fmt_date("garbage") == "N/A"
+    assert parser.fmt_date(10**20) == "N/A"  # out-of-range timestamp
+    assert parser.fmt_date(float("nan")) == "N/A"
+    assert parser.fmt_date(float("inf")) == "N/A"
 
 
 def test_rss_field_handles_cdata_and_case() -> None:
@@ -143,6 +228,36 @@ def test_row_sanitizes_semicolons() -> None:
     assert row[3] == "1"
     assert row[4] == "2"
     assert row[8] == ""
+
+
+def test_row_flattens_newlines_and_protects_url_fields() -> None:
+    row = parser._row(
+        "Line\nBreak",
+        "Cat\tegory",
+        "1\nGB",
+        True,
+        "1,234",
+        "5\n0",
+        None,
+        "magnet:?xt=urn:btih:" + "a" * 40 + "&dn=x;y",
+        "https://example.com/a\nb;c",
+    )
+    assert row[0] == "Line Break"
+    assert row[1] == "Cat egory"
+    assert row[2] == "1 GB"
+    assert row[3] == "1"
+    assert row[4] == "1234"
+    assert row[5] == "5 0"
+    assert row[7].endswith("%3By")
+    assert row[8] == "https://example.com/ab%3Bc"
+
+
+def test_url_helpers_and_query_matching() -> None:
+    assert parser._csv_url("https://x/a;b\nc") == "https://x/a%3Bbc"
+    assert parser._query_tokens("The Matrix 4K") == ["the", "matrix", "4k"]
+    assert parser._matches_query("The.Matrix.1999", "the matrix")
+    assert not parser._matches_query("Other Movie", "matrix")
+    assert parser._matches_query("Anything", "a")  # 1-char tokens are noise
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +315,8 @@ def test_extract_torrents_from_csv_text() -> None:
         "SOURCE -> apibay.org\n"
         + parser.CSV_HEADER
         + "\n"
-        + "Sample Show S01 1080p;Video - Movies;1.2 GB;10;5;100;2026-01-01;magnet:?xt=urn:btih:abcdef&dn=x;\n"
-        + "Sample Series S01 720p;Video - TV shows;800 MB;3;1;50;2025-06-01;magnet:?xt=urn:btih:fedcba&dn=y;"
+        + "Sample Show S01 1080p;Video - Movies;1.2 GB;10;5;100;2026-01-01;magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=x;\n"
+        + "Sample Series S01 720p;Video - TV shows;800 MB;3;1;50;2025-06-01;magnet:?xt=urn:btih:ffffffffffffffffffffffffffffffffffffffff&dn=y;"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 2
@@ -209,7 +324,14 @@ def test_extract_torrents_from_csv_text() -> None:
     assert torrents[0].source == "apibay.org"
     assert torrents[0].seeders == 10
     assert torrents[0].date == "2026-01-01"
-    assert torrents[0].magnet_link == "magnet:?xt=urn:btih:abcdef&dn=x"
+    assert (
+        torrents[0].magnet_link
+        == "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=x"
+    )
+
+
+def test_extract_torrents_skips_text_without_source_header() -> None:
+    assert parser.extract_torrents(["", "junk", "SOURCE -> nyaa.si\n"]) == []
 
 
 def test_extract_torrents_skips_no_results() -> None:
@@ -227,7 +349,7 @@ def test_extract_torrents_keeps_rows_mentioning_no_results() -> None:
     text = (
         "SOURCE -> nyaa.si\n"
         f"{parser.CSV_HEADER}\n"
-        "Movie - No results found here;Anime;1 GB;5;1;0;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x"
+        "Movie - No results found here;Anime;1 GB;5;1;0;2026-01-01;magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=x"
     )
     torrents = parser.extract_torrents([text])
     assert [t.filename for t in torrents] == ["Movie - No results found here"]
@@ -237,23 +359,23 @@ def test_extract_torrents_trims_trailing_empty_values() -> None:
     text = (
         "SOURCE -> nyaa.si\n"
         f"{parser.CSV_HEADER}\n"
-        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x;;"
+        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=x;;"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 1
     assert torrents[0].filename == "Name"
 
 
-def test_extract_torrents_skips_malformed_rows() -> None:
+def test_extract_torrents_coerces_bad_counters_to_zero() -> None:
     text = (
         "SOURCE -> nyaa.si\n"
         f"{parser.CSV_HEADER}\n"
-        "Good;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x\n"
-        "Bad;Anime;1 GB;not-a-number;1;50;2026-01-01;magnet:?xt=urn:btih:bbb&dn=x"
+        "Good;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=x\n"
+        "Bad;Anime;1 GB;not-a-number;1;50;2026-01-01;magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&dn=x"
     )
     torrents = parser.extract_torrents([text])
-    assert len(torrents) == 1
-    assert torrents[0].filename == "Good"
+    assert [t.filename for t in torrents] == ["Good", "Bad"]
+    assert torrents[1].seeders == 0
 
 
 def test_extract_torrents_merges_filename_overflow() -> None:
@@ -262,12 +384,15 @@ def test_extract_torrents_merges_filename_overflow() -> None:
     text = (
         "SOURCE -> nyaa.si\n"
         f"{parser.CSV_HEADER}\n"
-        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaa&dn=x;;extra"
+        "Name;Anime;1 GB;2;1;50;2026-01-01;magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=x;;extra"
     )
     torrents = parser.extract_torrents([text])
     assert len(torrents) == 1
     assert torrents[0].filename == "Name"
-    assert torrents[0].magnet_link == "magnet:?xt=urn:btih:aaa&dn=x"
+    assert (
+        torrents[0].magnet_link
+        == "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=x"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +445,26 @@ def test_yts_rows() -> None:
     assert rows[0][8] == ""
 
 
+def test_yts_rows_skips_malformed_payloads() -> None:
+    assert parser.yts_rows({"data": None}) == []
+    rows = parser.yts_rows(
+        {
+            "data": {
+                "movies": [
+                    "junk",
+                    {"title": "No Torrents", "torrents": ["junk", {"quality": "720p"}]},
+                    {
+                        "title": "Good",
+                        "torrents": [{"hash": "a" * 40, "quality": "1080p"}],
+                    },
+                ]
+            }
+        }
+    )
+    assert len(rows) == 1
+    assert rows[0][0] == "Good [1080p]"
+
+
 @pytest.mark.asyncio
 async def test_yts_parse(monkeypatch: Any) -> None:
     payload = json.dumps(
@@ -351,33 +496,47 @@ async def test_yts_parse(monkeypatch: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_yts_parse_browse_sets_sort_by(monkeypatch: Any) -> None:
-    seen: dict[str, Any] = {}
+    seen: list[dict[str, str]] = []
 
     async def spy(
         hosts: list[str], path: str, params: dict[str, str] | None = None
     ) -> str:
-        seen["params"] = params
+        seen.append(params or {})
         return '{"data": {"movies": []}}'
 
     monkeypatch.setattr(parser, "_get_first", spy)
     assert await parser.yts_parse("") == "No results"
-    assert seen["params"] == {"limit": "50", "sort_by": "date_added"}
+    assert [p["sort_by"] for p in seen] == ["date_added", "date_added"]
+    assert [p["page"] for p in seen] == ["1", "2"]
 
 
 @pytest.mark.asyncio
 async def test_popular_yts_uses_download_count_sort(monkeypatch: Any) -> None:
     """YTS ignores seeds/peers sorts; download_count is the popular one."""
-    seen: dict[str, Any] = {}
+    seen: list[dict[str, str]] = []
 
     async def spy(
         hosts: list[str], path: str, params: dict[str, str] | None = None
     ) -> str:
-        seen["params"] = params
+        seen.append(params or {})
         return '{"data": {"movies": []}}'
 
     monkeypatch.setattr(parser, "_get_first", spy)
     assert await parser.POPULAR_SOURCES["yts.mx"](5) == "No results"
-    assert seen["params"] == {"limit": "50", "sort_by": "download_count"}
+    assert all(p["sort_by"] == "download_count" for p in seen)
+
+
+@pytest.mark.asyncio
+async def test_yts_parse_skips_malformed_pages(monkeypatch: Any) -> None:
+    async def spy(
+        hosts: list[str], path: str, params: dict[str, str] | None = None
+    ) -> Any:
+        if params and params.get("page") == "1":
+            return ["not a dict"]
+        return {"data": None}
+
+    monkeypatch.setattr(parser, "_get_first", spy)
+    assert await parser.yts_parse("show") == "No results"
 
 
 # ---------------------------------------------------------------------------
@@ -386,7 +545,7 @@ async def test_popular_yts_uses_download_count_sort(monkeypatch: Any) -> None:
 
 
 def test_apibay_rows() -> None:
-    items: list[dict[str, Any]] = [
+    items: list[Any] = [
         {
             "id": "1",
             "info_hash": "d" * 40,
@@ -448,15 +607,38 @@ def test_apibay_rows() -> None:
             "leechers": "0",
             "added": "0",
         },
+        {
+            "id": "5",
+            "info_hash": "a" * 40,
+            "name": "Album",
+            "category": "101",
+            "size": "1000",
+            "seeders": "1",
+            "leechers": "0",
+            "added": "0",
+        },
+        {
+            "id": "6",
+            "info_hash": "9" * 40,
+            "name": "Game",
+            "category": 400,
+            "size": "1000",
+            "seeders": "1",
+            "leechers": "0",
+            "added": "0",
+        },
+        "junk",  # type: ignore[list-item]
     ]
     rows = parser.apibay_rows(items)
-    assert len(rows) == 3
+    assert len(rows) == 5
     assert rows[0][1] == "Video - TV shows"
     assert rows[0][3] == "100"
     assert rows[0][8] == "https://thepiratebay.org/description.php?id=1"
-    assert rows[1][1] == "Video"
+    assert rows[1][1] == "Other"
     assert rows[2][1] == "Video - TV shows HD"
     assert rows[2][8] == "https://thepiratebay.org/description.php?id=4"
+    assert rows[3][1] == "Audio - Music"
+    assert rows[4][1] == "Games"
 
 
 def test_apibay_rows_omits_page_url_without_id() -> None:
@@ -534,7 +716,7 @@ async def test_apibay_parse_browse_merges_top100(monkeypatch: Any) -> None:
             return json.loads(movies)
         if "208" in url:
             return json.loads(tv)
-        return json.loads(movies)
+        return []
 
     monkeypatch.setattr(parser, "_get_json", fake_json)
     out = await parser.apibay_parse("")
@@ -564,12 +746,19 @@ def test_eztv_rows() -> None:
                 "date_released_unix": 1614202551,
             },
             {"hash": "", "filename": "no hash"},
+            {
+                "hash": "a" * 40,
+                "filename": "bad magnet",
+                "magnet_url": "javascript:alert(1)",
+            },
+            "junk",
         ]
     }
     rows = parser.eztv_rows(data)
-    assert len(rows) == 1
+    assert len(rows) == 2
     assert rows[0][7] == f"magnet:?xt=urn:btih:{'f' * 40}&dn=provided"
     assert rows[0][1] == "Video - TV shows"
+    assert rows[1][7].startswith(f"magnet:?xt=urn:btih:{'a' * 40}")
 
 
 @pytest.mark.asyncio
@@ -579,9 +768,13 @@ async def test_eztv_parse_filters_client_side(monkeypatch: Any) -> None:
             {
                 "hash": "f" * 40,
                 "filename": "Show S01E01 1080p",
-                "magnet_url": MAGNET_40,
+                "magnet_url": f"magnet:?xt=urn:btih:{'f' * 40}&dn=show",
             },
-            {"hash": "e" * 40, "filename": "Other Show 720p", "magnet_url": MAGNET_40},
+            {
+                "hash": "e" * 40,
+                "filename": "Other Show 720p",
+                "magnet_url": f"magnet:?xt=urn:btih:{'e' * 40}&dn=other",
+            },
         ]
     }
     monkeypatch.setattr(parser, "_get_json", _fake(payload))
@@ -595,6 +788,26 @@ async def test_eztv_parse_filters_client_side(monkeypatch: Any) -> None:
     assert torrents[0].filename == "Other Show 720p"
 
     assert await parser.eztv_parse("sample show") == "No results"
+
+
+@pytest.mark.asyncio
+async def test_eztv_parse_skips_failed_pages(monkeypatch: Any) -> None:
+    payload = {
+        "torrents": [
+            {"hash": "f" * 40, "filename": "Show S01E01", "magnet_url": MAGNET_40}
+        ]
+    }
+    calls = iter([RuntimeError("down"), payload])
+
+    async def flaky(url: str, params: dict[str, str] | None = None) -> Any:
+        value = next(calls)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    monkeypatch.setattr(parser, "_get_json", flaky)
+    out = await parser.eztv_parse("show")
+    assert len(_extract("eztvx.to", out)) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -638,6 +851,7 @@ def test_uindex_date_converts_relative_ages(monkeypatch: Any) -> None:
     assert parser._uindex_date("2 hours ago") == expected.strftime("%Y-%m-%d")
     assert len(parser._uindex_date("3 weeks ago")) == 10
     assert parser._uindex_date("2026-01-01") == "2026-01-01"
+    assert parser._uindex_date("9" * 400 + " years ago") == "N/A"
 
 
 @pytest.mark.asyncio
@@ -695,6 +909,21 @@ async def test_fitgirl_parse_search_and_browse_urls(monkeypatch: Any) -> None:
     assert seen[1].endswith("/feed/")
 
 
+@pytest.mark.asyncio
+async def test_fitgirl_parse_filters_irrelevant_search_results(
+    monkeypatch: Any,
+) -> None:
+    xml = f"""<rss><channel>
+    <item><title>Matrix Game</title><description><a href="magnet:?xt=urn:btih:{"a" * 40}&amp;dn=x">m</a></description></item>
+    <item><title>Unrelated Game</title><description><a href="magnet:?xt=urn:btih:{"b" * 40}&amp;dn=x">m</a></description></item>
+    </channel></rss>"""
+    monkeypatch.setattr(parser, "_get_text", _fake(xml))
+    out = await parser.fitgirl_parse("matrix")
+    assert [t.filename for t in _extract("fitgirl-repacks.site", out)] == [
+        "Matrix Game"
+    ]
+
+
 # ---------------------------------------------------------------------------
 # SubsPlease
 # ---------------------------------------------------------------------------
@@ -719,6 +948,11 @@ def test_subsplease_rows() -> None:
             ],
         },
         "Broken": {"show": "Broken", "downloads": [{"res": "480"}]},
+        "NotADict": "junk",
+        "BadMagnet": {
+            "show": "Bad",
+            "downloads": [{"res": "720", "magnet": 123}],
+        },
     }
     rows = parser.subsplease_rows(data)
     assert len(rows) == 1
@@ -726,6 +960,20 @@ def test_subsplease_rows() -> None:
     assert rows[0][2] == "1.4 GiB"
     assert rows[0][6] == "2026-08-09T16:03:43+00:00"
     assert rows[0][8] == "https://subsplease.org/shows/show/"
+
+
+def test_subsplease_accepts_base32_magnets() -> None:
+    data = {
+        "Show - 1": {
+            "show": "Show",
+            "episode": "1",
+            "downloads": [{"res": "1080", "magnet": "magnet:?xt=urn:btih:" + "A" * 32}],
+        }
+    }
+    torrents = _extract("subsplease.org", parser._format(parser.subsplease_rows(data)))
+    assert len(torrents) == 1
+    assert torrents[0].magnet_link is not None
+    assert "urn:btih:" + "A" * 32 in torrents[0].magnet_link
 
 
 def test_pick_download_falls_back() -> None:
@@ -814,7 +1062,7 @@ async def test_nyaa_popular_parses_html_table(monkeypatch: Any) -> None:
         '<tr><td><a href="/?c=1_2">cat</a></td>'
         '<td colspan="2"><a href="/view/123" title="Show S01E01">x</a></td>'
         '<td class="text-center"><a href="/download/123.torrent">dl</a>'
-        '<a href="magnet:?xt=urn:btih:{hash}&amp;dn=x">m</a></td>'
+        f'<a href="magnet:?xt=urn:btih:{MAGNET_40[20:]}&amp;dn=x">m</a></td>'
         '<td class="text-center">1.5 GiB</td>'
         '<td class="text-center" data-timestamp="1787497286">2026-08-23 15:01</td>'
         '<td class="text-center">3,442</td>'
@@ -833,6 +1081,7 @@ async def test_nyaa_popular_parses_html_table(monkeypatch: Any) -> None:
     torrents = _extract("nyaa.si", out)
     assert len(torrents) == 2
     assert torrents[0].filename == "Show S01E01"
+    assert torrents[0].category == "cat"
     assert torrents[0].size == "1.5 GiB"
     assert torrents[0].seeders == 3442
     assert torrents[0].leechers == 91
@@ -842,6 +1091,22 @@ async def test_nyaa_popular_parses_html_table(monkeypatch: Any) -> None:
     assert torrents[0].magnet_link
     assert seen["url"] == parser.NYAA_POPULAR_URL
     assert seen["params"] == parser.NYAA_POPULAR_PARAMS
+
+
+def test_nyaa_html_rows_reads_category_title_attribute() -> None:
+    tr = (
+        '<tr><td><a href="/?c=1_2" title="Anime - English-translated">'
+        '<img src="x" alt="Anime"></a></td>'
+        '<td colspan="2"><a href="/view/1" title="Show">x</a>'
+        f'<a href="magnet:?xt=urn:btih:{"a" * 40}&amp;dn=x">m</a></td>'
+        + "".join(
+            f'<td class="text-center">{c}</td>'
+            for c in ("dl", "1 GB", "2026-01-01", "5", "1", "10")
+        )
+        + "</tr>"
+    )
+    rows = parser.nyaa_html_rows(f"<table>{tr}</table>")
+    assert rows[0][1] == "Anime - English-translated"
 
 
 def test_nyaa_html_rows_skips_malformed_cells() -> None:
@@ -910,7 +1175,7 @@ def test_x1337_upload_date() -> None:
 async def test_x1337_fetch_and_detail(monkeypatch: Any) -> None:
     async def flaky(url: str, params: dict[str, str] | None = None) -> str:
         if "good" in url:
-            return f'<a href="magnet:?xt=urn:btih:{MAGNET_40[21:]}" />'
+            return f'<a href="magnet:?xt=urn:btih:{MAGNET_40[20:]}" />'
         if "nomagnet" in url:
             return "<html><p>no magnet here</p></html>"
         raise httpx2.ConnectError("down")

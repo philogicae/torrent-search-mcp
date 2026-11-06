@@ -39,6 +39,47 @@ def test_format_missing_magnet_uses_none_id() -> None:
     assert t.id == "nyaa.si-none"
 
 
+def test_format_rejects_unsafe_magnet_links() -> None:
+    for bad in (
+        "javascript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "magnet:?dn=no-hash",
+        "magnet:?xt=urn:btih:not-a-hash",
+        "https://example.com/x.torrent",
+    ):
+        t = _format(magnet_link=bad)
+        assert t.magnet_link is None
+        assert t.id == "nyaa.si-none"
+
+
+def test_format_accepts_valid_magnet_variants() -> None:
+    assert _format(magnet_link=MAGNET).magnet_link == MAGNET
+    magnet = f"magnet:?dn=x&xt=urn:btih:{'b' * 40}&tr=udp%3A%2F%2Ft"
+    assert _format(magnet_link=magnet).magnet_link == magnet
+    assert _format(magnet_link=magnet).info_hash == "b" * 40
+    base32 = "magnet:?xt=urn:btih:" + "A" * 32 + "&dn=x"
+    assert _format(magnet_link=base32).magnet_link == base32
+
+
+def test_info_hash_property() -> None:
+    assert _format().info_hash == "a" * 40
+    assert _format(magnet_link=None).info_hash is None
+    assert _format(magnet_link="javascript:alert(1)").info_hash is None
+    assert _format(magnet_link="magnet:?dn=x").info_hash is None
+    base32 = _format(magnet_link="magnet:?xt=urn:btih:" + "A" * 32)
+    assert base32.info_hash == "a" * 32
+
+
+def test_format_collapses_whitespace_in_filenames() -> None:
+    assert _format(filename="  Show\n\tS01E01  ").filename == "Show S01E01"
+
+
+def test_format_bool_counters() -> None:
+    assert _format(seeders=True, leechers=False).seeders == 1
+    assert _format(seeders=float("nan"), leechers=float("inf")).seeders == 0
+    assert _format(seeders=float("nan"), leechers=float("inf")).leechers == 0
+
+
 def test_format_normalizes_page_url() -> None:
     assert _format(page_url="").page_url is None
     assert _format(page_url="javascript:alert(1)").page_url is None
@@ -81,6 +122,13 @@ def test_prepend_and_extract_info() -> None:
     )
 
 
+def test_extract_info_keeps_hyphenated_source() -> None:
+    t = _format(source="fitgirl-repacks.site")
+    t.prepend_info("sample game", 0)
+    query, max_items, source, _ = Torrent.extract_info(t.id)
+    assert (query, max_items, source) == ("sample game", 0, "fitgirl-repacks.site")
+
+
 def test_extract_info_roundtrip_with_compress62() -> None:
     t = _format()
     t.prepend_info("héllo", 25)
@@ -110,6 +158,16 @@ def test_cache_update_get_refresh_and_clean() -> None:
     cache.cache[first.id].timestamp = expired
     cache.clean()
     assert cache.get(first.id) is None
+
+
+def test_cache_get_rejects_and_drops_expired_entry() -> None:
+    """A direct get must not resurrect an expired entry by refreshing it."""
+    cache = Cache(ttl=60)
+    first = _format()
+    cache.update([first])
+    cache.cache[first.id].timestamp = int(time()) - 100
+    assert cache.get(first.id) is None
+    assert first.id not in cache.cache
 
 
 def test_cache_enforces_max_size() -> None:

@@ -1,6 +1,6 @@
 [project]
 name = "torrent-search-mcp"
-version = "4.6.1"
+version = "4.6.2"
 description = "Torrent Search MCP Server"
 authors = [{ name = "philogicae" }]
 requires-python = ">=3.10,<4.0"
@@ -11,8 +11,11 @@ dependencies = [
     "fastmcp",
     "fastapi",
     "httpx2",
+    "pydantic",
     "pybase62",
-    "minify-html"
+    "minify-html",
+    "python-dotenv",
+    "uvicorn",
 ]
 
 [project.urls]

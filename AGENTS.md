@@ -33,8 +33,10 @@ Torrent search MCP server - a Python-based torrent search service with MCP (Mode
 ## Security considerations
 
 - Scraped text is written by anonymous uploaders, so MCP output goes through `_wrap_untrusted()`: a per-response nonce fence plus a data-not-instructions notice. Any new tool returning scraped text must use it, and copies of the tag name inside the body must stay defanged.
-- `/forward_telegram` is Bearer-session gated and rate-limited per chat (20/min); the Telegram bot token never leaves server config.
-- Auth store bounds: sessions older than 30 days are purged at load only (an active session stays valid until logout or a later startup purge); pairing codes are 16-character alphanumeric, capacity-capped (50) and TTL-bounded (5 min) - accepted trade-off.
+- Magnet links are validated (btih hex or base32) before they reach the UI or Telegram; page links are limited to absolute HTTP(S). The Web UI applies a second safe-URL check before rendering links.
+- When `TELEGRAM_BOT_HANDLE` and `TORRENT_SEARCH_API_KEY` are set, `/torrent/*` is gated by a browser session (HttpOnly `torrent_session` cookie; legacy Bearer tokens are migrated) or the API key and rate-limited per IP; the MCP server sends the API key on every REST call. `/docs`, `/redoc`, `/openapi.json` require the same session/key while the gate is active.
+- `/forward_telegram` is session-gated (HttpOnly cookie or Bearer) and rate-limited per chat (20/min); the Telegram bot token never leaves server config.
+- Auth store bounds: sessions older than 30 days are purged at load only (an active session stays valid until logout or a later startup purge); at most 20 sessions per chat and 1000 total are kept (oldest revoked); pairing codes are 16-character alphanumeric, capacity-capped (50) and TTL-bounded (5 min) - accepted trade-off.
 - Scraped source-page links are retained only when they are absolute HTTP(S) URLs.
 
 ## Conventions & constraints

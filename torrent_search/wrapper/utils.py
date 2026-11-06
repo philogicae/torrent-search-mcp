@@ -1,7 +1,15 @@
+import re
 import zlib
 from urllib.parse import parse_qs, quote, unquote
 
 import base62
+
+# Torrent ids embed a zlib-compressed query. A crafted id could otherwise be a
+# decompression bomb, so decompression is capped to the longest query we accept
+# anywhere in the stack (API, MCP and ids).
+MAX_QUERY_BYTES = 4096
+
+_BTIH = re.compile(r"urn:btih:(?:[0-9a-fA-F]{40}|[A-Za-z2-7]{32})\Z", re.IGNORECASE)
 
 
 def prune_magnet(magnet: str, display_name: str | None = None) -> str:
@@ -9,18 +17,28 @@ def prune_magnet(magnet: str, display_name: str | None = None) -> str:
 
     All ``&tr=`` trackers (and any other parameters) are stripped. The display
     name defaults to the decoded original ``dn``; passing ``display_name``
-    overrides it. Returns the input unchanged when no btih info hash exists.
+    overrides it. Returns the input unchanged when no valid btih info hash
+    exists. The info hash is validated so a crafted ``xt`` value cannot smuggle
+    extra magnet parameters (e.g. a tracker) through percent-decoding.
     """
-    if not magnet.startswith("magnet:?"):
+    if not magnet.lower().startswith("magnet:?"):
         return magnet
     params = parse_qs(magnet[len("magnet:?") :], keep_blank_values=True)
     xt = next(
-        (v[0] for k, v in params.items() if k.lower() == "xt" and "urn:btih:" in v[0]),
+        (
+            values[0]
+            for key, values in params.items()
+            if key.lower() == "xt" and _BTIH.fullmatch(values[0])
+        ),
         None,
     )
     if xt is None:
         return magnet
-    name = display_name or unquote(params.get("dn", [""])[0])
+    dn = next(
+        (values[0] for key, values in params.items() if key.lower() == "dn"),
+        "",
+    )
+    name = display_name or unquote(dn)
     return f"magnet:?xt={xt}&dn={quote(name)}"
 
 
@@ -31,4 +49,10 @@ class Compress62:
 
     @staticmethod
     def decompress(compressed: str) -> str:
-        return zlib.decompress(base62.decodebytes(compressed)).decode()
+        payload = base62.decodebytes(compressed)
+        inflater = zlib.decompressobj()
+        data = inflater.decompress(payload, MAX_QUERY_BYTES + 1)
+        if len(data) > MAX_QUERY_BYTES or inflater.unconsumed_tail:
+            raise ValueError("compressed query exceeds the size limit")
+        data += inflater.flush()
+        return data.decode()

@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Torrent Search</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>" />
-    <script data-key="oat.min.js" data-src="https://unpkg.com/@knadh/oat/oat.min.js" defer></script>
-    <link rel="stylesheet" data-key="oat.min.css" data-src="https://unpkg.com/@knadh/oat/oat.min.css" />
-    <script data-key="qrcode.min.js" data-src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js" defer></script>
+    <script data-key="oat.min.js" data-src="https://unpkg.com/@knadh/oat@1.1.0/oat.min.js" defer></script>
+    <link rel="stylesheet" data-key="oat.min.css" data-src="https://unpkg.com/@knadh/oat@1.1.0/oat.min.css" />
+    <script data-key="qrcode.js" data-src="https://unpkg.com/qrcode-generator@2.0.4/dist/qrcode.js" defer></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -116,6 +116,17 @@
       button,
       input {
         font-family: inherit;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      th[data-sort]:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      #query:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
       }
       /* Thin, mobile-like scrollbars everywhere (incl. WebKit) */
       * {
@@ -554,7 +565,7 @@
         color: var(--text-3);
       }
       col.c-link {
-        width: 2.2rem;
+        width: 3.5rem;
       }
       col.c-date {
         width: 10.5rem;
@@ -644,7 +655,7 @@
         border-radius: 2px;
         padding: 0 0.26rem;
         font-family: var(--mono);
-        font-size: 0.48rem; /* greatly reduced so chips always fit one row */
+        font-size: 0.54rem; /* small but still legible; chips fit one row */
         letter-spacing: 0.02em;
         line-height: 1.45;
         text-decoration: none; /* source chips are links */
@@ -678,6 +689,9 @@
       }
       #results th:last-child {
         text-align: right;
+      }
+      #results th.c-link {
+        text-align: center;
       }
       td.actions-cell a,
       td.actions-cell button,
@@ -718,6 +732,31 @@
         gap: 0.6rem;
         align-content: start;
         padding: 0.6rem;
+      }
+      /* Compact search view (tablet portrait / phone): full-width card rows. */
+      #tiles.tile-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        padding: 0.45rem;
+      }
+      .tile-cards .tile-row {
+        align-items: flex-start;
+        padding: 0.42rem 0.55rem;
+      }
+      .tile-cards .tile-name-row {
+        align-items: flex-start;
+      }
+      .tile-cards .tile-name {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        white-space: normal;
+        overflow-wrap: break-word;
+        line-height: 1.28;
+      }
+      .tile-cards .tile-actions {
+        padding-top: 0.1rem;
       }
       /* author display values would otherwise beat the hidden attribute */
       #tiles[hidden],
@@ -1291,13 +1330,14 @@
           grid-column: 1 / -1;
         }
         /* Mobile search view: same card rows as the popular tiles. */
-        #tiles.tile-cards {
-          display: flex;
-          flex-direction: column;
-          padding: 0.45rem;
-        }
         dialog {
           --dlg-pad: var(--space-3);
+          width: min(22rem, calc(100vw - 1.5rem));
+        }
+        dialog .dlg-actions.row button {
+          font-size: 0.58rem;
+          letter-spacing: 0.02em;
+          padding-inline: 0.25rem;
         }
         #tiles {
           display: flex;
@@ -1380,7 +1420,7 @@
       <main class="container">
         <div id="toolbar">
           <label data-field>
-            <input id="query" type="search" placeholder="Search torrents..." autocomplete="off" autofocus />
+            <input id="query" type="search" placeholder="Search torrents..." aria-label="Search torrents" autocomplete="off" maxlength="200" autofocus />
           </label>
           <button id="btn-search" aria-label="Search torrents"><span class="btn-icon">🔍</span> Search</button>
           <button id="btn-popular" aria-label="Load popular torrents"><span class="btn-icon">⭐</span> Popular</button>
@@ -1412,12 +1452,12 @@
               </colgroup>
               <thead>
                 <tr>
-                  <th data-sort="name">File</th>
-                  <th>Src</th>
-                  <th data-sort="date">Date</th>
-                  <th data-sort="size">Size</th>
-                  <th class="c-num" data-sort="se">SE</th>
-                  <th class="c-num" data-sort="le">LE</th>
+                  <th data-sort="name" tabindex="0">File</th>
+                  <th class="c-link">Page</th>
+                  <th data-sort="date" tabindex="0">Date</th>
+                  <th data-sort="size" tabindex="0">Size</th>
+                  <th class="c-num" data-sort="se" tabindex="0">SE</th>
+                  <th class="c-num" data-sort="le" tabindex="0">LE</th>
                   <th>Links</th>
                 </tr>
               </thead>
@@ -1464,7 +1504,7 @@
           <button id="auth-web-btn" title="Open the t.me page in a new tab">t.me ↗</button>
           <button id="auth-copy-msg" title="Copy the prompt message to send to the agent">Copy Prompt</button>
         </div>
-        <p id="auth-status" class="pair-status waiting">Waiting for approval...</p>
+        <p id="auth-status" class="pair-status waiting" role="status" aria-live="polite">Waiting for approval...</p>
       </div>
     </dialog>
 
@@ -1493,7 +1533,7 @@
             <button id="tg-cancel">Cancel</button>
           </div>
         </div>
-        <p id="tg-status" class="pair-status"></p>
+        <p id="tg-status" class="pair-status" role="status" aria-live="polite"></p>
       </div>
     </dialog>
     <script src="https://unpkg.com/@knadh/indexed-cache@0.4.4/dist/indexed-cache.min.js"></script>
@@ -1557,6 +1597,8 @@
 
       const $ = (id) => document.getElementById(id);
 
+      // Legacy localStorage token from older releases: sent once while the
+      // server migrates it to the HttpOnly cookie, then cleared.
       function getToken() {
         try {
           return localStorage.getItem(SESSION_KEY) || "";
@@ -1589,8 +1631,10 @@
 
       // Source labels are domains: link out to the site everywhere.
       function sourceLinkHtml(source, style, classAttr) {
-        const href = `https://${escapeHtml(source)}/`;
-        return `<a ${classAttr} href="${href}" target="_blank" rel="noopener noreferrer" title="Open ${escapeHtml(source)}"${style}>${escapeHtml(source)}</a>`;
+        const safe = safeSource(source);
+        if (!safe) return escapeHtml(source);
+        const href = `https://${safe}/`;
+        return `<a ${classAttr} href="${href}" target="_blank" rel="noopener noreferrer" title="Open ${escapeHtml(safe)}"${style}>${escapeHtml(safe)}</a>`;
       }
       function escapeHtml(s) {
         return String(s ?? "").replace(
@@ -1604,6 +1648,29 @@
               "'": "&#39;",
             })[c],
         );
+      }
+
+      // Defense in depth: the API already validates these, but a scraped value
+      // must never become a javascript:/data: link in the DOM.
+      function safeMagnet(value) {
+        const s = String(value || "");
+        return /^magnet:\?[^\s]*xt=urn:btih:(?:[0-9a-f]{40}|[a-z2-7]{32})(?:&|$)/i.test(s) ? s : "";
+      }
+      function safeHttpUrl(value) {
+        const s = String(value || "");
+        return /^https?:\/\/[^\s]+$/i.test(s) ? s : "";
+      }
+      function safeSource(value) {
+        const s = String(value || "");
+        return /^[a-z0-9.-]+$/i.test(s) ? s : "";
+      }
+      // Filenames use dots/underscores as separators; cards read better with
+      // spaces while the exact name stays available in the ⓘ tooltip.
+      function displayName(value) {
+        return String(value || "")
+          .replace(/[._]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
       }
 
       // ---- View switching (spinner / empty / table / tiles) -------------------
@@ -1620,19 +1687,21 @@
         $("tiles").hidden = true;
       }
       function showResults() {
-        const mobile = mobileQuery.matches;
+        const compact = compactQuery.matches;
         $("loading").hidden = true;
         $("empty-state").hidden = true;
-        // Mobile search renders cards in #tiles; the table can't fit a phone.
-        $("table-wrap").hidden = viewMode !== "search" || mobile;
-        $("tiles").hidden = viewMode === "search" && !mobile;
+        // Search uses cards when the table would be too narrow; popular always
+        // uses the tile grid (2 columns on tablet, accordion on phones).
+        $("table-wrap").hidden = viewMode !== "search" || compact;
+        $("tiles").hidden = viewMode === "search" ? !compact : false;
       }
 
       // ---- Row actions (search table + tiles + mobile cards) -------------------
       // Telegram ON: telegram popup + copy magnet. Telegram OFF: magnet link +
       // copy magnet. Always exactly two buttons.
       function actionButtonsHtml(r) {
-        const magnet = r.magnet_link || "";
+        const raw = String(r.magnet_link || "");
+        const magnet = safeMagnet(raw);
         const copy = magnet
           ? `<button data-copy="${escapeHtml(magnet)}" title="Copy magnet link" aria-label="Copy magnet link">📋</button>`
           : `<button title="No magnet link available" aria-label="No magnet link available" disabled>📋</button>`;
@@ -1640,7 +1709,7 @@
         if (!magnet) return `${none}${copy}`;
         if (session.enabled && session.authenticated && session.handle) {
           const attrs = [
-            `data-magnet="${escapeHtml(r.magnet_link)}"`,
+            `data-magnet="${escapeHtml(magnet)}"`,
             `data-filename="${escapeHtml(r.filename)}"`,
             `data-size="${escapeHtml(r.size)}"`,
             `data-date="${escapeHtml(r.date)}"`,
@@ -1660,7 +1729,7 @@
       }
 
       function torrentPageLinkHtml(r) {
-        const url = r.page_url || "";
+        const url = safeHttpUrl(r.page_url || "");
         if (!url) return `<span class="no-link" title="No source page available" aria-label="No source page available">—</span>`;
         return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="Open source page" aria-label="Open source page">↗</a>`;
       }
@@ -1755,8 +1824,10 @@
       }
       function paintSortIndicators() {
         document.querySelectorAll("#results thead th[data-sort]").forEach((th) => {
-          th.classList.toggle("sort-asc", !!sortState && sortState.key === th.dataset.sort && sortState.dir === 1);
-          th.classList.toggle("sort-desc", !!sortState && sortState.key === th.dataset.sort && sortState.dir === -1);
+          const active = !!sortState && sortState.key === th.dataset.sort;
+          th.classList.toggle("sort-asc", active && sortState.dir === 1);
+          th.classList.toggle("sort-desc", active && sortState.dir === -1);
+          th.setAttribute("aria-sort", active ? (sortState.dir === 1 ? "ascending" : "descending") : "none");
         });
       }
       function renderTable() {
@@ -1772,6 +1843,13 @@
         sortState = { key, dir: nextDir };
         saveSortState();
         renderTable();
+      });
+      document.querySelector("#results thead").addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        const th = e.target.closest("th[data-sort]");
+        if (!th) return;
+        e.preventDefault();
+        th.click();
       });
 
       // ---- Popular tiles -------------------------------------------------------
@@ -1794,7 +1872,7 @@
       function tileRowHtml(r, chipsHtml) {
         return `<div class="tile-row">
                 <div class="tile-main">
-                  <span class="tile-name-row">${infoButtonHtml(r)}<span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(r.filename)}</span></span>
+                  <span class="tile-name-row">${infoButtonHtml(r)}<span class="tile-name" title="${escapeHtml(r.filename)}">${escapeHtml(displayName(r.filename))}</span></span>
                   ${chipsHtml || ""}
                   <span class="tile-meta"><span class="m-se">▲${r.seeders}</span><span class="m-le">▼${r.leechers}</span><span>${escapeHtml(r.size)}</span><span>${escapeHtml(formatDate(r.date))}</span></span>
                 </div>
@@ -1816,6 +1894,9 @@
       }
 
       const mobileQuery = window.matchMedia("(max-width: 640px)");
+      // Search tables get cramped well before phone width: switch to cards
+      // for tablet portraits too, while popular keeps its 2-column tiles.
+      const compactQuery = window.matchMedia("(max-width: 820px)");
 
       function renderTiles() {
         $("tiles").classList.remove("tile-cards");
@@ -1828,7 +1909,7 @@
       // results render as the same card rows the popular tiles use.
       function renderCards() {
         $("tiles").classList.add("tile-cards");
-        $("tiles").innerHTML = rows
+        $("tiles").innerHTML = sortedRows()
           .map((r) => {
             const chips = sourceChipHtml(r) + categoryChipHtml(r);
             return tileRowHtml(r, chips ? `<span class="torrent-detail">${chips}</span>` : "");
@@ -1863,6 +1944,9 @@
         }
         render();
       });
+      compactQuery.addEventListener("change", () => {
+        if (viewMode === "search") render(); // swap table <-> cards
+      });
 
       function render() {
         if (!rows.length) {
@@ -1870,9 +1954,9 @@
           return;
         }
         showResults();
-        const mobile = mobileQuery.matches;
+        const compact = compactQuery.matches;
         if (viewMode === "search") {
-          if (mobile) {
+          if (compact) {
             renderCards();
           } else {
             renderTable();
@@ -1885,9 +1969,19 @@
       async function fetchJson(url, options) {
         const res = await fetch(url, {
           cache: "no-store",
+          credentials: "same-origin",
           ...options,
           headers: { ...authHeaders(), ...(options && options.headers) },
         });
+        if (res.status === 401) {
+          // The server revoked/expired this browser's session: drop it and
+          // send the user back through pairing instead of looping on errors.
+          setToken("");
+          session.authenticated = false;
+          paintLock();
+          showGate();
+          if (session.enabled) openAuthDialog();
+        }
         if (!res.ok) {
           const err = new Error(`HTTP ${res.status}`);
           err.status = res.status;
@@ -1897,6 +1991,10 @@
       }
 
       let requestSeq = 0;
+      // Server-side caps are 200; asking for 1000 used to be silently clamped
+      // to whatever each provider happened to return and made huge payloads.
+      const SEARCH_MAX_ITEMS = 200;
+      const POPULAR_PER_SOURCE = 100;
       async function run(url, options, activeBtn) {
         const seq = ++requestSeq;
         showLoading();
@@ -1914,6 +2012,7 @@
           if (seq !== requestSeq) return;
           rows = [];
           showEmpty();
+          if (err && err.status === 401) return; // the gate dialog is already open
           const slow = err && err.status === 429;
           toast(slow ? "Slow down: too many requests. Try again in a minute." : `Request failed: ${err.message}. Is the server running?`, "Torrent Search", { variant: slow ? "warning" : "danger" });
         } finally {
@@ -1925,7 +2024,7 @@
         }
       }
 
-      function doSearch() {
+      function doSearch(updateUrl = true) {
         const q = $("query").value.trim();
         if (!q) {
           toast("Enter a query first", "Torrent Search", {
@@ -1934,22 +2033,60 @@
           return;
         }
         viewMode = "search";
-        run(`/torrent/search?query=${encodeURIComponent(q)}&max_items=1000`, { method: "POST" }, $("btn-search"));
+        if (updateUrl) setUrlQuery(q, currentQuery() !== q);
+        run(`/torrent/search?query=${encodeURIComponent(q)}&max_items=${SEARCH_MAX_ITEMS}`, { method: "POST" }, $("btn-search"));
       }
 
       // `force` is set by the POPULAR button: the server drops its listing
       // caches and re-scrapes every source. Boot/boot-after-pairing loads the
       // cached listing so a warm server answers immediately.
-      function doPopular(force) {
+      function doPopular(force, updateUrl = true) {
         viewMode = "sections";
-        run(`/torrent/popular?per_source=1000${force ? "&refresh=true" : ""}`, {}, $("btn-popular"));
+        if (updateUrl) setUrlQuery("", Boolean(currentQuery()));
+        run(`/torrent/popular?per_source=${POPULAR_PER_SOURCE}${force ? "&refresh=true" : ""}`, {}, $("btn-popular"));
       }
 
-      $("btn-search").onclick = doSearch;
-      $("btn-popular").onclick = () => doPopular(true);
+      // ---- Shareable search URLs (?q=...) -------------------------------------
+      function currentQuery() {
+        try {
+          return new URLSearchParams(window.location.search).get("q") || "";
+        } catch {
+          return "";
+        }
+      }
+
+      function setUrlQuery(query, push) {
+        try {
+          const url = new URL(window.location.href);
+          if (query) url.searchParams.set("q", query);
+          else url.searchParams.delete("q");
+          const next = `${url.pathname}${url.search}${url.hash}`;
+          if (push) window.history.pushState({ q: query }, "", next);
+          else window.history.replaceState({ q: query }, "", next);
+        } catch {
+          /* history unavailable: search still works, the URL just won't sync */
+        }
+      }
+
+      // Single entry point for the initial load, back/forward and the pairing
+      // return: a `?q=` URL always lands on that search, otherwise popular.
+      function loadFromUrl() {
+        const q = currentQuery().trim().slice(0, 200);
+        if (q) {
+          $("query").value = q;
+          doSearch(false);
+        } else {
+          $("query").value = "";
+          doPopular(false, false);
+        }
+      }
+
+      $("btn-search").onclick = () => doSearch(true);
+      $("btn-popular").onclick = () => doPopular(true, true);
       $("query").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") doSearch();
+        if (e.key === "Enter") doSearch(true);
       });
+      window.addEventListener("popstate", loadFromUrl);
 
       // ---- Telegram session (lock button + gate) ------------------------------
       function showGate() {
@@ -1978,6 +2115,9 @@
           session.handle = state.handle || null;
           session.prune = !!state.prune_magnet_links;
           session.agent_name = state.agent_name || null;
+          // Sessions now live in an HttpOnly cookie set by the server. Clear
+          // any legacy localStorage token once the cookie is known-good.
+          if (session.authenticated) setToken("");
         } catch {
           session.enabled = false;
           session.authenticated = true; // offline server: don't gate the UI
@@ -1995,6 +2135,7 @@
         if (session.authenticated) {
           fetch("/telegram/auth/logout", {
             method: "POST",
+            credentials: "same-origin",
             headers: authHeaders(),
           })
             .catch(() => {})
@@ -2019,6 +2160,7 @@
       let authCode = null;
       let authPollTimer = null; // 2s approval poll
       let authCountdownTimer = null; // 1s ttl ticker
+      let authRetryTimer = null; // one-shot challenge retry after an error
       let authSecondsLeft = 0;
 
       function stopAuthPolling() {
@@ -2029,6 +2171,10 @@
         if (authCountdownTimer) {
           clearInterval(authCountdownTimer);
           authCountdownTimer = null;
+        }
+        if (authRetryTimer) {
+          clearTimeout(authRetryTimer);
+          authRetryTimer = null;
         }
       }
 
@@ -2090,8 +2236,9 @@
           $("auth-open").dataset.app = links.app;
           $("auth-web-btn").dataset.web = links.web;
           drawQr("auth-qr", links.app);
-          // 10-minute countdown; on expiry the challenge resets itself.
-          authSecondsLeft = Math.max(1, Math.round(data.expires_in || 600));
+          // 5-minute countdown (server challenge TTL); on expiry the
+          // challenge resets itself.
+          authSecondsLeft = Math.max(1, Math.round(data.expires_in || 300));
           renderAuthWaiting();
           authCountdownTimer = setInterval(() => {
             authSecondsLeft -= 1;
@@ -2106,25 +2253,31 @@
           authCode = null;
           $("auth-qr").innerHTML = "";
           setAuthStatus(`Could not create pairing code: ${err.message} - retrying...`, "bad");
-          setTimeout(createChallenge, 15000);
+          authRetryTimer = setTimeout(createChallenge, 15000);
         }
       }
 
       async function pollChallenge() {
         if (!authCode) return;
         try {
-          const res = await fetch(`/telegram/auth/poll?code=${encodeURIComponent(authCode)}`, { cache: "no-store" });
+          const res = await fetch(`/telegram/auth/poll?code=${encodeURIComponent(authCode)}`, { cache: "no-store", credentials: "same-origin" });
+          if (res.status === 429) {
+            setAuthStatus("Too many pairing polls - waiting a moment...", "bad");
+            return;
+          }
           const data = await res.json();
           if (data.status === "approved" && data.token) {
             stopAuthPolling();
             authCode = null;
-            setToken(data.token);
+            // The server also sets the HttpOnly session cookie on this poll
+            // response; the browser stays paired even if this tab is closed.
+            setToken("");
             setAuthStatus("✅ Access granted - this browser is paired.", "ok");
             await refreshSession();
             setTimeout(() => {
               showApp();
               if (authDialog.open) authDialog.close();
-              doPopular();
+              loadFromUrl();
             }, 900);
           } else if (data.status !== "pending") {
             // Approved elsewhere or swept server-side: reset right away.
@@ -2136,7 +2289,7 @@
       }
 
       function openAuthDialog() {
-        authDialog.showModal();
+        if (!authDialog.open) authDialog.showModal();
         createChallenge();
       }
 
@@ -2247,7 +2400,14 @@
         const xt = m.match(/[?&]xt=urn:btih:([^&]+)/i);
         if (!xt) return m;
         const dnMatch = m.match(/[?&]dn=([^&]*)/i);
-        const dn = dnMatch ? decodeURIComponent(dnMatch[1]) : "";
+        let dn = "";
+        if (dnMatch) {
+          try {
+            dn = decodeURIComponent(dnMatch[1]);
+          } catch {
+            dn = dnMatch[1];
+          }
+        }
         return `magnet:?xt=urn:btih:${xt[1]}${dn ? `&dn=${encodeURIComponent(dn)}` : ""}`;
       }
       function tgLinks(text) {
@@ -2369,12 +2529,12 @@
         if (!state.enabled) {
           // Telegram integration off: no gate, no telegram features.
           showApp();
-          doPopular();
+          loadFromUrl();
           return;
         }
-        if (state.authenticated && getToken()) {
+        if (state.authenticated) {
           showApp();
-          doPopular();
+          loadFromUrl();
           return;
         }
         // No valid token: gateway block - stars + pairing popup.

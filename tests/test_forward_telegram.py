@@ -55,6 +55,15 @@ def paired(monkeypatch: Any, tmp_path: Any) -> str:
     return "sess-token"
 
 
+def test_forward_rejects_unsafe_magnet(paired: str, client: TestClient) -> None:
+    response = client.post(
+        "/forward_telegram",
+        json={"filename": FILENAME, "magnet_link": "javascript:alert(1)"},
+        headers={"Authorization": f"Bearer {paired}"},
+    )
+    assert response.status_code == 422
+
+
 def test_forward_disabled_without_bot_token(client: TestClient) -> None:
     response = client.post(
         "/forward_telegram", json={"filename": FILENAME, "magnet_link": MAGNET}
@@ -84,6 +93,20 @@ def test_forward_requires_valid_session(paired: str, client: TestClient) -> None
         ).status_code
         == 401
     )
+
+
+def test_forward_with_session_cookie(
+    paired: str, client: TestClient, monkeypatch: Any
+) -> None:
+    fake_bot = _FakeBotClient()
+    monkeypatch.setattr(api_server, "_bot", lambda: fake_bot)
+    client.cookies.set(api_server.SESSION_COOKIE, paired)
+    api_server._FORWARD_LIMITER._events.pop("12345", None)
+    response = client.post(
+        "/forward_telegram", json={"filename": FILENAME, "magnet_link": MAGNET}
+    )
+    assert response.status_code == 200
+    assert fake_bot.sent[0]["chat_id"] == "12345"
 
 
 def test_forward_server_to_server_with_api_key(
@@ -168,6 +191,16 @@ def test_forward_keeps_full_magnet_when_prune_disabled(
     )
     assert response.status_code == 200
     assert fake_bot.sent[0]["text"].endswith(MAGNET)
+
+
+def test_forward_rejects_oversized_message(paired: str, client: TestClient) -> None:
+    magnet = "magnet:?xt=urn:btih:" + "a" * 40 + "&dn=" + "x" * 4000
+    response = client.post(
+        "/forward_telegram",
+        json={"filename": "F" * 512, "magnet_link": magnet},
+        headers={"Authorization": f"Bearer {paired}"},
+    )
+    assert response.status_code == 413
 
 
 def test_forward_maps_bot_failures_to_502(

@@ -1,17 +1,24 @@
 import logging
 import secrets
+from contextlib import asynccontextmanager
+from functools import lru_cache
 from os import getenv
 from pathlib import Path as PathLib
+from typing import Any
 
 import httpx2
-from fastapi import FastAPI, HTTPException, Path, Request, Response
+from fastapi import FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from minify_html import minify
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from .wrapper import Torrent, TorrentSearchApi
+from .wrapper.models import is_magnet_link
+from .wrapper.parser import aclose_client
 from .wrapper.telegram_auth import (
+    SESSION_TTL_SECONDS,
     ChallengeManager,
     RateLimiter,
     TelegramAuthStore,
@@ -21,9 +28,28 @@ from .wrapper.utils import prune_magnet
 
 logger = logging.getLogger("Torrent Search")
 
+SESSION_COOKIE = "torrent_session"
+_DOCS_PATHS = {"/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"}
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Close outbound HTTP clients on shutdown (connections are pooled)."""
+    global _bot_client, _relay_client
+    yield
+    await aclose_client()
+    if _bot_client is not None:
+        await _bot_client.aclose()
+        _bot_client = None
+    if _relay_client is not None:
+        await _relay_client.aclose()
+        _relay_client = None
+
+
 app = FastAPI(
     title="Torrent Search API",
     description="API server for Torrent Search API.",
+    lifespan=_lifespan,
 )
 api_client = TorrentSearchApi()
 app.add_middleware(GZipMiddleware, minimum_size=1024)
@@ -42,18 +68,58 @@ _PRUNE_MAGNET_LINKS = str(getenv("PRUNE_MAGNET_LINKS", "false")).strip().lower()
     "on",
 )
 _REGISTER_SECRET = getenv("TORRENT_SEARCH_API_KEY") or None
-_WEBUI_HTML = minify(
-    (_STATIC_DIR / "index.html").read_text(encoding="utf-8"),
-    minify_css=True,
-    minify_js=True,
-)
 _AUTH_STORE = TelegramAuthStore()
 _CHALLENGES = ChallengeManager()
 _CHALLENGE_LIMITER = RateLimiter(max_events=60, per_seconds=60)
 _REGISTER_LIMITER = RateLimiter(max_events=30, per_seconds=60)
 _POLL_LIMITER = RateLimiter(max_events=300, per_seconds=60)
 _FORWARD_LIMITER = RateLimiter(max_events=20, per_seconds=60)
+_SEARCH_LIMITER = RateLimiter(max_events=60, per_seconds=60)
+_POPULAR_LIMITER = RateLimiter(max_events=30, per_seconds=60)
+_GET_LIMITER = RateLimiter(max_events=120, per_seconds=60)
 _bot_client: httpx2.AsyncClient | None = None
+
+
+@lru_cache(maxsize=1)
+def _webui_html() -> str:
+    """Minify the single-file Web UI once, on first request."""
+    return minify(
+        (_STATIC_DIR / "index.html").read_text(encoding="utf-8"),
+        minify_css=True,
+        minify_js=True,
+    )
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next: Any) -> Response:
+    """Baseline browser hardening for the bundled UI and JSON API."""
+    response: Response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+    )
+    return response
+
+
+def _gate_enabled() -> bool:
+    """The pairing gate exists only when both the bot handle and secret are set."""
+    return bool(_TELEGRAM_BOT_HANDLE and _REGISTER_SECRET)
+
+
+@app.middleware("http")
+async def _hide_docs_when_gated(request: Request, call_next: Any) -> Response:
+    """Expose the OpenAPI schema only to an authenticated owner."""
+    if (
+        _gate_enabled()
+        and request.url.path in _DOCS_PATHS
+        and not (
+            _is_server_token(_bearer_token(request)) or _authenticated_token(request)
+        )
+    ):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return await call_next(request)
 
 
 def _bot() -> httpx2.AsyncClient:
@@ -78,6 +144,16 @@ def _relay() -> httpx2.AsyncClient:
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
+def _no_store(response: Response) -> None:
+    response.headers.update(
+        {
+            "Cache-Control": "no-cache, no-store",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+    )
+
+
 @app.get(
     "/",
     summary="Web UI",
@@ -89,7 +165,7 @@ async def webui() -> Response:
     over the API and must never run stale markup against a fresh server.
     """
     return Response(
-        content=_WEBUI_HTML,
+        content=_webui_html(),
         media_type="text/html",
         headers={"Cache-Control": "no-cache, no-store"},
     )
@@ -110,23 +186,23 @@ async def list_sources() -> list[str]:
     response_model=list[Torrent],
 )
 async def popular_torrents(
-    response: Response, per_source: int = 20, refresh: bool = False
+    response: Response,
+    request: Request,
+    per_source: int = Query(20, ge=1, le=200),
+    refresh: bool = False,
 ) -> list[Torrent]:
     """
     Get the most popular torrents across sources with a top listing,
     keeping up to `per_source` results from each. Cached server-side for
-    2 minutes; the response is marked no-store so browsers always re-fetch.
+    5 minutes; the response is marked no-store so browsers always re-fetch.
     `refresh=true` drops the server-side caches and asks every source for a
     fresh listing (the Web UI POPULAR button uses it).
     Corresponds to `TorrentSearchApi.popular_torrents()`.
     """
-    response.headers.update(
-        {
-            "Cache-Control": "no-cache, no-store",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        }
-    )
+    if not _POPULAR_LIMITER.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many popular requests.")
+    _require_torrent_access(request)
+    _no_store(response)
     torrents: list[Torrent] = await api_client.popular_torrents(per_source, refresh)
     return torrents
 
@@ -139,9 +215,10 @@ async def popular_torrents(
 )
 async def search_torrents(
     response: Response,
-    query: str,
-    max_items: int | None = None,
-    per_source: int | None = None,
+    request: Request,
+    query: str = Query(..., min_length=1, max_length=200),
+    max_items: int | None = Query(None, ge=1, le=200),
+    per_source: int | None = Query(None, ge=1, le=200),
 ) -> list[Torrent]:
     """
     Search for torrents across all enabled sources.
@@ -153,13 +230,10 @@ async def search_torrents(
     `max_items` is passed too.
     Corresponds to `TorrentSearchApi.search_torrents()`.
     """
-    response.headers.update(
-        {
-            "Cache-Control": "no-cache, no-store",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        }
-    )
+    if not _SEARCH_LIMITER.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many searches.")
+    _require_torrent_access(request)
+    _no_store(response)
     effective_max = max_items
     if effective_max is None and per_source is None:
         effective_max = 20
@@ -176,12 +250,18 @@ async def search_torrents(
     response_model=str,
 )
 async def get_torrent(
-    torrent_id: str = Path(..., description="The ID of the torrent."),
+    request: Request,
+    response: Response,
+    torrent_id: str = Path(..., description="The ID of the torrent.", max_length=1024),
 ) -> str:
     """
     Get the magnet link for a specific torrent by id.
     Corresponds to `TorrentSearchApi.get_torrent()`.
     """
+    if not _GET_LIMITER.allow(_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many magnet lookups.")
+    _require_torrent_access(request)
+    _no_store(response)
     result: str | None = await api_client.get_torrent(torrent_id)
     if not result:
         raise HTTPException(
@@ -197,12 +277,66 @@ def _client_ip(request: Request) -> str:
 
 def _bearer_token(request: Request) -> str:
     authorization = request.headers.get("authorization", "")
-    return authorization[7:].strip() if authorization.startswith("Bearer ") else ""
+    if authorization[:7].lower() == "bearer ":
+        return authorization[7:].strip()
+    return ""
+
+
+def _cookie_secure(request: Request) -> bool:
+    override = getenv("COOKIE_SECURE")
+    if override is not None:
+        return override.strip().lower() in {"1", "true", "yes", "on"}
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    proto = forwarded.split(",", 1)[0].strip().lower()
+    return request.url.scheme == "https" or proto == "https"
+
+
+def _set_session_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=SESSION_TTL_SECONDS,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=_cookie_secure(request),
+    )
+
+
+def _authenticated_token(request: Request) -> str | None:
+    """Return the first valid session token from Bearer or the HttpOnly cookie."""
+    candidates = (_bearer_token(request), request.cookies.get(SESSION_COOKIE, ""))
+    for token in candidates:
+        if token and _AUTH_STORE.chat_id_for_token(token) is not None:
+            return token
+    return None
+
+
+def _is_server_token(token: str) -> bool:
+    return (
+        bool(token)
+        and bool(_REGISTER_SECRET)
+        and secrets.compare_digest(token, _REGISTER_SECRET)
+    )
 
 
 def _is_authenticated(request: Request) -> bool:
-    token = _bearer_token(request)
-    return bool(token) and _AUTH_STORE.chat_id_for_token(token) is not None
+    return _authenticated_token(request) is not None
+
+
+def _require_torrent_access(request: Request) -> None:
+    """Gate torrent endpoints when the Web UI pairing gate is enabled.
+
+    Browser clients present their HttpOnly session cookie (or a legacy Bearer
+    token); the MCP server (and other server-to-server callers) present
+    ``TORRENT_SEARCH_API_KEY``. When the Telegram integration is off there is
+    no gate, so the API stays open like the Web UI.
+    """
+    if not _gate_enabled():
+        return
+    if _is_server_token(_bearer_token(request)) or _authenticated_token(request):
+        return
+    raise HTTPException(status_code=401, detail="Valid session required.")
 
 
 @app.get(
@@ -210,14 +344,25 @@ def _is_authenticated(request: Request) -> bool:
     summary="Telegram Session",
     tags=["Telegram"],
 )
-async def telegram_session(request: Request) -> dict[str, object]:
+async def telegram_session(request: Request, response: Response) -> dict[str, object]:
     """
     Auth state for the Web UI (send the session token as a Bearer header).
     The bot handle is public (it is required to build the pairing deep
     links); session tokens are what gate the app.
     """
-    enabled = _TELEGRAM_BOT_HANDLE is not None
+    response.headers["Cache-Control"] = "no-store"
+    enabled = _gate_enabled()
     authenticated = enabled and _is_authenticated(request)
+    if enabled and authenticated:
+        # Migrate existing localStorage Bearer sessions to the HttpOnly cookie
+        # so the browser keeps access even if the original tab is closed.
+        bearer = _bearer_token(request)
+        if bearer and _authenticated_token(request) == bearer:
+            _set_session_cookie(response, request, bearer)
+    elif enabled and request.cookies.get(SESSION_COOKIE):
+        # Stale/revoked cookie on a return visit: clear it so the browser does
+        # not keep presenting a dead session.
+        response.delete_cookie(SESSION_COOKIE, path="/")
     return {
         "enabled": enabled,
         "authenticated": authenticated or not enabled,
@@ -272,8 +417,12 @@ async def telegram_poll(
         if chat_id is not None:
             token = new_session_token()
             _AUTH_STORE.add_session(chat_id, token)
+            _set_session_cookie(response, request, token)
             logger.info("Telegram session granted to chat %s.", chat_id)
             return {"status": "approved", "token": token}
+        # Another poll consumed it (or it expired between poll and consume):
+        # never report "approved" without a token.
+        status = "expired"
     return {"status": status}
 
 
@@ -308,9 +457,8 @@ async def telegram_register(
             status_code=403,
             detail="Registration disabled: TORRENT_SEARCH_API_KEY is not configured.",
         )
-    authorization = request.headers.get("authorization", "")
-    expected = f"Bearer {_REGISTER_SECRET}"
-    if not secrets.compare_digest(authorization, expected):
+    authorization = _bearer_token(request)
+    if not _is_server_token(authorization):
         raise HTTPException(status_code=401, detail="Invalid registrar secret.")
     if not _REGISTER_LIMITER.allow(_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many registrations.")
@@ -325,10 +473,18 @@ async def telegram_register(
     summary="Telegram Logout",
     tags=["Telegram"],
 )
-async def telegram_logout(request: Request) -> dict[str, str]:
-    """Revoke the presented session token (removed from the server store)."""
-    token = _bearer_token(request)
-    revoked = bool(token) and _AUTH_STORE.remove_token(token)
+async def telegram_logout(request: Request, response: Response) -> dict[str, str]:
+    """Revoke the presented session token(s) and clear the session cookie."""
+    tokens = {
+        token
+        for token in (
+            _bearer_token(request),
+            request.cookies.get(SESSION_COOKIE, ""),
+        )
+        if token
+    }
+    revoked = any(_AUTH_STORE.remove_token(token) for token in tokens)
+    response.delete_cookie(SESSION_COOKIE, path="/")
     if revoked:
         logger.info("Telegram session revoked via logout.")
     return {"status": "logged_out"}
@@ -337,10 +493,17 @@ async def telegram_logout(request: Request) -> dict[str, str]:
 class ForwardPayload(BaseModel):
     """Torrent info accepted by ``/forward_telegram``."""
 
-    filename: str
-    magnet_link: str
-    size: str | None = None
-    seeders: int | None = None
+    filename: str = Field(min_length=1, max_length=512)
+    magnet_link: str = Field(min_length=1, max_length=4096)
+    size: str | None = Field(None, max_length=64)
+    seeders: int | None = Field(None, ge=0)
+
+    @field_validator("magnet_link")
+    @classmethod
+    def validate_magnet_link(cls, value: str) -> str:
+        if not is_magnet_link(value):
+            raise ValueError("a magnet URI with a btih info hash is required")
+        return value
 
 
 @app.post(
@@ -363,11 +526,10 @@ async def forward_telegram(request: Request, payload: ForwardPayload) -> dict[st
     receive bot-authored Telegram messages); ``TELEGRAM_AGENT_NAME`` and
     ``TELEGRAM_MSG_FORWARD`` provide the relay sender and notice.
     """
-    token = _bearer_token(request)
-    server_forward = bool(_REGISTER_SECRET) and secrets.compare_digest(
-        token, _REGISTER_SECRET
-    )
-    chat_id = _AUTH_STORE.chat_id_for_token(token)
+    bearer = _bearer_token(request)
+    server_forward = _is_server_token(bearer)
+    session_token = _authenticated_token(request)
+    chat_id = _AUTH_STORE.chat_id_for_token(session_token) if session_token else None
     if server_forward:
         chat_id = request.query_params.get("chat_id", "").strip() or None
     if not _TELEGRAM_BOT_TOKEN and not _AGENT_MODE:
@@ -413,6 +575,11 @@ async def forward_telegram(request: Request, payload: ForwardPayload) -> dict[st
     if payload.seeders is not None:
         lines.append(f"Seeders: {payload.seeders}")
     text = "\n".join([*lines, magnet])
+    if len(text) > 4096:
+        raise HTTPException(
+            status_code=413,
+            detail="Forwarded message is too long for Telegram (4096 chars).",
+        )
     try:
         bot_response = await _bot().post(
             f"/bot{_TELEGRAM_BOT_TOKEN}/sendMessage",

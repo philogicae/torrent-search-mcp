@@ -54,6 +54,30 @@ def test_store_multiple_sessions_per_chat(tmp_path: Any) -> None:
     assert store.chat_id_for_token("token-b") == "12345"  # ...keeps the other
 
 
+def test_store_caps_sessions_per_chat(tmp_path: Any, monkeypatch: Any) -> None:
+    store = ta.TelegramAuthStore(tmp_path / "authorized_tokens.json")
+    monkeypatch.setattr(ta, "MAX_SESSIONS_PER_CHAT", 2)
+    ticks = iter([1_000.0, 1_001.0, 1_002.0])
+    monkeypatch.setattr(ta.time, "time", lambda: next(ticks))
+    for i in range(3):
+        store.add_session("12345", f"token-{i}")
+    assert len(store) == 2
+    assert store.chat_id_for_token("token-0") is None
+    assert store.chat_id_for_token("token-1") == "12345"
+    assert store.chat_id_for_token("token-2") == "12345"
+
+
+def test_store_caps_total_sessions(tmp_path: Any, monkeypatch: Any) -> None:
+    store = ta.TelegramAuthStore(tmp_path / "authorized_tokens.json")
+    monkeypatch.setattr(ta, "MAX_SESSIONS", 2)
+    ticks = iter([1_000.0, 1_001.0, 1_002.0])
+    monkeypatch.setattr(ta.time, "time", lambda: next(ticks))
+    for i in range(3):
+        store.add_session(f"chat-{i}", f"token-{i}")
+    assert len(store) == 2
+    assert store.chat_id_for_token("token-0") is None
+
+
 def test_store_creates_missing_file(tmp_path: Any) -> None:
     path = tmp_path / "authorized_tokens.json"
     assert not path.exists()
@@ -67,6 +91,30 @@ def test_store_init_fails_closed_when_unwritable(tmp_path: Any) -> None:
     blocker.write_text("")  # a file, not a directory
     store = ta.TelegramAuthStore(blocker / "tokens.json")
     assert store.chat_id_for_token("anything") is None
+
+
+def test_store_caps_oversized_file_at_startup(tmp_path: Any, monkeypatch: Any) -> None:
+    monkeypatch.setattr(ta, "MAX_SESSIONS_PER_CHAT", 2)
+    path = tmp_path / "authorized_tokens.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "sessions": [
+                    {
+                        "chat_id": "1",
+                        "token_hash": ta.hash_token(f"token-{i}"),
+                        "created": int(time.time()) + i,
+                    }
+                    for i in range(3)
+                ],
+            }
+        )
+    )
+    store = ta.TelegramAuthStore(path)
+    assert len(store) == 2
+    assert store.chat_id_for_token("token-0") is None
+    assert store.chat_id_for_token("token-2") == "1"
 
 
 def test_store_purges_expired_sessions_at_startup(tmp_path: Any) -> None:
@@ -110,6 +158,16 @@ def test_store_corrupt_file_fails_closed(tmp_path: Any) -> None:
     assert store.chat_id_for_token("anything") is None
     store.add_session("1", "fresh")  # recovers by rewriting a valid file
     assert store.chat_id_for_token("fresh") == "1"
+
+
+def test_store_corruption_after_load_clears_sessions(tmp_path: Any) -> None:
+    path = tmp_path / "authorized_tokens.json"
+    store = ta.TelegramAuthStore(path)
+    store.add_session("1", "fresh")
+    path.write_text("{not json")
+    store._fingerprint = (0, 0)  # force the changed-file read
+    assert len(store) == 0
+    assert store.chat_id_for_token("fresh") is None
 
 
 def test_store_reloads_when_file_changes(tmp_path: Any) -> None:
@@ -184,11 +242,22 @@ def test_rate_limiter_drops_expired_events(monkeypatch: Any) -> None:
     assert limiter._events["ip"] == [111.0]
 
 
+def test_rate_limiter_bounds_key_set(monkeypatch: Any) -> None:
+    ticks = iter([1.0, 2.0, 3.0])
+    monkeypatch.setattr(ta.time, "monotonic", lambda: next(ticks))
+    limiter = ta.RateLimiter(max_events=2, per_seconds=60, max_keys=1)
+    assert limiter.allow("first")
+    assert limiter.allow("second")  # evicts "first" instead of growing forever
+    assert list(limiter._events) == ["second"]
+
+
 # ---- REST pairing flow -------------------------------------------------------
 
 
 def test_session_states(client: TestClient, auth_env: Any) -> None:
-    unauth = client.get("/telegram/session").json()
+    response = client.get("/telegram/session")
+    assert response.headers["cache-control"] == "no-store"
+    unauth = response.json()
     # The handle is public (pairing deep links need it); tokens are the gate.
     assert unauth == {
         "enabled": True,
@@ -224,18 +293,21 @@ def test_full_pairing_flow(client: TestClient, auth_env: Any) -> None:
     )
     assert ok.status_code == 200
 
-    # Poll delivers the one-time session token bound to the chat id.
-    approved = client.get("/telegram/auth/poll", params={"code": code}).json()
+    # Poll delivers the one-time session token and sets the HttpOnly cookie.
+    poll_response = client.get("/telegram/auth/poll", params={"code": code})
+    approved = poll_response.json()
     assert approved["status"] == "approved"
     token = approved["token"]
     assert token
+    set_cookie = poll_response.headers["set-cookie"]
+    assert f"{api_server.SESSION_COOKIE}={token}" in set_cookie
+    assert "HttpOnly" in set_cookie
+    assert "SameSite=lax" in set_cookie
     replay = client.get("/telegram/auth/poll", params={"code": code}).json()
     assert replay == {"status": "expired"}  # single use
 
-    # The token authenticates and reveals the handle.
-    session = client.get(
-        "/telegram/session", headers={"Authorization": f"Bearer {token}"}
-    ).json()
+    # The cookie alone authenticates (no Authorization header needed).
+    session = client.get("/telegram/session").json()
     assert session == {
         "enabled": True,
         "authenticated": True,
@@ -244,18 +316,77 @@ def test_full_pairing_flow(client: TestClient, auth_env: Any) -> None:
         "agent_name": None,
     }
 
-    # Logout revokes the token server-side.
-    assert (
-        client.post(
-            "/telegram/auth/logout", headers={"Authorization": f"Bearer {token}"}
-        ).status_code
-        == 200
-    )
+    # Logout revokes the token and clears the cookie.
+    logout = client.post("/telegram/auth/logout")
+    assert logout.status_code == 200
+    assert "Max-Age=0" in logout.headers["set-cookie"]
     assert auth_env.chat_id_for_token(token) is None
-    after = client.get(
-        "/telegram/session", headers={"Authorization": f"Bearer {token}"}
-    ).json()
+    after = client.get("/telegram/session").json()
     assert after["authenticated"] is False
+
+
+def test_session_migrates_legacy_bearer_to_cookie(
+    client: TestClient, auth_env: Any
+) -> None:
+    auth_env.add_session("12345", "legacy-token")
+    migrated = client.get(
+        "/telegram/session", headers={"Authorization": "Bearer legacy-token"}
+    )
+    assert migrated.json()["authenticated"] is True
+    assert f"{api_server.SESSION_COOKIE}=legacy-token" in migrated.headers["set-cookie"]
+    # The cookie now carries the session without the legacy Bearer header.
+    assert client.get("/telegram/session").json()["authenticated"] is True
+
+
+def test_session_invalid_cookie_is_cleared(client: TestClient, auth_env: Any) -> None:
+    client.cookies.set(api_server.SESSION_COOKIE, "revoked")
+    response = client.get("/telegram/session")
+    assert response.json()["authenticated"] is False
+    assert "Max-Age=0" in response.headers["set-cookie"]
+
+
+def test_session_cookie_secure_override(
+    client: TestClient, auth_env: Any, monkeypatch: Any
+) -> None:
+    monkeypatch.setenv("COOKIE_SECURE", "true")
+    challenge = client.post("/telegram/auth/challenge").json()
+    client.post(
+        "/telegram/auth/register",
+        params={"code": challenge["code"], "chat_id": "1"},
+        headers={"Authorization": "Bearer reg-secret-123"},
+    )
+    response = client.get("/telegram/auth/poll", params={"code": challenge["code"]})
+    assert response.json()["status"] == "approved"
+    assert "Secure" in response.headers["set-cookie"]
+
+
+def test_session_cookie_secure_from_forwarded_proto(
+    client: TestClient, auth_env: Any
+) -> None:
+    challenge = client.post("/telegram/auth/challenge").json()
+    client.post(
+        "/telegram/auth/register",
+        params={"code": challenge["code"], "chat_id": "1"},
+        headers={"Authorization": "Bearer reg-secret-123"},
+    )
+    response = client.get(
+        "/telegram/auth/poll",
+        params={"code": challenge["code"]},
+        headers={"x-forwarded-proto": "https"},
+    )
+    assert "Secure" in response.headers["set-cookie"]
+
+
+def test_docs_hidden_when_gated(client: TestClient, auth_env: Any) -> None:
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
+
+    # The owner can still inspect the API after pairing.
+    auth_env.add_session("1", "docs-token")
+    client.cookies.set(api_server.SESSION_COOKIE, "docs-token")
+    assert client.get("/docs").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
 
 
 def test_pairing_survives_via_persisted_store(
@@ -305,6 +436,14 @@ def test_disabled_without_bot_handle(monkeypatch: Any) -> None:
     }
 
 
+def test_gate_disabled_without_register_secret(
+    client: TestClient, auth_env: Any, monkeypatch: Any
+) -> None:
+    """A handle without the registrar secret cannot pair: do not gate the UI."""
+    monkeypatch.setattr(api_server, "_REGISTER_SECRET", None)
+    assert client.get("/telegram/session").json()["enabled"] is False
+
+
 def test_register_disabled_without_secret(monkeypatch: Any, auth_env: Any) -> None:
     monkeypatch.setattr(api_server, "_REGISTER_SECRET", None)
     client = TestClient(api_server.app)
@@ -320,6 +459,61 @@ def test_challenge_disabled_without_secret(monkeypatch: Any, auth_env: Any) -> N
     monkeypatch.setattr(api_server, "_REGISTER_SECRET", None)
     client = TestClient(api_server.app)
     assert client.post("/telegram/auth/challenge").status_code == 404
+
+
+def test_torrent_endpoints_gated_by_session_or_api_key(
+    client: TestClient, auth_env: Any, monkeypatch: Any
+) -> None:
+    async def fake_search(
+        query: str, max_items: int | None = 20, per_source: int | None = None
+    ) -> list[Any]:
+        return []
+
+    async def fake_popular(
+        per_source: int | None = 20, refresh: bool = False
+    ) -> list[Any]:
+        return []
+
+    async def fake_get(torrent_id: str) -> str | None:
+        return None
+
+    monkeypatch.setattr(api_server.api_client, "search_torrents", fake_search)
+    monkeypatch.setattr(api_server.api_client, "popular_torrents", fake_popular)
+    monkeypatch.setattr(api_server.api_client, "get_torrent", fake_get)
+
+    search = {"query": "show"}
+    assert client.post("/torrent/search", params=search).status_code == 401
+    assert client.get("/torrent/popular").status_code == 401
+    assert client.get("/torrent/any-id").status_code == 401
+
+    auth_env.add_session("12345", "session-token")
+    client.cookies.set(api_server.SESSION_COOKIE, "session-token")
+    assert client.post("/torrent/search", params=search).status_code == 200
+    client.cookies.clear()
+
+    headers = {"Authorization": "Bearer session-token"}
+    assert (
+        client.post("/torrent/search", params=search, headers=headers).status_code
+        == 200
+    )
+    assert client.get("/torrent/popular", headers=headers).status_code == 200
+    assert client.get("/torrent/any-id", headers=headers).status_code == 404
+
+    # Server-to-server MCP callers use the registrar secret.
+    server = {"Authorization": "Bearer reg-secret-123"}
+    assert (
+        client.post("/torrent/search", params=search, headers=server).status_code == 200
+    )
+
+
+def test_poll_approved_without_token_reads_expired(
+    client: TestClient, auth_env: Any, monkeypatch: Any
+) -> None:
+    """A consumed/expired approval must never answer approved without a token."""
+    monkeypatch.setattr(api_server._CHALLENGES, "poll", lambda _code: "approved")
+    monkeypatch.setattr(api_server._CHALLENGES, "consume", lambda _code: None)
+    response = client.get("/telegram/auth/poll", params={"code": "x"})
+    assert response.json() == {"status": "expired"}
 
 
 def test_challenge_rate_limited(

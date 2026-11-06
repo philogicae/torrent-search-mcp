@@ -1,3 +1,22 @@
+## [4.6.2] - 2026-11-06
+
+### 🚀 Features
+
+- Feat: cookie-based Telegram sessions, API gating and shareable searches; fix: cache, magnet and client hardening
+
+- api_server.py: HttpOnly `torrent_session` cookie set at pairing approval, legacy Bearer→cookie migration, cookie-aware logout/forward/torrent gating, docs/OpenAPI auth, per-IP rate limits, payload bounds, no-store headers, client shutdown
+- mcp_server.py: send API key on REST calls, quote torrent IDs, map 413/429, bound tool inputs, lazy logging
+- wrapper/parser.py: full TPB category map + 7 popular top100 feeds, 1337x 6 categories/mirror fallback/40-detail cap, EZTV 2 pages/dedupe, FitGirl title filtering, Nyaa categories, YTS 2 popular pages, base32 magnets, connect retries, 8 MiB cap, CSV/date/counter hardening
+- wrapper/{models,api_client,scraper}.py: magnet validation + info-hash dedupe, cache TTL fix, uncapped get_torrent re-search, 5-min synchronous popular refresh, health-based ranking
+- wrapper/{utils,telegram_auth}.py: strict prune magnet validation, bounded decompression, session caps (20/chat, 1000 total), rate-limiter key cap, fail-closed corrupt store, fsync
+- static/index.html: `?q=` deep links + back/forward, compact search cards at 820px, 2-line filenames with humanized separators, mobile dialog sizing, safe magnet/http/source URLs, aria/keyboard sorting, CDN pins (oat 1.1.0, qrcode 2.0.4, indexed-cache 0.4.4)
+- tests: 263 tests, 100% coverage; CI on PRs with coverage gate and read permissions; README/AGENTS/env docs
+- pyproject.toml 4.6.1→4.6.2 + direct pydantic/uvicorn/python-dotenv deps; uv.lock refresh; Dockerfile.publish default CMD
+
+### ⚙️ Miscellaneous Tasks
+
+- Chore: update changelog
+
 ## [4.6.1] - 2026-10-16
 
 ### 🚀 Features
